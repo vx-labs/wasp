@@ -1,0 +1,7 @@
+.env*
+vendor/
+.vscode
+.terraform
+terraform.tfstate*
+config/
+run_config
