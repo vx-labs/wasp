@@ -218,6 +218,12 @@ func main() {
 			}
 			cancel()
 			wg.Wait()
+			err = messageLog.Close()
+			if err != nil {
+				wasp.L(ctx).Error("failed to close message log", zap.Error(err))
+			} else {
+				wasp.L(ctx).Info("message log closed")
+			}
 		},
 	}
 	cmd.Flags().BoolP("debug", "", false, "Use a fancy logger and increase logging level.")

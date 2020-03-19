@@ -12,6 +12,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/transport"
+	"go.uber.org/zap"
 )
 
 var (
@@ -75,6 +76,9 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 		})
 		if err == ErrSessionDisconnected {
 			return nil
+		}
+		if err != nil {
+			L(ctx).Warn("session packet processing failed", zap.Error(err))
 		}
 		c.SetDeadline(
 			time.Now().Add(2 * time.Duration(keepAlive) * time.Second),
