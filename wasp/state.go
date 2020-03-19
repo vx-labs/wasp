@@ -13,8 +13,8 @@ type State interface {
 	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
 	Unsubscribe(ctx context.Context, id string, pattern []byte) error
 	Recipients(topic []byte, qos int32) ([]string, []int32, error)
-	GetSession(id string) sessions.Session
-	SaveSession(id string, session sessions.Session)
+	GetSession(id string) *sessions.Session
+	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
 	RetainMessage(msg *packet.Publish) error
 	RetainedMessages(topic []byte) ([]*packet.Publish, error)
@@ -46,10 +46,10 @@ func (s *state) Recipients(topic []byte, qos int32) ([]string, []int32, error) {
 	return recipients, recipientQos, s.subscriptions.Match(topic, qos, &recipients, &recipientQos)
 }
 
-func (s *state) GetSession(id string) sessions.Session {
+func (s *state) GetSession(id string) *sessions.Session {
 	return s.sessions.Get(id)
 }
-func (s *state) SaveSession(id string, session sessions.Session) {
+func (s *state) SaveSession(id string, session *sessions.Session) {
 	s.sessions.Save(id, session)
 }
 func (s *state) CloseSession(id string) {

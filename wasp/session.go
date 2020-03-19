@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/decoder"
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
 )
@@ -27,7 +27,7 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 	defer c.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	session := newSession(c)
+	session := sessions.NewSession(c)
 	enc := encoder.New(c)
 	keepAlive := int32(30)
 	dec := decoder.Async(c)
@@ -44,7 +44,7 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 		fmt.Println(firstPkt)
 		return ErrConnectNotDone
 	}
-	err := session.processConnect(connectPkt)
+	err := session.ProcessConnect(connectPkt)
 	if err != nil {
 		return err
 	}
@@ -54,8 +54,8 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	state.SaveSession(session.id, session)
-	defer state.CloseSession(session.id)
+	state.SaveSession(session.ID, session)
+	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer
 	c.SetDeadline(
 		time.Now().Add(2 * time.Duration(keepAlive) * time.Second),
@@ -69,11 +69,7 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 	}
 
 	for pkt := range dec.Packet() {
-		err = processRequest(ctx, state, ch, &Request{
-			packet:    pkt,
-			conn:      c,
-			sessionID: string(connectPkt.ClientId),
-		})
+		err = processRequest(ctx, state, ch, session, pkt)
 		if err == ErrSessionDisconnected {
 			return nil
 		}
@@ -85,34 +81,8 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 		)
 	}
 	err = dec.Err()
-	if session.lwt != nil {
-		ch <- session.lwt
+	if session.Lwt != nil {
+		ch <- session.Lwt
 	}
 	return err
-}
-
-type session struct {
-	id   string
-	lwt  *packet.Publish
-	conn io.Writer
-}
-
-func newSession(conn io.Writer) *session {
-	return &session{conn: conn}
-}
-
-func (s *session) processConnect(connect *packet.Connect) error {
-	s.id = string(connect.ClientId)
-	if len(connect.WillTopic) > 0 {
-		s.lwt = &packet.Publish{
-			Header:  &packet.Header{Retain: connect.WillRetain, Qos: connect.WillQos},
-			Topic:   connect.WillTopic,
-			Payload: connect.WillPayload,
-		}
-	}
-	return nil
-}
-func (s *session) Send(publish *packet.Publish) error {
-	publish.MessageId = 1
-	return encoder.New(s.conn).Publish(publish)
 }

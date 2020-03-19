@@ -7,6 +7,7 @@ import (
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/sessions"
 )
 
 type Request struct {
@@ -15,12 +16,12 @@ type Request struct {
 	conn      io.WriteCloser
 }
 
-func processRequest(ctx context.Context, state State, publishes chan *packet.Publish, req *Request) error {
+func processRequest(ctx context.Context, state State, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	switch p := req.packet.(type) {
+	switch p := pkt.(type) {
 	case *packet.Connect:
-		return req.conn.Close()
+		return session.Conn.Close()
 	case *packet.Publish:
 		select {
 		case publishes <- p:
@@ -28,19 +29,19 @@ func processRequest(ctx context.Context, state State, publishes chan *packet.Pub
 			return ctx.Err()
 		}
 		if p.Header.Qos == 1 {
-			encoder.New(req.conn).PubAck(&packet.PubAck{
+			encoder.New(session.Conn).PubAck(&packet.PubAck{
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			})
 		}
 	case *packet.Subscribe:
 		for idx := range p.Topic {
-			err := state.Subscribe(ctx, req.sessionID, p.Topic[idx], p.Qos[idx])
+			err := state.Subscribe(ctx, session.ID, p.Topic[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
 		}
-		err := encoder.New(req.conn).SubAck(&packet.SubAck{
+		err := encoder.New(session.Conn).SubAck(&packet.SubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 			Qos:       p.Qos,
@@ -54,7 +55,7 @@ func processRequest(ctx context.Context, state State, publishes chan *packet.Pub
 				return err
 			}
 			for _, message := range messages {
-				err = encoder.New(req.conn).Publish(message)
+				err = encoder.New(session.Conn).Publish(message)
 				if err != nil {
 					return err
 				}
@@ -62,19 +63,19 @@ func processRequest(ctx context.Context, state State, publishes chan *packet.Pub
 		}
 	case *packet.Unsubscribe:
 		for idx := range p.Topic {
-			err := state.Unsubscribe(ctx, req.sessionID, p.Topic[idx])
+			err := state.Unsubscribe(ctx, session.ID, p.Topic[idx])
 			if err != nil {
 				return err
 			}
 		}
-		return encoder.New(req.conn).UnsubAck(&packet.UnsubAck{
+		return encoder.New(session.Conn).UnsubAck(&packet.UnsubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 		})
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:
-		return encoder.New(req.conn).PingResp(&packet.PingResp{
+		return encoder.New(session.Conn).PingResp(&packet.PingResp{
 			Header: p.Header,
 		})
 	}
