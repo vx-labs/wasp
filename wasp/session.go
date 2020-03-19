@@ -68,8 +68,7 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 	}
 
 	for pkt := range dec.Packet() {
-		err = processRequest(state, ch, &Request{
-			ctx:       ctx,
+		err = processRequest(ctx, state, ch, &Request{
 			packet:    pkt,
 			conn:      c,
 			sessionID: string(connectPkt.ClientId),

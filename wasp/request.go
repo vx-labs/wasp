@@ -3,27 +3,29 @@ package wasp
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 )
 
 type Request struct {
-	ctx       context.Context
 	sessionID string
 	packet    interface{}
 	conn      io.WriteCloser
 }
 
-func processRequest(state State, publishes chan *packet.Publish, req *Request) error {
+func processRequest(ctx context.Context, state State, publishes chan *packet.Publish, req *Request) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	switch p := req.packet.(type) {
 	case *packet.Connect:
-		req.conn.Close()
+		return req.conn.Close()
 	case *packet.Publish:
 		select {
 		case publishes <- p:
-		case <-req.ctx.Done():
-			return req.ctx.Err()
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 		if p.Header.Qos == 1 {
 			encoder.New(req.conn).PubAck(&packet.PubAck{
@@ -33,7 +35,7 @@ func processRequest(state State, publishes chan *packet.Publish, req *Request) e
 		}
 	case *packet.Subscribe:
 		for idx := range p.Topic {
-			err := state.Subscribe(req.ctx, req.sessionID, p.Topic[idx], p.Qos[idx])
+			err := state.Subscribe(ctx, req.sessionID, p.Topic[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
@@ -60,7 +62,7 @@ func processRequest(state State, publishes chan *packet.Publish, req *Request) e
 		}
 	case *packet.Unsubscribe:
 		for idx := range p.Topic {
-			err := state.Unsubscribe(req.ctx, req.sessionID, p.Topic[idx])
+			err := state.Unsubscribe(ctx, req.sessionID, p.Topic[idx])
 			if err != nil {
 				return err
 			}
