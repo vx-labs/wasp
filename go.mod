@@ -13,9 +13,9 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.5.1
-	github.com/vx-labs/mqtt-broker v0.0.71 // indirect
-	github.com/vx-labs/mqtt-protocol v4.1.1+incompatible
+	github.com/surgemq/message v0.0.0-20151017233315-2b7ca1ac6121
+	github.com/vx-labs/mqtt-protocol v4.2.1+incompatible
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20190510104115-cbcb75029529
-	golang.org/x/net v0.0.0-20200301022130-244492dfa37a
+	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
 )
