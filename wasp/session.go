@@ -23,10 +23,8 @@ var (
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
 )
 
-func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
+func RunSession(ctx context.Context, state State, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
 	defer c.Close()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
 	session := sessions.NewSession(c)
 	enc := encoder.New(c)
 	keepAlive := int32(30)
@@ -48,12 +46,19 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 	if err != nil {
 		return err
 	}
+	ctx = AddFields(ctx,
+		zap.String("session_id", session.ID),
+		zap.Time("connected_at", time.Now()),
+		zap.String("session_username", string(connectPkt.Username)),
+	)
 	if string(connectPkt.Username) != "vx:psk" || string(connectPkt.Password) != os.Getenv("PSK_PASSWORD") {
+		L(ctx).Info("authentication failed")
 		return enc.ConnAck(&packet.ConnAck{
 			Header:     connectPkt.Header,
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
+	L(ctx).Info("session connected")
 	state.SaveSession(session.ID, session)
 	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer
@@ -76,6 +81,7 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 	for pkt := range dec.Packet() {
 		err = processPacket(ctx, state, ch, session, pkt)
 		if err == ErrSessionDisconnected {
+			L(ctx).Info("session closed")
 			return session.Conn.Close()
 		}
 		if err != nil {
@@ -86,6 +92,9 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 		)
 	}
 	err = dec.Err()
+	if err != nil {
+		L(ctx).Info("session lost", zap.String("loss_reason", err.Error()))
+	}
 	if session.Lwt != nil {
 		ch <- session.Lwt
 	}

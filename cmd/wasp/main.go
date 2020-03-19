@@ -152,12 +152,10 @@ func main() {
 			}()
 			handler := func(m transport.Metadata) error {
 				go func() {
-					err := wasp.RunSession(state, m.Channel, publishes)
-					if err != nil {
-						wasp.L(ctx).Info("session lost", zap.String("loss_reason", err.Error()))
-					} else {
-						wasp.L(ctx).Info("session closed")
-					}
+					ctx, cancel := context.WithCancel(ctx)
+					defer cancel()
+					ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
+					wasp.RunSession(ctx, state, m.Channel, publishes)
 				}()
 				return nil
 			}
