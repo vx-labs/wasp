@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"bytes"
 	"io"
 	"sync"
 
@@ -9,9 +10,11 @@ import (
 )
 
 type Session struct {
-	ID   string
-	Lwt  *packet.Publish
-	Conn io.WriteCloser
+	ID     string
+	Lwt    *packet.Publish
+	Conn   io.WriteCloser
+	mtx    sync.Mutex
+	topics [][]byte
 }
 
 func (s *Session) ProcessConnect(connect *packet.Connect) error {
@@ -24,6 +27,25 @@ func (s *Session) ProcessConnect(connect *packet.Connect) error {
 		}
 	}
 	return nil
+}
+
+func (s *Session) AddTopic(t []byte) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	s.topics = append(s.topics, t)
+}
+func (s *Session) RemoveTopic(t []byte) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for idx := range s.topics {
+		if bytes.Equal(s.topics[idx], t) {
+			s.topics[idx] = s.topics[len(s.topics)-1]
+			s.topics = s.topics[:len(s.topics)-1]
+		}
+	}
+}
+func (s *Session) GetTopics() [][]byte {
+	return s.topics
 }
 func (s *Session) Send(publish *packet.Publish) error {
 	publish.MessageId = 1

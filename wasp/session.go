@@ -67,11 +67,16 @@ func RunSession(state State, c transport.TimeoutReadWriteCloser, ch chan *packet
 	if err != nil {
 		return err
 	}
-
+	defer func() {
+		topics := session.GetTopics()
+		for idx := range topics {
+			state.Unsubscribe(ctx, session.ID, topics[idx])
+		}
+	}()
 	for pkt := range dec.Packet() {
-		err = processRequest(ctx, state, ch, session, pkt)
+		err = processPacket(ctx, state, ch, session, pkt)
 		if err == ErrSessionDisconnected {
-			return nil
+			return session.Conn.Close()
 		}
 		if err != nil {
 			L(ctx).Warn("session packet processing failed", zap.Error(err))

@@ -16,7 +16,7 @@ type Request struct {
 	conn      io.WriteCloser
 }
 
-func processRequest(ctx context.Context, state State, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
+func processPacket(ctx context.Context, state State, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -40,6 +40,7 @@ func processRequest(ctx context.Context, state State, publishes chan *packet.Pub
 			if err != nil {
 				return err
 			}
+			session.AddTopic(p.Topic[idx])
 		}
 		err := encoder.New(session.Conn).SubAck(&packet.SubAck{
 			Header:    p.Header,
@@ -67,6 +68,7 @@ func processRequest(ctx context.Context, state State, publishes chan *packet.Pub
 			if err != nil {
 				return err
 			}
+			session.RemoveTopic(p.Topic[idx])
 		}
 		return encoder.New(session.Conn).UnsubAck(&packet.UnsubAck{
 			Header:    p.Header,
