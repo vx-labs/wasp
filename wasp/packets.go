@@ -2,7 +2,6 @@ package wasp
 
 import (
 	"context"
-	"io"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
@@ -10,13 +9,14 @@ import (
 	"github.com/vx-labs/wasp/wasp/sessions"
 )
 
-type Request struct {
-	sessionID string
-	packet    interface{}
-	conn      io.WriteCloser
+type FSM interface {
+	RetainedMessage(ctx context.Context, publish *packet.Publish) error
+	DeleteRetainedMessage(ctx context.Context, topic []byte) error
+	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
+	Unsubscribe(ctx context.Context, id string, pattern []byte) error
 }
 
-func processPacket(ctx context.Context, state State, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
+func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -36,7 +36,7 @@ func processPacket(ctx context.Context, state State, publishes chan *packet.Publ
 		}
 	case *packet.Subscribe:
 		for idx := range p.Topic {
-			err := state.Subscribe(ctx, session.ID, p.Topic[idx], p.Qos[idx])
+			err := fsm.Subscribe(ctx, session.ID, p.Topic[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
@@ -64,7 +64,7 @@ func processPacket(ctx context.Context, state State, publishes chan *packet.Publ
 		}
 	case *packet.Unsubscribe:
 		for idx := range p.Topic {
-			err := state.Unsubscribe(ctx, session.ID, p.Topic[idx])
+			err := fsm.Unsubscribe(ctx, session.ID, p.Topic[idx])
 			if err != nil {
 				return err
 			}

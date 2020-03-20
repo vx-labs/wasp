@@ -11,14 +11,15 @@ import (
 	"time"
 
 	"github.com/spf13/viper"
+	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
-	"github.com/mattn/go-colorable"
 	"github.com/spf13/cobra"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
+	"github.com/vx-labs/wasp/wasp/fsm"
+	"github.com/vx-labs/wasp/wasp/raft"
 	"github.com/vx-labs/wasp/wasp/transport"
 )
 
@@ -26,41 +27,6 @@ type listenerConfig struct {
 	name     string
 	port     int
 	listener net.Listener
-}
-
-func getLogger(config *viper.Viper) *zap.Logger {
-	var logger *zap.Logger
-	var err error
-	fields := []zap.Field{
-		zap.String("version", BuiltVersion),
-		zap.Time("started_at", time.Now()),
-	}
-	if allocID := os.Getenv("NOMAD_ALLOC_ID"); allocID != "" {
-		fields = append(fields,
-			zap.String("nomad_alloc_id", os.Getenv("NOMAD_ALLOC_ID")[:8]),
-			zap.String("nomad_alloc_name", os.Getenv("NOMAD_ALLOC_NAME")),
-			zap.String("nomad_alloc_index", os.Getenv("NOMAD_ALLOC_INDEX")),
-		)
-	}
-	opts := []zap.Option{
-		zap.Fields(fields...),
-	}
-	if config.GetBool("debug") {
-		config := zap.NewDevelopmentEncoderConfig()
-		config.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		logger = zap.New(zapcore.NewCore(
-			zapcore.NewConsoleEncoder(config),
-			zapcore.AddSync(colorable.NewColorableStdout()),
-			zapcore.DebugLevel,
-		))
-		logger.Debug("started debug logger")
-	} else {
-		logger, err = zap.NewProduction(opts...)
-	}
-	if err != nil {
-		panic(err)
-	}
-	return logger
 }
 
 func main() {
@@ -82,7 +48,54 @@ func main() {
 			ctx = wasp.StoreLogger(ctx, getLogger(config))
 			wg := sync.WaitGroup{}
 			publishes := make(chan *packet.Publish, 20)
+			commandsCh := make(chan raft.Command)
+			confCh := make(chan raftpb.ConfChange)
 			state := wasp.NewState()
+			eventsCh, errCh, snapCh := raft.NewNode(1, config.GetString("data-dir"), []string{"http://127.0.0.1:1899"}, false, state.MarshalBinary, commandsCh, confCh)
+			snapshotter := <-snapCh
+
+			snapshot, err := snapshotter.Load()
+			if err != nil {
+				wasp.L(ctx).Warn("failed to get state snapshot", zap.Error(err))
+			} else {
+				err := state.Load(snapshot.Data)
+				if err != nil {
+					wasp.L(ctx).Warn("failed to load state snapshot", zap.Error(err))
+				}
+			}
+			stateMachine := fsm.NewFSM("1", state, commandsCh)
+
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("raft error processor stopped")
+					wg.Done()
+				}()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case err := <-errCh:
+						wasp.L(ctx).Fatal("raft error", zap.Error(err))
+					}
+				}
+			}()
+
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("command processor stopped")
+					wg.Done()
+				}()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case event := <-eventsCh:
+						stateMachine.Apply(event)
+					}
+				}
+			}()
 			messageLog, err := wasp.NewMessageLog(ctx, config.GetString("data-dir"))
 			if err != nil {
 				panic(err)
@@ -155,7 +168,7 @@ func main() {
 					ctx, cancel := context.WithCancel(ctx)
 					defer cancel()
 					ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-					wasp.RunSession(ctx, state, m.Channel, publishes)
+					wasp.RunSession(ctx, stateMachine, state, m.Channel, publishes)
 				}()
 				return nil
 			}
