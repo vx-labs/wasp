@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"path"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/pb"
@@ -38,8 +39,8 @@ func (c *compatLogger) Infof(string, ...interface{})    {}
 func (c *compatLogger) Warningf(string, ...interface{}) {}
 func (c *compatLogger) Errorf(string, ...interface{})   {}
 
-func NewMessageLog(ctx context.Context, path string) (MessageLog, error) {
-	opts := badger.DefaultOptions(path)
+func NewMessageLog(ctx context.Context, datadir string) (MessageLog, error) {
+	opts := badger.DefaultOptions(path.Join(datadir, "badger"))
 	opts.Logger = &compatLogger{l: L(ctx)}
 	db, err := badger.Open(opts)
 	if err != nil {
