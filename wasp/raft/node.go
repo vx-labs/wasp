@@ -2,9 +2,9 @@ package raft
 
 import (
 	"context"
+	"hash/fnv"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -29,18 +29,30 @@ type Command struct {
 	ErrCh   chan error
 }
 
+func hashNodeID(nodeid string) int {
+	h := fnv.New64()
+	h.Write([]byte(nodeid))
+	return int(h.Sum64())
+}
+
+type Peer struct {
+	ID      string
+	Address string
+}
+
 // A key-value stream backed by raft
 type raftNode struct {
+	address     string                   // local node listening address
 	proposeC    <-chan Command           // proposed messages (k,v)
 	confChangeC <-chan raftpb.ConfChange // proposed cluster config changes
 	commitC     chan<- []byte            // entries committed to log (k,v)
 	errorC      chan<- error             // errors from raft session
 
-	id          int      // client ID for raft session
-	peers       []string // raft peer URLs
-	join        bool     // node is joining an existing cluster
-	waldir      string   // path to WAL directory
-	snapdir     string   // path to snapshot directory
+	id          int    // client ID for raft session
+	peers       []Peer // raft peer URLs
+	join        bool   // node is joining an existing cluster
+	waldir      string // path to WAL directory
+	snapdir     string // path to snapshot directory
 	getSnapshot func() ([]byte, error)
 	lastIndex   uint64 // index of log at start
 
@@ -65,18 +77,38 @@ type raftNode struct {
 
 var defaultSnapshotCount uint64 = 10000
 
+type Config struct {
+	NodeID      string
+	NodeAddress string
+	DataDir     string
+	Peers       []Peer
+	Join        bool
+	GetSnapshot func() ([]byte, error)
+	ProposeC    chan Command
+	ConfChangeC <-chan raftpb.ConfChange
+}
+
 // NewNode initiates a raft instance and returns a committed log entry
 // channel and error channel. Proposals for log updates are sent over the
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func NewNode(id int, datadir string, peers []string, join bool, getSnapshot func() ([]byte, error), proposeC chan Command,
-	confChangeC <-chan raftpb.ConfChange) (<-chan []byte, <-chan error, <-chan *snap.Snapshotter) {
+func NewNode(config Config) (<-chan []byte, <-chan error, <-chan *snap.Snapshotter) {
+
+	nodeid := config.NodeID
+	datadir := config.DataDir
+	peers := config.Peers
+	join := config.Join
+	getSnapshot := config.GetSnapshot
+	proposeC := config.ProposeC
+	confChangeC := config.ConfChangeC
 
 	commitC := make(chan []byte)
 	errorC := make(chan error)
 
+	id := hashNodeID(nodeid)
 	rc := &raftNode{
+		address:     config.NodeAddress,
 		proposeC:    proposeC,
 		confChangeC: confChangeC,
 		commitC:     commitC,
@@ -260,10 +292,11 @@ func (rc *raftNode) startRaft() {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 
-	rpeers := make([]raft.Peer, len(rc.peers))
-	for i := range rpeers {
-		rpeers[i] = raft.Peer{ID: uint64(i + 1)}
+	rpeers := make([]raft.Peer, len(rc.peers)+1)
+	for i := range rc.peers {
+		rpeers[i] = raft.Peer{ID: uint64(hashNodeID(rc.peers[i].ID))}
 	}
+	rpeers[len(rpeers)-1] = raft.Peer{ID: uint64(rc.id)}
 	c := &raft.Config{
 		ID:                        uint64(rc.id),
 		ElectionTick:              10,
@@ -296,9 +329,8 @@ func (rc *raftNode) startRaft() {
 
 	rc.transport.Start()
 	for i := range rc.peers {
-		if i+1 != rc.id {
-			rc.transport.AddPeer(types.ID(i+1), []string{rc.peers[i]})
-		}
+		peerID := hashNodeID(rc.peers[i].ID)
+		rc.transport.AddPeer(types.ID(peerID), []string{rc.peers[i].Address})
 	}
 
 	go rc.serveRaft()
@@ -451,12 +483,7 @@ func (rc *raftNode) serveChannels() {
 }
 
 func (rc *raftNode) serveRaft() {
-	url, err := url.Parse(rc.peers[rc.id-1])
-	if err != nil {
-		log.Fatalf("raftexample: Failed parsing URL (%v)", err)
-	}
-
-	ln, err := newStoppableListener(url.Host, rc.httpstopc)
+	ln, err := newStoppableListener(rc.address, rc.httpstopc)
 	if err != nil {
 		log.Fatalf("raftexample: Failed to listen rafthttp (%v)", err)
 	}

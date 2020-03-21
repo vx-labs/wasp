@@ -1,6 +1,8 @@
 package wasp
 
 import (
+	"encoding/json"
+
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
@@ -42,11 +44,41 @@ func NewState() State {
 	}
 }
 
-func (s *state) Load([]byte) error {
+type StateDump struct {
+	Subscriptions []byte
+	Topics        []byte
+}
+
+func (s *state) Load(buf []byte) error {
+	dump := StateDump{}
+	err := json.Unmarshal(buf, &dump)
+	if err != nil {
+		return err
+	}
+	err = s.subscriptions.Load(dump.Subscriptions)
+	if err != nil {
+		return err
+	}
+	err = s.topics.Load(dump.Topics)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (s *state) MarshalBinary() ([]byte, error) {
-	return nil, nil
+	subscriptionsDump, err := s.subscriptions.Dump()
+	if err != nil {
+		return nil, nil
+	}
+	topicsDump, err := s.topics.Dump()
+	if err != nil {
+		return nil, nil
+	}
+	dump := StateDump{
+		Subscriptions: subscriptionsDump,
+		Topics:        topicsDump,
+	}
+	return json.Marshal(dump)
 }
 func (s *state) Subscribe(id string, pattern []byte, qos int32) error {
 	return s.subscriptions.Insert(pattern, qos, id)

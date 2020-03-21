@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -10,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/spf13/viper"
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
@@ -19,6 +23,7 @@ import (
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
 	"github.com/vx-labs/wasp/wasp/fsm"
+	"github.com/vx-labs/wasp/wasp/membership"
 	"github.com/vx-labs/wasp/wasp/raft"
 	"github.com/vx-labs/wasp/wasp/transport"
 )
@@ -27,6 +32,83 @@ type listenerConfig struct {
 	name     string
 	port     int
 	listener net.Listener
+}
+
+type MemberlistMemberProvider interface {
+	Members() []*memberlist.Node
+}
+
+type MemberMetadata struct {
+	RaftAddress string `json:"raft_address"`
+	ID          string `json:"id"`
+}
+
+func localPrivateHost() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		panic(err)
+	}
+
+	for _, v := range ifaces {
+		if v.Flags&net.FlagLoopback != net.FlagLoopback && v.Flags&net.FlagUp == net.FlagUp {
+			h := v.HardwareAddr.String()
+			if len(h) == 0 {
+				continue
+			} else {
+				addresses, _ := v.Addrs()
+				if len(addresses) > 0 {
+					ip := addresses[0]
+					if ipnet, ok := ip.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+						if ipnet.IP.To4() != nil {
+							return ipnet.IP.String()
+						}
+					}
+				}
+			}
+		}
+	}
+	panic("could not find a valid network interface")
+}
+
+func decodeMD(buf []byte) (MemberMetadata, error) {
+	md := MemberMetadata{}
+	return md, json.Unmarshal(buf, &md)
+}
+func encodeMD(id, raftAddress string) []byte {
+	md := MemberMetadata{
+		ID:          id,
+		RaftAddress: raftAddress,
+	}
+	p, _ := json.Marshal(md)
+	return p
+}
+
+func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNumber int) ([]raft.Peer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		nodes := mesh.Members()
+		// TODO: look for bootstrapped cluster
+		if len(nodes) >= expectedNumber {
+			peers := make([]raft.Peer, len(nodes))
+			for idx := range peers {
+				md, err := decodeMD(nodes[idx].Meta)
+				if err != nil {
+					log.Print(string(nodes[idx].Meta))
+					return nil, err
+				}
+				peers[idx] = raft.Peer{Address: md.RaftAddress, ID: md.ID}
+			}
+			return peers, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func main() {
@@ -38,20 +120,89 @@ func main() {
 			config.BindPFlag("tls-port", cmd.Flags().Lookup("tls-port"))
 			config.BindPFlag("wss-port", cmd.Flags().Lookup("wss-port"))
 			config.BindPFlag("ws-port", cmd.Flags().Lookup("ws-port"))
+			config.BindPFlag("raft-port", cmd.Flags().Lookup("raft-port"))
+			config.BindPFlag("serf-port", cmd.Flags().Lookup("serf-port"))
 			config.BindPFlag("tls-cn", cmd.Flags().Lookup("tls-cn"))
 			config.BindPFlag("data-dir", cmd.Flags().Lookup("data-dir"))
 			config.BindPFlag("debug", cmd.Flags().Lookup("debug"))
 			config.BindPFlag("use-vault", cmd.Flags().Lookup("use-vault"))
+			config.BindPFlag("join-node", cmd.Flags().Lookup("join-node"))
+			config.BindPFlag("serf-advertized-address", cmd.Flags().Lookup("serf-advertized-address"))
+			config.BindPFlag("raft-advertized-address", cmd.Flags().Lookup("raft-advertized-address"))
+			config.BindPFlag("serf-advertized-port", cmd.Flags().Lookup("serf-advertized-port"))
+			config.BindPFlag("raft-advertized-port", cmd.Flags().Lookup("raft-advertized-port"))
+			config.BindPFlag("raft-bootstrap-expect", cmd.Flags().Lookup("raft-bootstrap-expect"))
+
+			if !cmd.Flags().Changed("serf-advertized-port") {
+				config.Set("serf-advertized-port", config.Get("serf-port"))
+			}
+			if !cmd.Flags().Changed("raft-advertized-port") {
+				config.Set("raft-advertized-port", config.Get("raft-port"))
+			}
+
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx, cancel := context.WithCancel(context.Background())
 			ctx = wasp.StoreLogger(ctx, getLogger(config))
+
+			id, err := loadID(config.GetString("data-dir"))
+			if err != nil {
+				wasp.L(ctx).Fatal("failed to get node ID", zap.Error(err))
+			}
+			ctx = wasp.AddFields(ctx, zap.String("node_id", id))
+
 			wg := sync.WaitGroup{}
 			publishes := make(chan *packet.Publish, 20)
 			commandsCh := make(chan raft.Command)
 			confCh := make(chan raftpb.ConfChange)
 			state := wasp.NewState()
-			eventsCh, errCh, snapCh := raft.NewNode(1, config.GetString("data-dir"), []string{"http://127.0.0.1:1899"}, false, state.MarshalBinary, commandsCh, confCh)
+
+			membership := membership.New(
+				id,
+				config.GetInt("serf-port"),
+				config.GetString("serf-advertized-address"),
+				config.GetInt("serf-advertized-port"),
+				wasp.L(ctx),
+			)
+			fmt.Printf("Gossip listener is running on port %d", config.GetInt("serf-port"))
+			membership.UpdateMetadata(encodeMD(id,
+				fmt.Sprintf("http://%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-port")),
+			))
+
+			joinList := config.GetStringSlice("join-node")
+			if len(joinList) > 0 {
+				retryTicker := time.NewTicker(3 * time.Second)
+				for {
+					err = membership.Join(config.GetStringSlice("join-node"))
+					if err != nil {
+						wasp.L(ctx).Warn("failed to join cluster", zap.Error(err))
+					} else {
+						break
+					}
+					<-retryTicker.C
+				}
+				retryTicker.Stop()
+			}
+			var peers []raft.Peer
+			if n := config.GetInt("raft-bootstrap-expect"); n > 1 {
+				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", n))
+				peers, err = waitForNodes(ctx, membership, n)
+				if err != nil {
+					wasp.L(ctx).Fatal("cluster bootstrap failed", zap.Error(err))
+				}
+				wasp.L(ctx).Debug("found nodes")
+			}
+			wasp.L(ctx).Debug("starting raft")
+			eventsCh, errCh, snapCh := raft.NewNode(raft.Config{
+				NodeID:      id,
+				Peers:       peers,
+				NodeAddress: fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")),
+				DataDir:     config.GetString("data-dir"),
+				Join:        false,
+				GetSnapshot: state.MarshalBinary,
+				ProposeC:    commandsCh,
+				ConfChangeC: confCh,
+			})
 			snapshotter := <-snapCh
 
 			snapshot, err := snapshotter.Load()
@@ -63,7 +214,7 @@ func main() {
 					wasp.L(ctx).Warn("failed to load state snapshot", zap.Error(err))
 				}
 			}
-			stateMachine := fsm.NewFSM("1", state, commandsCh)
+			stateMachine := fsm.NewFSM(id, state, commandsCh)
 
 			wg.Add(1)
 			go func() {
@@ -237,16 +388,26 @@ func main() {
 			}
 		},
 	}
-	cmd.Flags().BoolP("debug", "", false, "Use a fancy logger and increase logging level.")
-	cmd.Flags().BoolP("use-vault", "", false, "Use Hashicorp Vault to store private keys and certificates.")
+
+	defaultIP := localPrivateHost()
+
+	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
+	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
 
 	cmd.Flags().IntP("tcp-port", "t", 0, "Start TCP listener on this port.")
 	cmd.Flags().IntP("tls-port", "s", 0, "Start TLS listener on this port.")
 	cmd.Flags().IntP("wss-port", "w", 0, "Start Secure WS listener on this port.")
-	cmd.Flags().IntP("ws-port", "", 0, "Start WS listener on this port.")
-
+	cmd.Flags().Int("ws-port", 0, "Start WS listener on this port.")
+	cmd.Flags().Int("serf-port", 1799, "Membership (Serf) port.")
+	cmd.Flags().Int("raft-port", 1899, "Clustering (Raft) port.")
+	cmd.Flags().String("serf-advertized-address", defaultIP, "Advertize this adress to other gossip members.")
+	cmd.Flags().String("raft-advertized-address", defaultIP, "Advertize this adress to other raft nodes.")
+	cmd.Flags().Int("serf-advertized-port", 1799, "Advertize this port to other gossip members.")
+	cmd.Flags().Int("raft-advertized-port", 1899, "Advertize this port to other raft nodes.")
+	cmd.Flags().StringSliceP("join-node", "j", nil, "Join theses nodes to form a cluster.")
 	cmd.Flags().StringP("data-dir", "d", "/tmp/wasp", "Wasp persistent message log location.")
 
-	cmd.Flags().StringP("tls-cn", "", "localhost", "Get ACME certificat for this Common Name.")
+	cmd.Flags().String("tls-cn", "localhost", "Get ACME certificat for this Common Name.")
+	cmd.Flags().IntP("raft-bootstrap-expect", "n", 3, "Wasp will wait for this number of nodes to be available before bootstraping a cluster.")
 	cmd.Execute()
 }

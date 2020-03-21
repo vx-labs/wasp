@@ -1,5 +1,7 @@
 package topics
 
+//go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/wasp/topics/ --go_out=plugins=grpc:. topics.proto
+
 import (
 	"errors"
 	"sync"
@@ -25,6 +27,8 @@ type Store interface {
 	Insert(msg *packet.Publish) error
 	Remove(topic []byte) error
 	Match(topic []byte, msg *[]*packet.Publish) error
+	Dump() ([]byte, error)
+	Load([]byte) error
 }
 
 func NewTree() Store {
@@ -35,9 +39,26 @@ func NewTree() Store {
 
 type tree struct {
 	mtx  sync.RWMutex
-	root *node
+	root *Node
 }
 
+func (t *tree) Dump() ([]byte, error) {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	return proto.Marshal(t.root)
+}
+
+func (t *tree) Load(buf []byte) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	root := &Node{}
+	err := proto.Unmarshal(buf, root)
+	if err != nil {
+		return err
+	}
+	t.root = root
+	return nil
+}
 func (t *tree) Insert(msg *packet.Publish) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
@@ -55,83 +76,76 @@ func (t *tree) Match(topic []byte, msg *[]*packet.Publish) error {
 	return t.root.match(format.Topic(topic), msg)
 }
 
-type node struct {
-	msg *packet.Publish
-	buf []byte
-
-	children map[string]*node
-}
-
-func newNode() *node {
-	return &node{
-		children: make(map[string]*node),
+func newNode() *Node {
+	return &Node{
+		Children: make(map[string]*Node),
 	}
 }
 
-func (n *node) insert(topic format.Topic, msg *packet.Publish) error {
+func (n *Node) insert(topic format.Topic, msg *packet.Publish) error {
 	topic, token := topic.Next()
 	var err error
 	if token == "" {
-		n.buf, err = proto.Marshal(msg)
+		n.Buf, err = proto.Marshal(msg)
 		if err != nil {
 			return err
 		}
-		if n.msg == nil {
-			n.msg = &packet.Publish{}
+		if n.Msg == nil {
+			n.Msg = &packet.Publish{}
 		}
-		if err := proto.Unmarshal(n.buf, n.msg); err != nil {
+		if err := proto.Unmarshal(n.Buf, n.Msg); err != nil {
 			return err
 		}
 		return nil
 	}
 	// Add snode if it doesn't already exist
-	child, ok := n.children[token]
+	child, ok := n.Children[token]
 	if !ok {
 		child = newNode()
-		n.children[token] = child
+		n.Children[token] = child
 	}
 
 	return child.insert(topic, msg)
 }
 
-func (n *node) remove(topic format.Topic) error {
+func (n *Node) remove(topic format.Topic) error {
 	topic, token := topic.Next()
 	if token == "" {
-		n.buf = nil
-		n.msg = nil
+		n.Buf = nil
+		n.Msg = nil
 		return nil
 	}
-	child, ok := n.children[token]
+	child, ok := n.Children[token]
 	if !ok {
 		return ErrTopicNotFound
 	}
 	if err := child.remove(topic); err != nil {
 		return err
 	}
-	if len(child.children) == 0 {
-		delete(n.children, token)
+	if len(child.Children) == 0 {
+		delete(n.Children, token)
 	}
 	return nil
 }
 
-func (n *node) match(topic format.Topic, msgs *[]*packet.Publish) error {
+func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
 	topic, token := topic.Next()
 	if token == "" {
-		if n.msg != nil {
-			*msgs = append(*msgs, n.msg)
+		if n.Msg != nil {
+			*msgs = append(*msgs, n.Msg)
 		}
 		return nil
 	}
 	if token == MWC {
 		n.allRetained(msgs)
 	} else if token == SWC {
-		for _, child := range n.children {
+		for _, child := range n.Children {
 			if err := child.match(topic, msgs); err != nil {
 				return err
 			}
 		}
 	} else {
-		if child, ok := n.children[token]; ok {
+		if child, ok := n.Children[token]; ok {
 			if err := child.match(topic, msgs); err != nil {
 				return err
 			}
@@ -141,12 +155,12 @@ func (n *node) match(topic format.Topic, msgs *[]*packet.Publish) error {
 	return nil
 }
 
-func (n *node) allRetained(msgs *[]*packet.Publish) {
-	if n.msg != nil {
-		*msgs = append(*msgs, n.msg)
+func (n *Node) allRetained(msgs *[]*packet.Publish) {
+	if n.Msg != nil {
+		*msgs = append(*msgs, n.Msg)
 	}
 
-	for _, child := range n.children {
+	for _, child := range n.Children {
 		child.allRetained(msgs)
 	}
 }

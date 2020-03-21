@@ -10,8 +10,10 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/gorilla/websocket v1.4.1
+	github.com/hashicorp/memberlist v0.2.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mattn/go-colorable v0.1.6
+	github.com/oklog/ulid v1.3.1
 	github.com/prometheus/client_golang v1.5.1 // indirect
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.3.2
@@ -19,6 +21,7 @@ require (
 	github.com/vx-labs/mqtt-protocol v4.2.1+incompatible
 	go.etcd.io/etcd v0.0.0-20200319002442-e784ba73c229
 	go.uber.org/zap v1.14.1
-	golang.org/x/crypto v0.0.0-20190510104115-cbcb75029529
+	golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
+	google.golang.org/grpc v1.23.1
 )
