@@ -7,7 +7,7 @@ message RetainedMessageDeleted { bytes Topic = 1; }
 
 message SubscriptionCreated {
   string SessionID = 1;
-  string Peer = 2;
+  uint64 Peer = 2;
   bytes Pattern = 3;
   int32 Qos = 4;
 }

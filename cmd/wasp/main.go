@@ -4,8 +4,8 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -15,17 +15,22 @@ import (
 
 	"github.com/hashicorp/memberlist"
 	"github.com/spf13/viper"
-	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 
 	"github.com/spf13/cobra"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
+	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/fsm"
 	"github.com/vx-labs/wasp/wasp/membership"
 	"github.com/vx-labs/wasp/wasp/raft"
 	"github.com/vx-labs/wasp/wasp/transport"
+)
+
+var (
+	ErrExistingClusterFound = errors.New("existing cluster found")
 )
 
 type listenerConfig struct {
@@ -40,7 +45,7 @@ type MemberlistMemberProvider interface {
 
 type MemberMetadata struct {
 	RaftAddress string `json:"raft_address"`
-	ID          string `json:"id"`
+	ID          uint64 `json:"id"`
 }
 
 func localPrivateHost() string {
@@ -74,7 +79,7 @@ func decodeMD(buf []byte) (MemberMetadata, error) {
 	md := MemberMetadata{}
 	return md, json.Unmarshal(buf, &md)
 }
-func encodeMD(id, raftAddress string) []byte {
+func encodeMD(id uint64, raftAddress string) []byte {
 	md := MemberMetadata{
 		ID:          id,
 		RaftAddress: raftAddress,
@@ -83,20 +88,43 @@ func encodeMD(id, raftAddress string) []byte {
 	return p
 }
 
-func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNumber int) ([]raft.Peer, error) {
+func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNumber int, localContext api.RaftContext) ([]raft.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		nodes := mesh.Members()
-		// TODO: look for bootstrapped cluster
+		for idx := range nodes {
+			md, err := decodeMD(nodes[idx].Meta)
+			if err != nil {
+				continue
+			}
+			conn, err := grpc.Dial(md.RaftAddress,
+				grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(300*time.Millisecond))
+			if err != nil {
+				if err == context.DeadlineExceeded {
+					continue
+				} else {
+					return nil, err
+				}
+			}
+			ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+			clusterPeers, err := api.NewRaftClient(conn).JoinCluster(ctx, &localContext)
+			cancel()
+			if err == nil {
+				peers := []raft.Peer{}
+				for _, clusterPeer := range clusterPeers.GetPeers() {
+					peers = append(peers, raft.Peer{ID: clusterPeer.ID, Address: clusterPeer.Address})
+				}
+				return peers, ErrExistingClusterFound
+			}
+		}
 		if len(nodes) >= expectedNumber {
 			peers := make([]raft.Peer, len(nodes))
 			for idx := range peers {
 				md, err := decodeMD(nodes[idx].Meta)
 				if err != nil {
-					log.Print(string(nodes[idx].Meta))
 					return nil, err
 				}
 				peers[idx] = raft.Peer{Address: md.RaftAddress, ID: md.ID}
@@ -144,19 +172,26 @@ func main() {
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx, cancel := context.WithCancel(context.Background())
 			ctx = wasp.StoreLogger(ctx, getLogger(config))
-
+			err := os.MkdirAll(config.GetString("data-dir"), 0700)
+			if err != nil {
+				wasp.L(ctx).Fatal("failed to create data directory", zap.Error(err))
+			}
 			id, err := loadID(config.GetString("data-dir"))
 			if err != nil {
 				wasp.L(ctx).Fatal("failed to get node ID", zap.Error(err))
 			}
-			ctx = wasp.AddFields(ctx, zap.String("node_id", id))
+			ctx = wasp.AddFields(ctx, zap.Uint64("node_id", id))
 
 			wg := sync.WaitGroup{}
 			publishes := make(chan *packet.Publish, 20)
 			commandsCh := make(chan raft.Command)
-			confCh := make(chan raftpb.ConfChange)
+			confCh := make(chan raft.ChangeConfCommand)
 			state := wasp.NewState()
-
+			server := wasp.ListenGRPC()
+			clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
+			if err != nil {
+				wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
+			}
 			membership := membership.New(
 				id,
 				config.GetInt("serf-port"),
@@ -164,9 +199,9 @@ func main() {
 				config.GetInt("serf-advertized-port"),
 				wasp.L(ctx),
 			)
-			fmt.Printf("Gossip listener is running on port %d", config.GetInt("serf-port"))
+			raftAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
 			membership.UpdateMetadata(encodeMD(id,
-				fmt.Sprintf("http://%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-port")),
+				raftAddress,
 			))
 
 			joinList := config.GetStringSlice("join-node")
@@ -183,26 +218,40 @@ func main() {
 				}
 				retryTicker.Stop()
 			}
-			var peers []raft.Peer
-			if n := config.GetInt("raft-bootstrap-expect"); n > 1 {
-				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", n))
-				peers, err = waitForNodes(ctx, membership, n)
-				if err != nil {
-					wasp.L(ctx).Fatal("cluster bootstrap failed", zap.Error(err))
-				}
-				wasp.L(ctx).Debug("found nodes")
-			}
-			wasp.L(ctx).Debug("starting raft")
-			eventsCh, errCh, snapCh := raft.NewNode(raft.Config{
+			raftConfig := raft.Config{
 				NodeID:      id,
-				Peers:       peers,
+				Server:      server,
 				NodeAddress: fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")),
 				DataDir:     config.GetString("data-dir"),
 				Join:        false,
 				GetSnapshot: state.MarshalBinary,
 				ProposeC:    commandsCh,
 				ConfChangeC: confCh,
-			})
+			}
+			if n := config.GetInt("raft-bootstrap-expect"); n > 1 {
+				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", n))
+				raftConfig.Peers, err = waitForNodes(ctx, membership, n, api.RaftContext{
+					ID:      id,
+					Address: raftAddress,
+				})
+				if err != nil {
+					if err == ErrExistingClusterFound {
+						wasp.L(ctx).Debug("found existing cluster")
+						raftConfig.Join = true
+					} else {
+						wasp.L(ctx).Fatal("cluster bootstrap failed", zap.Error(err))
+					}
+				} else {
+					wasp.L(ctx).Debug("found nodes")
+				}
+			}
+			if raftConfig.Join {
+				wasp.L(ctx).Debug("joining raft cluster")
+			} else {
+				wasp.L(ctx).Debug("bootstraping raft cluster")
+			}
+
+			eventsCh, errCh, snapCh := raft.NewNode(raftConfig, wasp.L(ctx))
 			snapshotter := <-snapCh
 
 			snapshot, err := snapshotter.Load()
@@ -314,6 +363,17 @@ func main() {
 					}
 				}
 			}()
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("cluster listener stopped")
+					wg.Done()
+				}()
+				err := server.Serve(clusterListener)
+				if err != nil {
+					wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
+				}
+			}()
 			handler := func(m transport.Metadata) error {
 				go func() {
 					ctx, cancel := context.WithCancel(ctx)
@@ -378,7 +438,10 @@ func main() {
 				listener.listener.Close()
 				wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 			}
+
 			cancel()
+			server.GracefulStop()
+			clusterListener.Close()
 			wg.Wait()
 			err = messageLog.Close()
 			if err != nil {

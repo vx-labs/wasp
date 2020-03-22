@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package api;
+
+import "go.etcd.io/etcd/raft/raftpb/raft.proto";
+
+message Payload { bytes Data = 1; }
+
+message RaftContext {
+  uint64 ID = 1;
+  string Address = 2;
+}
+
+message JoinClusterResponse { repeated RaftContext Peers = 1; }
+
+message PeerResponse { bool status = 1; }
+
+message CheckHealthRequest {}
+message CheckHealthResponse {}
+
+service Raft {
+  rpc ProcessMessage(raftpb.Message) returns (Payload) {}
+  rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
+  rpc IsPeer(RaftContext) returns (PeerResponse) {}
+  rpc CheckHealth(CheckHealthRequest) returns (CheckHealthResponse) {}
+}

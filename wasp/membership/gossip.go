@@ -3,6 +3,7 @@ package membership
 import (
 	"io/ioutil"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/hashicorp/memberlist"
@@ -88,9 +89,10 @@ func (self *Gossip) MemberCount() int {
 	return self.numMembers()
 }
 
-func New(id string, port int, advertiseAddr string, advertisePort int, logger *zap.Logger) *Gossip {
+func New(id uint64, port int, advertiseAddr string, advertisePort int, logger *zap.Logger) *Gossip {
+	idstr := strconv.Itoa(int(id))
 	self := &Gossip{
-		id:     id,
+		id:     idstr,
 		meta:   []byte{},
 		logger: logger,
 	}
@@ -100,7 +102,7 @@ func New(id string, port int, advertiseAddr string, advertisePort int, logger *z
 	config.AdvertisePort = advertisePort
 	config.BindPort = port
 	config.BindAddr = "0.0.0.0"
-	config.Name = id
+	config.Name = idstr
 	config.Delegate = self
 	config.Events = self
 	if os.Getenv("ENABLE_MEMBERLIST_LOG") != "true" {
