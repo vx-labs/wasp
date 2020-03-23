@@ -7,11 +7,14 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
+
+	consulapi "github.com/hashicorp/consul/api"
 
 	"github.com/hashicorp/memberlist"
 	"github.com/spf13/viper"
@@ -140,6 +143,34 @@ func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNu
 	}
 }
 
+func findPeers(name, tag string, minimumCount int) ([]string, error) {
+	config := consulapi.DefaultConfig()
+	config.HttpClient = http.DefaultClient
+	client, err := consulapi.NewClient(config)
+	if err != nil {
+		return nil, err
+	}
+	var idx uint64
+	for {
+		services, meta, err := client.Catalog().Service(name, tag, &consulapi.QueryOptions{
+			WaitIndex: idx,
+			WaitTime:  10 * time.Second,
+		})
+		if err != nil {
+			return nil, err
+		}
+		idx = meta.LastIndex
+		if len(services) < minimumCount {
+			continue
+		}
+		out := make([]string, len(services))
+		for idx := range services {
+			out[idx] = services[idx].ServiceAddress
+		}
+		return out, nil
+	}
+}
+
 func main() {
 	config := viper.New()
 	cmd := &cobra.Command{
@@ -154,6 +185,7 @@ func main() {
 			config.BindPFlag("tls-cn", cmd.Flags().Lookup("tls-cn"))
 			config.BindPFlag("data-dir", cmd.Flags().Lookup("data-dir"))
 			config.BindPFlag("debug", cmd.Flags().Lookup("debug"))
+			config.BindPFlag("consul-join", cmd.Flags().Lookup("consul-join"))
 			config.BindPFlag("use-vault", cmd.Flags().Lookup("use-vault"))
 			config.BindPFlag("join-node", cmd.Flags().Lookup("join-node"))
 			config.BindPFlag("serf-advertized-address", cmd.Flags().Lookup("serf-advertized-address"))
@@ -161,6 +193,8 @@ func main() {
 			config.BindPFlag("serf-advertized-port", cmd.Flags().Lookup("serf-advertized-port"))
 			config.BindPFlag("raft-advertized-port", cmd.Flags().Lookup("raft-advertized-port"))
 			config.BindPFlag("raft-bootstrap-expect", cmd.Flags().Lookup("raft-bootstrap-expect"))
+			config.BindPFlag("consul-service-name", cmd.Flags().Lookup("consul-service-name"))
+			config.BindPFlag("consul-service-tag", cmd.Flags().Lookup("consul-service-tag"))
 
 			if !cmd.Flags().Changed("serf-advertized-port") {
 				config.Set("serf-advertized-port", config.Get("serf-port"))
@@ -204,8 +238,16 @@ func main() {
 			membership.UpdateMetadata(encodeMD(id,
 				raftAddress,
 			))
-
 			joinList := config.GetStringSlice("join-node")
+			if config.GetBool("consul-join") {
+				consulJoinList, err := findPeers(
+					config.GetString("consul-service-name"), config.GetString("consul-service-tag"),
+					config.GetInt("raft-bootstrap-expect"))
+				if err != nil {
+					wasp.L(ctx).Fatal("failed to find other peers on consul", zap.Error(err))
+				}
+				joinList = append(joinList, consulJoinList...)
+			}
 			if len(joinList) > 0 {
 				retryTicker := time.NewTicker(3 * time.Second)
 				for {
@@ -500,6 +542,9 @@ func main() {
 
 	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
 	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
+	cmd.Flags().Bool("consul-join", false, "Use Hashicorp Consul to find other gossip members. Wasp won't handle service registration in Consul, you must do it before running Wasp.")
+	cmd.Flags().String("consul-service-name", "wasp", "Consul auto-join service name.")
+	cmd.Flags().String("consul-service-tag", "gossip", "Consul auto-join service tag.")
 
 	cmd.Flags().IntP("tcp-port", "t", 0, "Start TCP listener on this port.")
 	cmd.Flags().IntP("tls-port", "s", 0, "Start TLS listener on this port.")

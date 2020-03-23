@@ -10,6 +10,8 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/gorilla/websocket v1.4.1
+	github.com/hashicorp/consul v1.7.2 // indirect
+	github.com/hashicorp/consul/api v1.4.0
 	github.com/hashicorp/memberlist v0.2.0
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mattn/go-colorable v0.1.6
@@ -22,7 +24,7 @@ require (
 	github.com/vx-labs/mqtt-protocol v4.2.1+incompatible
 	go.etcd.io/etcd v0.0.0-20200319002442-e784ba73c229
 	go.uber.org/zap v1.14.1
-	golang.org/x/crypto v0.0.0-20190923035154-9ee001bba392
+	golang.org/x/crypto v0.0.0-20191106202628-ed6320f186d4
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
 	google.golang.org/grpc v1.23.1
 )

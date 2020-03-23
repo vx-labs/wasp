@@ -11,7 +11,7 @@ job "wasp" {
     canary           = 0
   }
 
-  group "tcp-listener" {
+  group "broker" {
     vault {
       policies      = ["nomad-tls-storer"]
       change_mode   = "signal"
@@ -19,7 +19,7 @@ job "wasp" {
       env           = false
     }
 
-    count = 1
+    count = 3
 
     restart {
       attempts = 10
@@ -36,7 +36,7 @@ job "wasp" {
       driver = "docker"
 
       env {
-        CONSUL_HTTP_ADDR = "$${NOMAD_IP_health}:8500"
+        CONSUL_HTTP_ADDR = "$${NOMAD_IP_rpc}:8500"
         VAULT_ADDR       = "http://active.vault.service.consul:8200/"
       }
 
@@ -46,8 +46,6 @@ job "wasp" {
 
         data = <<EOH
 {{with secret "secret/data/vx/mqtt"}}
-http_proxy="{{.Data.http_proxy}}"
-https_proxy="{{.Data.http_proxy}}"
 LE_EMAIL="{{.Data.acme_email}}"
 PSK_PASSWORD="{{ .Data.static_tokens }}"
 JWT_SIGN_KEY="{{ .Data.jwt_sign_key }}"
@@ -109,13 +107,25 @@ EOH
         }
 
         image      = "${service_image}"
-        args       = ["--tcp-port", "1883", "--use-vault", "--wss-port", "443", "--tls-port", "8883", "--tls-cn", "broker.iot.cloud.vx-labs.net"]
+        args       = [
+          "--use-vault",
+          "--consul-join",
+          "--consul-service-name", "wasp",
+          "--consul-service-tag", "gossip",
+          "--wss-port", "443", "--tls-port", "8883", "--tcp-port", "1883",
+          "--tls-cn", "broker.iot.cloud.vx-labs.net",
+          "-n", "${replica_count}",
+          "--raft-advertized-address", "$${NOMAD_IP_rpc}", "--raft-advertized-port", "$${NOMAD_HOST_PORT_rpc}",
+          "--serf-advertized-address", "$${NOMAD_IP_gossip}", "--serf-advertized-port", "$${NOMAD_HOST_PORT_gossip}",
+        ]
         force_pull = true
 
         port_map {
           mqtt   = 1883
           mqtts   = 8883
           mqttwss   = 443
+          gossip = 1799
+          rpc = 1899
         }
       }
 
@@ -128,6 +138,8 @@ EOH
           port  "mqtt"{}
           port  "mqtts"{}
           port  "mqttwss"{}
+          port "rpc" {}
+          port "gossip" {}
         }
       }
 
@@ -184,6 +196,30 @@ EOH
         check {
           type     = "tcp"
           port     = "mqtts"
+          interval = "30s"
+          timeout  = "2s"
+        }
+      }
+      service {
+        name = "wasp"
+        port = "rpc"
+        tags = ["rpc"]
+
+        check {
+          type     = "tcp"
+          port     = "rpc"
+          interval = "30s"
+          timeout  = "2s"
+        }
+      }
+      service {
+        name = "wasp"
+        port = "gossip"
+        tags = ["gossip"]
+
+        check {
+          type     = "tcp"
+          port     = "gossip"
           interval = "30s"
           timeout  = "2s"
         }
