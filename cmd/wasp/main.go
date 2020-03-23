@@ -3,6 +3,9 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net"
 	"os"
 	"os/signal"
@@ -10,16 +13,25 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 
-	"github.com/mattn/go-colorable"
 	"github.com/spf13/cobra"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
+	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/fsm"
+	"github.com/vx-labs/wasp/wasp/membership"
+	"github.com/vx-labs/wasp/wasp/raft"
+	"github.com/vx-labs/wasp/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/transport"
+)
+
+var (
+	ErrExistingClusterFound = errors.New("existing cluster found")
 )
 
 type listenerConfig struct {
@@ -28,39 +40,104 @@ type listenerConfig struct {
 	listener net.Listener
 }
 
-func getLogger(config *viper.Viper) *zap.Logger {
-	var logger *zap.Logger
-	var err error
-	fields := []zap.Field{
-		zap.String("version", BuiltVersion),
-		zap.Time("started_at", time.Now()),
-	}
-	if allocID := os.Getenv("NOMAD_ALLOC_ID"); allocID != "" {
-		fields = append(fields,
-			zap.String("nomad_alloc_id", os.Getenv("NOMAD_ALLOC_ID")[:8]),
-			zap.String("nomad_alloc_name", os.Getenv("NOMAD_ALLOC_NAME")),
-			zap.String("nomad_alloc_index", os.Getenv("NOMAD_ALLOC_INDEX")),
-		)
-	}
-	opts := []zap.Option{
-		zap.Fields(fields...),
-	}
-	if config.GetBool("debug") {
-		config := zap.NewDevelopmentEncoderConfig()
-		config.EncodeLevel = zapcore.CapitalColorLevelEncoder
-		logger = zap.New(zapcore.NewCore(
-			zapcore.NewConsoleEncoder(config),
-			zapcore.AddSync(colorable.NewColorableStdout()),
-			zapcore.DebugLevel,
-		))
-		logger.Debug("started debug logger")
-	} else {
-		logger, err = zap.NewProduction(opts...)
-	}
+type MemberlistMemberProvider interface {
+	Members() []*memberlist.Node
+}
+
+type MemberMetadata struct {
+	RaftAddress string `json:"raft_address"`
+	ID          uint64 `json:"id"`
+}
+
+func localPrivateHost() string {
+	ifaces, err := net.Interfaces()
 	if err != nil {
 		panic(err)
 	}
-	return logger
+
+	for _, v := range ifaces {
+		if v.Flags&net.FlagLoopback != net.FlagLoopback && v.Flags&net.FlagUp == net.FlagUp {
+			h := v.HardwareAddr.String()
+			if len(h) == 0 {
+				continue
+			} else {
+				addresses, _ := v.Addrs()
+				if len(addresses) > 0 {
+					ip := addresses[0]
+					if ipnet, ok := ip.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+						if ipnet.IP.To4() != nil {
+							return ipnet.IP.String()
+						}
+					}
+				}
+			}
+		}
+	}
+	panic("could not find a valid network interface")
+}
+
+func decodeMD(buf []byte) (MemberMetadata, error) {
+	md := MemberMetadata{}
+	return md, json.Unmarshal(buf, &md)
+}
+func encodeMD(id uint64, raftAddress string) []byte {
+	md := MemberMetadata{
+		ID:          id,
+		RaftAddress: raftAddress,
+	}
+	p, _ := json.Marshal(md)
+	return p
+}
+
+func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNumber int, localContext api.RaftContext) ([]raft.Peer, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	for {
+		nodes := mesh.Members()
+		for idx := range nodes {
+			md, err := decodeMD(nodes[idx].Meta)
+			if err != nil {
+				continue
+			}
+			conn, err := grpc.Dial(md.RaftAddress,
+				grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(300*time.Millisecond))
+			if err != nil {
+				if err == context.DeadlineExceeded {
+					continue
+				} else {
+					return nil, err
+				}
+			}
+			ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
+			clusterPeers, err := api.NewRaftClient(conn).JoinCluster(ctx, &localContext)
+			cancel()
+			if err == nil {
+				peers := []raft.Peer{}
+				for _, clusterPeer := range clusterPeers.GetPeers() {
+					peers = append(peers, raft.Peer{ID: clusterPeer.ID, Address: clusterPeer.Address})
+				}
+				return peers, ErrExistingClusterFound
+			}
+		}
+		if len(nodes) >= expectedNumber {
+			peers := make([]raft.Peer, len(nodes))
+			for idx := range peers {
+				md, err := decodeMD(nodes[idx].Meta)
+				if err != nil {
+					return nil, err
+				}
+				peers[idx] = raft.Peer{Address: md.RaftAddress, ID: md.ID}
+			}
+			return peers, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
 }
 
 func main() {
@@ -72,17 +149,170 @@ func main() {
 			config.BindPFlag("tls-port", cmd.Flags().Lookup("tls-port"))
 			config.BindPFlag("wss-port", cmd.Flags().Lookup("wss-port"))
 			config.BindPFlag("ws-port", cmd.Flags().Lookup("ws-port"))
+			config.BindPFlag("raft-port", cmd.Flags().Lookup("raft-port"))
+			config.BindPFlag("serf-port", cmd.Flags().Lookup("serf-port"))
 			config.BindPFlag("tls-cn", cmd.Flags().Lookup("tls-cn"))
 			config.BindPFlag("data-dir", cmd.Flags().Lookup("data-dir"))
 			config.BindPFlag("debug", cmd.Flags().Lookup("debug"))
 			config.BindPFlag("use-vault", cmd.Flags().Lookup("use-vault"))
+			config.BindPFlag("join-node", cmd.Flags().Lookup("join-node"))
+			config.BindPFlag("serf-advertized-address", cmd.Flags().Lookup("serf-advertized-address"))
+			config.BindPFlag("raft-advertized-address", cmd.Flags().Lookup("raft-advertized-address"))
+			config.BindPFlag("serf-advertized-port", cmd.Flags().Lookup("serf-advertized-port"))
+			config.BindPFlag("raft-advertized-port", cmd.Flags().Lookup("raft-advertized-port"))
+			config.BindPFlag("raft-bootstrap-expect", cmd.Flags().Lookup("raft-bootstrap-expect"))
+
+			if !cmd.Flags().Changed("serf-advertized-port") {
+				config.Set("serf-advertized-port", config.Get("serf-port"))
+			}
+			if !cmd.Flags().Changed("raft-advertized-port") {
+				config.Set("raft-advertized-port", config.Get("raft-port"))
+			}
+
 		},
 		Run: func(cmd *cobra.Command, _ []string) {
 			ctx, cancel := context.WithCancel(context.Background())
 			ctx = wasp.StoreLogger(ctx, getLogger(config))
+			err := os.MkdirAll(config.GetString("data-dir"), 0700)
+			if err != nil {
+				wasp.L(ctx).Fatal("failed to create data directory", zap.Error(err))
+			}
+			id, err := loadID(config.GetString("data-dir"))
+			if err != nil {
+				wasp.L(ctx).Fatal("failed to get node ID", zap.Error(err))
+			}
+			ctx = wasp.AddFields(ctx, zap.Uint64("node_id", id))
+
 			wg := sync.WaitGroup{}
 			publishes := make(chan *packet.Publish, 20)
+			commandsCh := make(chan raft.Command)
+			confCh := make(chan raft.ChangeConfCommand)
 			state := wasp.NewState()
+			server := rpc.Listen()
+			clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
+			if err != nil {
+				wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
+			}
+			membership := membership.New(
+				id,
+				config.GetInt("serf-port"),
+				config.GetString("serf-advertized-address"),
+				config.GetInt("serf-advertized-port"),
+				wasp.L(ctx),
+			)
+			raftAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
+			membership.UpdateMetadata(encodeMD(id,
+				raftAddress,
+			))
+
+			joinList := config.GetStringSlice("join-node")
+			if len(joinList) > 0 {
+				retryTicker := time.NewTicker(3 * time.Second)
+				for {
+					err = membership.Join(config.GetStringSlice("join-node"))
+					if err != nil {
+						wasp.L(ctx).Warn("failed to join cluster", zap.Error(err))
+					} else {
+						break
+					}
+					<-retryTicker.C
+				}
+				retryTicker.Stop()
+			}
+			raftConfig := raft.Config{
+				NodeID:      id,
+				Server:      server,
+				NodeAddress: fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")),
+				DataDir:     config.GetString("data-dir"),
+				Join:        false,
+				GetSnapshot: state.MarshalBinary,
+				ProposeC:    commandsCh,
+				ConfChangeC: confCh,
+			}
+			if n := config.GetInt("raft-bootstrap-expect"); n > 1 {
+				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", n))
+				raftConfig.Peers, err = waitForNodes(ctx, membership, n, api.RaftContext{
+					ID:      id,
+					Address: raftAddress,
+				})
+				if err != nil {
+					if err == ErrExistingClusterFound {
+						wasp.L(ctx).Debug("found existing cluster")
+						raftConfig.Join = true
+					} else {
+						wasp.L(ctx).Fatal("cluster bootstrap failed", zap.Error(err))
+					}
+				} else {
+					wasp.L(ctx).Debug("found nodes")
+				}
+			}
+			if raftConfig.Join {
+				wasp.L(ctx).Debug("joining raft cluster")
+			} else {
+				wasp.L(ctx).Debug("bootstraping raft cluster")
+			}
+
+			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
+			/*	membership.OnNodeLeave(func(id string, meta []byte) {
+				md, err := decodeMD(meta)
+				if err != nil {
+					return
+				}
+				errCh := make(chan error)
+				select {
+				case <-ctx.Done():
+					return
+				case raftNode.ConfigurationChanges() <- raft.ChangeConfCommand{
+					Ctx:   ctx,
+					ErrCh: errCh,
+					Payload: raftpb.ConfChange{
+						Type:   raftpb.ConfChangeRemoveNode,
+						NodeID: md.ID,
+					},
+				}:
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case err := <-errCh:
+					if err != nil {
+						wasp.L(ctx).Error("failed to remove left node from cluster", zap.Error(err))
+					} else {
+						wasp.L(ctx).Info("node left cluster", zap.Uint64("remote_node_id", md.ID))
+					}
+				}
+			})*/
+			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode)
+			rpcTransport.Serve(server)
+			raftNode.Start(rpcTransport)
+			snapshotter := <-raftNode.Snapshotter()
+
+			snapshot, err := snapshotter.Load()
+			if err != nil {
+				wasp.L(ctx).Warn("failed to get state snapshot", zap.Error(err))
+			} else {
+				err := state.Load(snapshot.Data)
+				if err != nil {
+					wasp.L(ctx).Warn("failed to load state snapshot", zap.Error(err))
+				}
+			}
+			stateMachine := fsm.NewFSM(id, state, commandsCh)
+
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("command processor stopped")
+					wg.Done()
+				}()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case event := <-raftNode.Commits():
+						stateMachine.Apply(event)
+					}
+				}
+			}()
 			messageLog, err := wasp.NewMessageLog(ctx, config.GetString("data-dir"))
 			if err != nil {
 				panic(err)
@@ -111,12 +341,33 @@ func main() {
 					wg.Done()
 				}()
 				messageLog.Consume(ctx, func(p *packet.Publish) {
-					err := wasp.ProcessPublish(state, p)
+					err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, true, p)
 					if err != nil {
 						wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 					}
 				})
 			}()
+			remotePublishCh := make(chan *packet.Publish, 20)
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("remote publish processor stopped")
+					wg.Done()
+				}()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case p := <-remotePublishCh:
+						err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, false, p)
+						if err != nil {
+							wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
+						}
+					}
+				}
+			}()
+			mqttServer := rpc.NewMQTTServer(remotePublishCh)
+			mqttServer.Serve(server)
 			wg.Add(1)
 			go func() {
 				defer func() {
@@ -150,12 +401,23 @@ func main() {
 					}
 				}
 			}()
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("cluster listener stopped")
+					wg.Done()
+				}()
+				err := server.Serve(clusterListener)
+				if err != nil {
+					wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
+				}
+			}()
 			handler := func(m transport.Metadata) error {
 				go func() {
 					ctx, cancel := context.WithCancel(ctx)
 					defer cancel()
 					ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-					wasp.RunSession(ctx, state, m.Channel, publishes)
+					wasp.RunSession(ctx, stateMachine, state, m.Channel, publishes)
 				}()
 				return nil
 			}
@@ -209,12 +471,20 @@ func main() {
 				syscall.SIGTERM,
 				syscall.SIGQUIT)
 			<-sigc
-			wasp.L(ctx).Info("shutting down")
+			wasp.L(ctx).Info("shutting down wasp")
 			for _, listener := range listeners {
 				listener.listener.Close()
 				wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 			}
+			err = raftNode.Shutdown(ctx)
+			if err != nil {
+				wasp.L(ctx).Error("failed to shutdown raft", zap.Error(err))
+			} else {
+				wasp.L(ctx).Info("raft shutdown")
+			}
 			cancel()
+			server.GracefulStop()
+			clusterListener.Close()
 			wg.Wait()
 			err = messageLog.Close()
 			if err != nil {
@@ -222,18 +492,29 @@ func main() {
 			} else {
 				wasp.L(ctx).Info("message log closed")
 			}
+			wasp.L(ctx).Info("wasp shutdown")
 		},
 	}
-	cmd.Flags().BoolP("debug", "", false, "Use a fancy logger and increase logging level.")
-	cmd.Flags().BoolP("use-vault", "", false, "Use Hashicorp Vault to store private keys and certificates.")
+
+	defaultIP := localPrivateHost()
+
+	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
+	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
 
 	cmd.Flags().IntP("tcp-port", "t", 0, "Start TCP listener on this port.")
 	cmd.Flags().IntP("tls-port", "s", 0, "Start TLS listener on this port.")
 	cmd.Flags().IntP("wss-port", "w", 0, "Start Secure WS listener on this port.")
-	cmd.Flags().IntP("ws-port", "", 0, "Start WS listener on this port.")
-
+	cmd.Flags().Int("ws-port", 0, "Start WS listener on this port.")
+	cmd.Flags().Int("serf-port", 1799, "Membership (Serf) port.")
+	cmd.Flags().Int("raft-port", 1899, "Clustering (Raft) port.")
+	cmd.Flags().String("serf-advertized-address", defaultIP, "Advertize this adress to other gossip members.")
+	cmd.Flags().String("raft-advertized-address", defaultIP, "Advertize this adress to other raft nodes.")
+	cmd.Flags().Int("serf-advertized-port", 1799, "Advertize this port to other gossip members.")
+	cmd.Flags().Int("raft-advertized-port", 1899, "Advertize this port to other raft nodes.")
+	cmd.Flags().StringSliceP("join-node", "j", nil, "Join theses nodes to form a cluster.")
 	cmd.Flags().StringP("data-dir", "d", "/tmp/wasp", "Wasp persistent message log location.")
 
-	cmd.Flags().StringP("tls-cn", "", "localhost", "Get ACME certificat for this Common Name.")
+	cmd.Flags().String("tls-cn", "localhost", "Get ACME certificat for this Common Name.")
+	cmd.Flags().IntP("raft-bootstrap-expect", "n", 3, "Wasp will wait for this number of nodes to be available before bootstraping a cluster.")
 	cmd.Execute()
 }

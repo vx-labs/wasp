@@ -23,7 +23,7 @@ var (
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
 )
 
-func RunSession(ctx context.Context, state State, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
+func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
 	defer c.Close()
 	session := sessions.NewSession(c)
 	enc := encoder.New(c)
@@ -58,7 +58,7 @@ func RunSession(ctx context.Context, state State, c transport.TimeoutReadWriteCl
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	L(ctx).Info("session connected")
+	//L(ctx).Info("session connected")
 	state.SaveSession(session.ID, session)
 	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer
@@ -75,13 +75,13 @@ func RunSession(ctx context.Context, state State, c transport.TimeoutReadWriteCl
 	defer func() {
 		topics := session.GetTopics()
 		for idx := range topics {
-			state.Unsubscribe(ctx, session.ID, topics[idx])
+			fsm.Unsubscribe(ctx, session.ID, topics[idx])
 		}
 	}()
 	for pkt := range dec.Packet() {
-		err = processPacket(ctx, state, ch, session, pkt)
+		err = processPacket(ctx, fsm, state, ch, session, pkt)
 		if err == ErrSessionDisconnected {
-			L(ctx).Info("session closed")
+			//	L(ctx).Info("session closed")
 			return session.Conn.Close()
 		}
 		if err != nil {

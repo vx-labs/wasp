@@ -1,7 +1,7 @@
 package wasp
 
 import (
-	"context"
+	"encoding/json"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -10,13 +10,23 @@ import (
 )
 
 type State interface {
-	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
-	Unsubscribe(ctx context.Context, id string, pattern []byte) error
-	Recipients(topic []byte, qos int32) ([]string, []int32, error)
+	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
+	Unsubscribe(id string, pattern []byte) error
+	Recipients(topic []byte, qos int32) ([]uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
 	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
 	RetainMessage(msg *packet.Publish) error
+	DeleteRetainedMessage(topic []byte) error
+	RetainedMessages(topic []byte) ([]*packet.Publish, error)
+	Load([]byte) error
+	MarshalBinary() ([]byte, error)
+}
+type ReadState interface {
+	Recipients(topic []byte, qos int32) ([]uint64, []string, []int32, error)
+	GetSession(id string) *sessions.Session
+	SaveSession(id string, session *sessions.Session)
+	CloseSession(id string)
 	RetainedMessages(topic []byte) ([]*packet.Publish, error)
 }
 
@@ -34,16 +44,53 @@ func NewState() State {
 	}
 }
 
-func (s *state) Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error {
-	return s.subscriptions.Insert(pattern, qos, id)
+type StateDump struct {
+	Subscriptions []byte
+	Topics        []byte
 }
-func (s *state) Unsubscribe(ctx context.Context, id string, pattern []byte) error {
+
+func (s *state) Load(buf []byte) error {
+	dump := StateDump{}
+	err := json.Unmarshal(buf, &dump)
+	if err != nil {
+		return err
+	}
+	err = s.subscriptions.Load(dump.Subscriptions)
+	if err != nil {
+		return err
+	}
+	err = s.topics.Load(dump.Topics)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+func (s *state) MarshalBinary() ([]byte, error) {
+	subscriptionsDump, err := s.subscriptions.Dump()
+	if err != nil {
+		return nil, nil
+	}
+	topicsDump, err := s.topics.Dump()
+	if err != nil {
+		return nil, nil
+	}
+	dump := StateDump{
+		Subscriptions: subscriptionsDump,
+		Topics:        topicsDump,
+	}
+	return json.Marshal(dump)
+}
+func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) error {
+	return s.subscriptions.Insert(peer, pattern, qos, id)
+}
+func (s *state) Unsubscribe(id string, pattern []byte) error {
 	return s.subscriptions.Remove(pattern, id)
 }
-func (s *state) Recipients(topic []byte, qos int32) ([]string, []int32, error) {
+func (s *state) Recipients(topic []byte, qos int32) ([]uint64, []string, []int32, error) {
 	recipients := []string{}
 	recipientQos := []int32{}
-	return recipients, recipientQos, s.subscriptions.Match(topic, qos, &recipients, &recipientQos)
+	recipientPeer := []uint64{}
+	return recipientPeer, recipients, recipientQos, s.subscriptions.Match(topic, qos, &recipientPeer, &recipients, &recipientQos)
 }
 
 func (s *state) GetSession(id string) *sessions.Session {
@@ -60,6 +107,9 @@ func (s *state) RetainMessage(msg *packet.Publish) error {
 		return s.topics.Insert(msg)
 	}
 	return s.topics.Remove(msg.Topic)
+}
+func (s *state) DeleteRetainedMessage(topic []byte) error {
+	return s.topics.Remove(topic)
 }
 func (s *state) RetainedMessages(topic []byte) ([]*packet.Publish, error) {
 	out := []*packet.Publish{}

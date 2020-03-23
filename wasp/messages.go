@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"path"
+	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/pb"
@@ -13,8 +15,9 @@ import (
 )
 
 var (
-	messageBucketName []byte = []byte("messages")
-	encoding                 = binary.BigEndian
+	localMessagesBucketName  []byte = []byte("local")
+	remoteMessagesBucketName []byte = []byte("remote")
+	encoding                        = binary.BigEndian
 )
 
 type MessageLog interface {
@@ -38,14 +41,14 @@ func (c *compatLogger) Infof(string, ...interface{})    {}
 func (c *compatLogger) Warningf(string, ...interface{}) {}
 func (c *compatLogger) Errorf(string, ...interface{})   {}
 
-func NewMessageLog(ctx context.Context, path string) (MessageLog, error) {
-	opts := badger.DefaultOptions(path)
+func NewMessageLog(ctx context.Context, datadir string) (MessageLog, error) {
+	opts := badger.DefaultOptions(path.Join(datadir, "badger"))
 	opts.Logger = &compatLogger{l: L(ctx)}
 	db, err := badger.Open(opts)
 	if err != nil {
 		return nil, err
 	}
-	seq, err := db.GetSequence(messageBucketName, 1)
+	seq, err := db.GetSequence(localMessagesBucketName, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -71,19 +74,21 @@ func (s *messageLog) Close() error {
 }
 func (s *messageLog) Append(b [][]byte) error {
 	tx := s.db.NewTransaction(true)
-	seq, err := s.db.GetSequence(messageBucketName, 100)
+	defer tx.Discard()
+
+	seq, err := s.db.GetSequence(localMessagesBucketName, uint64(len(b)))
 	if err != nil {
 		return err
 	}
 	defer seq.Release()
 
-	defer tx.Discard()
 	for idx := range b {
 		offset, err := seq.Next()
 		if err != nil {
 			return err
 		}
-		err = tx.Set(int64ToBytes(uint64(offset)), b[idx])
+		entry := badger.NewEntry(int64ToBytes(uint64(offset)), b[idx]).WithTTL(2 * time.Hour)
+		err = tx.SetEntry(entry)
 		if err != nil {
 			return err
 		}

@@ -1,9 +1,11 @@
 package subscriptions
 
+//go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/wasp/subscriptions/ --go_out=plugins=grpc:. subscriptions.proto
 import (
 	"errors"
 	"sync"
 
+	"github.com/gogo/protobuf/proto"
 	"github.com/vx-labs/wasp/wasp/format"
 )
 
@@ -20,9 +22,11 @@ var (
 )
 
 type Tree interface {
-	Insert(pattern []byte, qos int32, sub string) error
+	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
-	Match(topic []byte, qos int32, subs *[]string, qoss *[]int32) error
+	Match(topic []byte, qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) error
+	Dump() ([]byte, error)
+	Load([]byte) error
 }
 
 func NewTree() Tree {
@@ -33,82 +37,98 @@ func NewTree() Tree {
 
 type tree struct {
 	mtx  sync.RWMutex
-	root *node
+	root *Node
 }
 
-func (t *tree) Insert(pattern []byte, qos int32, sub string) error {
+func (t *tree) Dump() ([]byte, error) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-	return t.root.insert(format.Topic(pattern), qos, sub)
+	return proto.Marshal(t.root)
+}
+
+func (t *tree) Load(buf []byte) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	root := &Node{}
+	err := proto.Unmarshal(buf, root)
+	if err != nil {
+		return err
+	}
+	t.root = root
+	return nil
+}
+func (t *tree) Insert(peer uint64, pattern []byte, qos int32, sub string) error {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	return t.root.insert(peer, format.Topic(pattern), qos, sub)
 }
 func (t *tree) Remove(pattern []byte, sub string) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 	return t.root.remove(format.Topic(pattern), sub)
 }
-func (this *tree) Match(topic []byte, qos int32, subs *[]string, qoss *[]int32) error {
+func (this *tree) Match(topic []byte, qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
 	defer this.mtx.RUnlock()
 
 	*subs = (*subs)[0:0]
 	*qoss = (*qoss)[0:0]
 
-	return this.root.match(topic, qos, subs, qoss)
+	return this.root.match(topic, qos, peers, subs, qoss)
 }
 
-type node struct {
-	recipients []string
-	qos        []int32
-
-	children map[string]*node
-}
-
-func newNode() *node {
-	return &node{
-		children: make(map[string]*node),
+func newNode() *Node {
+	return &Node{
+		Children: make(map[string]*Node),
 	}
 }
 
-func (n *node) insert(topic format.Topic, qos int32, sub string) error {
+func (n *Node) insert(peer uint64, topic format.Topic, qos int32, sub string) error {
 	topic, token := topic.Next()
 
 	if token == "" {
-		for i := range n.recipients {
-			if n.recipients[i] == sub {
-				n.qos[i] = qos
+		for i := range n.Recipients {
+			if n.Recipients[i] == sub {
+				n.Qos[i] = qos
 				return nil
 			}
 		}
-		n.recipients = append(n.recipients, sub)
-		n.qos = append(n.qos, qos)
+		n.Recipients = append(n.Recipients, sub)
+		n.Qos = append(n.Qos, qos)
+		n.Peer = append(n.Peer, peer)
 
 		return nil
 	}
-	child, ok := n.children[token]
+	if n.Children == nil {
+		n.Children = make(map[string]*Node)
+	}
+	child, ok := n.Children[token]
 	if !ok {
 		child = newNode()
-		n.children[token] = child
+		n.Children[token] = child
 	}
 
-	return child.insert(topic, qos, sub)
+	return child.insert(peer, topic, qos, sub)
 }
 
-func (n *node) remove(topic format.Topic, sub string) error {
+func (n *Node) remove(topic format.Topic, sub string) error {
 	topic, token := topic.Next()
 
 	if token == "" {
-		for i := range n.recipients {
-			if n.recipients[i] == sub {
-				n.recipients[i] = n.recipients[len(n.recipients)-1]
-				n.recipients = n.recipients[:len(n.recipients)-1]
-				n.qos[i] = n.qos[len(n.qos)-1]
-				n.qos = n.qos[:len(n.qos)-1]
+		for i := range n.Recipients {
+			if n.Recipients[i] == sub {
+				n.Recipients[i] = n.Recipients[len(n.Recipients)-1]
+				n.Recipients = n.Recipients[:len(n.Recipients)-1]
+				n.Qos[i] = n.Qos[len(n.Qos)-1]
+				n.Qos = n.Qos[:len(n.Qos)-1]
+				n.Peer[i] = n.Peer[len(n.Peer)-1]
+				n.Peer = n.Peer[:len(n.Peer)-1]
 				return nil
 			}
 		}
 		return ErrSubscriptionNotFound
 	}
-	child, ok := n.children[token]
+	child, ok := n.Children[token]
 	if !ok {
 		return ErrSubscriptionNotFound
 	}
@@ -117,36 +137,37 @@ func (n *node) remove(topic format.Topic, sub string) error {
 	if err != nil {
 		return err
 	}
-	if len(child.recipients) == 0 && len(child.children) == 0 {
-		delete(n.children, token)
+	if len(child.Recipients) == 0 && len(child.Children) == 0 {
+		delete(n.Children, token)
 	}
 	return nil
 }
 
-func (this *node) matchQos(qos int32, subs *[]string, qoss *[]int32) {
-	for i, sub := range this.recipients {
+func (this *Node) matchQos(qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) {
+	for i, sub := range this.Recipients {
 		// If the published QoS is higher than the subscriber QoS, then we skip the
 		// subscriber. Otherwise, add to the list.
-		if qos <= this.qos[i] {
+		if qos <= this.Qos[i] {
 			*subs = append(*subs, sub)
 			*qoss = append(*qoss, qos)
+			*peers = append(*peers, this.Peer[i])
 		}
 	}
 }
-func (this *node) match(topic format.Topic, qos int32, subs *[]string, qoss *[]int32) error {
+func (this *Node) match(topic format.Topic, qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	topic, token := topic.Next()
 
 	if token == "" {
-		this.matchQos(qos, subs, qoss)
+		this.matchQos(qos, peers, subs, qoss)
 		return nil
 	}
 
-	for k, n := range this.children {
+	for k, n := range this.Children {
 		// If the key is "#", then these subscribers are added to the result set
 		if k == MWC {
-			n.matchQos(qos, subs, qoss)
+			n.matchQos(qos, peers, subs, qoss)
 		} else if k == SWC || k == token {
-			if err := n.match(topic, qos, subs, qoss); err != nil {
+			if err := n.match(topic, qos, peers, subs, qoss); err != nil {
 				return err
 			}
 		}
