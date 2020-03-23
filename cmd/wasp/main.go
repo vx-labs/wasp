@@ -301,22 +301,6 @@ func main() {
 			wg.Add(1)
 			go func() {
 				defer func() {
-					wasp.L(ctx).Info("raft error processor stopped")
-					wg.Done()
-				}()
-				for {
-					select {
-					case <-ctx.Done():
-						return
-					case err := <-raftNode.Err():
-						wasp.L(ctx).Fatal("raft error", zap.Error(err))
-					}
-				}
-			}()
-
-			wg.Add(1)
-			go func() {
-				defer func() {
 					wasp.L(ctx).Info("command processor stopped")
 					wg.Done()
 				}()
@@ -357,7 +341,7 @@ func main() {
 					wg.Done()
 				}()
 				messageLog.Consume(ctx, func(p *packet.Publish) {
-					err := wasp.ProcessPublish(ctx, id, rpcTransport, state, true, p)
+					err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, true, p)
 					if err != nil {
 						wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 					}
@@ -375,7 +359,7 @@ func main() {
 					case <-ctx.Done():
 						return
 					case p := <-remotePublishCh:
-						err := wasp.ProcessPublish(ctx, id, rpcTransport, state, false, p)
+						err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, false, p)
 						if err != nil {
 							wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
 						}
@@ -487,12 +471,17 @@ func main() {
 				syscall.SIGTERM,
 				syscall.SIGQUIT)
 			<-sigc
-			wasp.L(ctx).Info("shutting down")
+			wasp.L(ctx).Info("shutting down wasp")
 			for _, listener := range listeners {
 				listener.listener.Close()
 				wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 			}
-
+			err = raftNode.Shutdown(ctx)
+			if err != nil {
+				wasp.L(ctx).Error("failed to shutdown raft", zap.Error(err))
+			} else {
+				wasp.L(ctx).Info("raft shutdown")
+			}
 			cancel()
 			server.GracefulStop()
 			clusterListener.Close()
@@ -503,6 +492,7 @@ func main() {
 			} else {
 				wasp.L(ctx).Info("message log closed")
 			}
+			wasp.L(ctx).Info("wasp shutdown")
 		},
 	}
 

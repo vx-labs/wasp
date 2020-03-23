@@ -70,6 +70,7 @@ type RaftNode struct {
 	snapCount uint64
 	transport *rpc.Transport
 	stopc     chan struct{} // signals proposal channel closed
+	done      chan struct{} // signals proposal channel closed
 }
 
 var defaultSnapshotCount uint64 = 10000
@@ -120,13 +121,11 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		getSnapshot:      getSnapshot,
 		snapCount:        defaultSnapshotCount,
 		stopc:            make(chan struct{}),
+		done:             make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		// rest of structure populated after WAL replay
 	}
 	return rc
-}
-func (rc *RaftNode) Err() <-chan error {
-	return rc.errorC
 }
 func (rc *RaftNode) Commits() <-chan []byte {
 	return rc.commitC
@@ -197,8 +196,8 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) bool {
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == rc.id {
-					log.Println("I've been removed from the cluster! Shutting down.")
-					return false
+					// "I've been removed from the cluster! Shutting down."
+					continue
 				}
 				rc.transport.RemovePeer(cc.NodeID)
 				rc.logger.Info("removed raft node from transport", zap.Uint64("raft_node_id", cc.NodeID))
@@ -345,7 +344,7 @@ func (rc *RaftNode) stop() {
 	close(rc.commitC)
 	close(rc.errorC)
 	rc.node.Stop()
-	rc.transport.Close()
+	close(rc.done)
 }
 
 func (rc *RaftNode) publishSnapshot(snapshotToSave raftpb.Snapshot) {
@@ -423,11 +422,12 @@ func (rc *RaftNode) serveChannels() {
 					rc.proposeC = nil
 				} else {
 					err := rc.node.Propose(command.Ctx, command.Payload)
-					select {
-					case <-command.Ctx.Done():
-						continue
-					default:
-						command.ErrCh <- err
+					if command.ErrCh != nil {
+						select {
+						case <-command.Ctx.Done():
+							continue
+						case command.ErrCh <- err:
+						}
 					}
 				}
 
@@ -438,11 +438,12 @@ func (rc *RaftNode) serveChannels() {
 					confChangeCount++
 					command.Payload.ID = confChangeCount
 					err := rc.node.ProposeConfChange(command.Ctx, command.Payload)
-					select {
-					case <-command.Ctx.Done():
-						continue
-					default:
-						command.ErrCh <- err
+					if command.ErrCh != nil {
+						select {
+						case <-command.Ctx.Done():
+							continue
+						case command.ErrCh <- err:
+						}
 					}
 				}
 			}
@@ -508,7 +509,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
-	case rc.confChangeC <- ChangeConfCommand{
+	case rc.ConfigurationChanges() <- ChangeConfCommand{
 		Ctx:   ctx,
 		ErrCh: ch,
 		Payload: raftpb.ConfChange{
@@ -528,4 +529,27 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 		}
 		return err
 	}
+}
+
+func (rc *RaftNode) Shutdown(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case rc.ConfigurationChanges() <- ChangeConfCommand{
+		Ctx:   ctx,
+		ErrCh: nil,
+		Payload: raftpb.ConfChange{
+			Type:    raftpb.ConfChangeRemoveNode,
+			NodeID:  rc.id,
+			Context: []byte(rc.address),
+		},
+	}:
+	}
+	rc.stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-rc.done:
+	}
+	return nil
 }

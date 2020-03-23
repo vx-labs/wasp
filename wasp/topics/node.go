@@ -98,7 +98,11 @@ func (n *Node) insert(topic format.Topic, msg *packet.Publish) error {
 		}
 		return nil
 	}
-	// Add snode if it doesn't already exist
+
+	if n.Children == nil {
+		n.Children = make(map[string]*Node)
+	}
+
 	child, ok := n.Children[token]
 	if !ok {
 		child = newNode()
@@ -114,6 +118,9 @@ func (n *Node) remove(topic format.Topic) error {
 		n.Buf = nil
 		n.Msg = nil
 		return nil
+	}
+	if n.Children == nil {
+		n.Children = make(map[string]*Node)
 	}
 	child, ok := n.Children[token]
 	if !ok {
@@ -145,6 +152,9 @@ func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
 			}
 		}
 	} else {
+		if n.Children == nil {
+			n.Children = make(map[string]*Node)
+		}
 		if child, ok := n.Children[token]; ok {
 			if err := child.match(topic, msgs); err != nil {
 				return err

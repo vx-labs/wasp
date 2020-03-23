@@ -58,7 +58,7 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	L(ctx).Info("session connected")
+	//L(ctx).Info("session connected")
 	state.SaveSession(session.ID, session)
 	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer
@@ -81,7 +81,7 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 	for pkt := range dec.Packet() {
 		err = processPacket(ctx, fsm, state, ch, session, pkt)
 		if err == ErrSessionDisconnected {
-			L(ctx).Info("session closed")
+			//	L(ctx).Info("session closed")
 			return session.Conn.Close()
 		}
 		if err != nil {

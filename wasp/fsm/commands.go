@@ -45,13 +45,14 @@ func (f *FSM) commit(ctx context.Context, payload []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	out := make(chan error)
-	defer close(out)
 	select {
 	case <-ctx.Done():
+		close(out)
 		return ctx.Err()
 	case f.commandsCh <- raft.Command{Ctx: ctx, ErrCh: out, Payload: payload}:
 		select {
 		case <-ctx.Done():
+			close(out)
 			return ctx.Err()
 		case err := <-out:
 			return err

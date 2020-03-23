@@ -99,6 +99,9 @@ func (n *Node) insert(peer uint64, topic format.Topic, qos int32, sub string) er
 
 		return nil
 	}
+	if n.Children == nil {
+		n.Children = make(map[string]*Node)
+	}
 	child, ok := n.Children[token]
 	if !ok {
 		child = newNode()

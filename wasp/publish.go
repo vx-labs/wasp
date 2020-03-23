@@ -10,11 +10,18 @@ import (
 	"go.uber.org/zap"
 )
 
-func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, state State, local bool, p *packet.Publish) error {
+func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
 	if p.Header.Retain {
-		err := state.RetainMessage(p)
-		if err != nil {
-			return err
+		if len(p.Payload) == 0 {
+			err := fsm.DeleteRetainedMessage(ctx, p.Topic)
+			if err != nil {
+				return err
+			}
+		} else {
+			err := fsm.RetainedMessage(ctx, p)
+			if err != nil {
+				return err
+			}
 		}
 		p.Header.Retain = false
 	}
