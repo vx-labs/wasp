@@ -40,7 +40,7 @@ func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fs
 		} else if local {
 			if _, ok := peersDone[peers[idx]]; !ok {
 				peersDone[peers[idx]] = struct{}{}
-				ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+				ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 				err := transport.DistributeMessage(ctx, peers[idx], p)
 				cancel()
 				if err != nil {
