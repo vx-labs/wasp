@@ -1,4 +1,4 @@
-package raftgrpc
+package rpc
 
 import (
 	"context"

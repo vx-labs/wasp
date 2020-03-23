@@ -3,6 +3,7 @@ syntax = "proto3";
 package api;
 
 import "go.etcd.io/etcd/raft/raftpb/raft.proto";
+import "github.com/vx-labs/mqtt-protocol/packet/pb.proto";
 
 message Payload { bytes Data = 1; }
 
@@ -23,4 +24,12 @@ service Raft {
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
   rpc IsPeer(RaftContext) returns (PeerResponse) {}
   rpc CheckHealth(CheckHealthRequest) returns (CheckHealthResponse) {}
+}
+
+message DistributeMessageRequest { packet.Publish Message = 1; }
+message DistributeMessageResponse {}
+
+service MQTT {
+  rpc DistributeMessage(DistributeMessageRequest)
+      returns (DistributeMessageResponse) {}
 }

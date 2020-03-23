@@ -1,9 +1,9 @@
-package wasp
+package rpc
 
 import (
 	"google.golang.org/grpc"
 )
 
-func ListenGRPC() *grpc.Server {
+func Listen() *grpc.Server {
 	return grpc.NewServer()
 }

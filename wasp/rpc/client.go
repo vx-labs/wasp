@@ -1,4 +1,4 @@
-package raftgrpc
+package rpc
 
 import (
 	"context"
@@ -33,7 +33,7 @@ type Transport struct {
 	peers               map[uint64]*Peer
 }
 
-func New(id uint64, address string, raft RaftInstance) *Transport {
+func NewTransport(id uint64, address string, raft RaftInstance) *Transport {
 	t := &Transport{
 		nodeID:            id,
 		nodeAddress:       address,

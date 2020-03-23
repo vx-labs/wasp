@@ -26,6 +26,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/fsm"
 	"github.com/vx-labs/wasp/wasp/membership"
 	"github.com/vx-labs/wasp/wasp/raft"
+	"github.com/vx-labs/wasp/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/transport"
 )
 
@@ -187,7 +188,7 @@ func main() {
 			commandsCh := make(chan raft.Command)
 			confCh := make(chan raft.ChangeConfCommand)
 			state := wasp.NewState()
-			server := wasp.ListenGRPC()
+			server := rpc.Listen()
 			clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 			if err != nil {
 				wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
@@ -251,8 +252,11 @@ func main() {
 				wasp.L(ctx).Debug("bootstraping raft cluster")
 			}
 
-			eventsCh, errCh, snapCh := raft.NewNode(raftConfig, wasp.L(ctx))
-			snapshotter := <-snapCh
+			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
+			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode)
+			rpcTransport.Serve(server)
+			raftNode.Start(rpcTransport)
+			snapshotter := <-raftNode.Snapshotter()
 
 			snapshot, err := snapshotter.Load()
 			if err != nil {
@@ -275,7 +279,7 @@ func main() {
 					select {
 					case <-ctx.Done():
 						return
-					case err := <-errCh:
+					case err := <-raftNode.Err():
 						wasp.L(ctx).Fatal("raft error", zap.Error(err))
 					}
 				}
@@ -291,7 +295,7 @@ func main() {
 					select {
 					case <-ctx.Done():
 						return
-					case event := <-eventsCh:
+					case event := <-raftNode.Commits():
 						stateMachine.Apply(event)
 					}
 				}
