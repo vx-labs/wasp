@@ -2,12 +2,19 @@ package rpc
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
+)
+
+var (
+	ErrPeerNotFound = errors.New("peer not found")
+	ErrPeerDisabled = errors.New("peer disabled by healthchecks")
 )
 
 type RaftInstance interface {
@@ -71,7 +78,9 @@ func (t *Transport) runHealthchecks(ctx context.Context) error {
 		_, err := api.NewRaftClient(conn.Conn).CheckHealth(ctx, &api.CheckHealthRequest{})
 		cancel()
 		if err != nil {
-			conn.Enabled = false
+			if conn.Enabled {
+				conn.Enabled = false
+			}
 		} else {
 			conn.Enabled = true
 		}
@@ -108,19 +117,37 @@ func (t *Transport) RemovePeer(id uint64) {
 		delete(t.peers, id)
 	}
 }
-func (t *Transport) Send(messages []raftpb.Message) error {
+func (t *Transport) Send(messages []raftpb.Message) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 	for _, message := range messages {
 		conn, ok := t.peers[message.To]
-		if ok && conn.Enabled {
-			_, err := api.NewRaftClient(conn.Conn).ProcessMessage(context.TODO(), &message)
-			if err != nil {
-				t.raft.ReportUnreachable(message.To)
-				conn.Enabled = false
-				return err
-			}
+		if !ok {
+			continue
+		}
+		if !conn.Enabled {
+			t.raft.ReportUnreachable(message.To)
+			continue
+		}
+		_, err := api.NewRaftClient(conn.Conn).ProcessMessage(context.TODO(), &message)
+		if err != nil {
+			t.raft.ReportUnreachable(message.To)
+			conn.Enabled = false
+			continue
 		}
 	}
-	return nil
+}
+
+func (t *Transport) DistributeMessage(ctx context.Context, to uint64, publish *packet.Publish) error {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+	conn, ok := t.peers[to]
+	if !ok {
+		return ErrPeerNotFound
+	}
+	if !conn.Enabled {
+		return ErrPeerDisabled
+	}
+	_, err := api.NewMQTTClient(conn.Conn).DistributeMessage(ctx, &api.DistributeMessageRequest{Message: publish})
+	return err
 }

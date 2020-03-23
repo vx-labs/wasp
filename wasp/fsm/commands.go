@@ -10,7 +10,7 @@ import (
 )
 
 type State interface {
-	Subscribe(id string, pattern []byte, qos int32) error
+	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
 	RetainMessage(msg *packet.Publish) error
 	DeleteRetainedMessage(topic []byte) error
@@ -124,7 +124,7 @@ func (f *FSM) Apply(b []byte) error {
 			err = f.state.RetainMessage(input.Publish)
 		case *StateTransition_SessionSubscribed:
 			input := event.SessionSubscribed
-			err = f.state.Subscribe(input.SessionID, input.Pattern, input.Qos)
+			err = f.state.Subscribe(input.Peer, input.SessionID, input.Pattern, input.Qos)
 		case *StateTransition_SessionUnsubscribed:
 			input := event.SessionUnsubscribed
 			err = f.state.Unsubscribe(input.SessionID, input.Pattern)

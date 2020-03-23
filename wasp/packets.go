@@ -17,7 +17,7 @@ type FSM interface {
 }
 
 func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 250*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
 	case *packet.Connect:

@@ -13,7 +13,7 @@ func (t *Transport) ProcessMessage(ctx context.Context, message *raftpb.Message)
 	return &api.Payload{}, t.raft.Process(ctx, *message)
 }
 func (t *Transport) JoinCluster(ctx context.Context, r *api.RaftContext) (*api.JoinClusterResponse, error) {
-	if t.raft == nil || t.raft.IsBootstrapped() {
+	if t.raft == nil || !t.raft.IsBootstrapped() {
 		return nil, errors.New("node not ready")
 	}
 	out := &api.JoinClusterResponse{}

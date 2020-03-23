@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sync/atomic"
 	"time"
 
 	"github.com/vx-labs/wasp/wasp/rpc"
@@ -130,6 +131,9 @@ func (rc *RaftNode) Err() <-chan error {
 func (rc *RaftNode) Commits() <-chan []byte {
 	return rc.commitC
 }
+func (rc *RaftNode) ConfigurationChanges() chan<- ChangeConfCommand {
+	return rc.confChangeC
+}
 func (rc *RaftNode) Snapshotter() <-chan *snap.Snapshotter {
 	return rc.snapshotterReady
 }
@@ -188,15 +192,15 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) bool {
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
-					rc.transport.AddPeer(uint64(cc.NodeID), string(cc.Context))
+					rc.transport.AddPeer(cc.NodeID, string(cc.Context))
 					rc.logger.Info("added new raft node to transport", zap.Uint64("raft_node_id", cc.NodeID))
 				}
 			case raftpb.ConfChangeRemoveNode:
-				if cc.NodeID == uint64(rc.id) {
+				if cc.NodeID == rc.id {
 					log.Println("I've been removed from the cluster! Shutting down.")
 					return false
 				}
-				rc.transport.RemovePeer(uint64(cc.NodeID))
+				rc.transport.RemovePeer(cc.NodeID)
 				rc.logger.Info("removed raft node from transport", zap.Uint64("raft_node_id", cc.NodeID))
 			}
 		}
@@ -300,11 +304,18 @@ func (rc *RaftNode) start() {
 
 	rpeers := make([]raft.Peer, len(rc.peers)+1)
 	for i := range rc.peers {
-		rpeers[i] = raft.Peer{ID: rc.peers[i].ID}
+		peerID := rc.peers[i].ID
+		rpeers[i] = raft.Peer{ID: peerID}
+		if peerID != rc.id {
+			rc.transport.AddPeer(peerID, rc.peers[i].Address)
+			rc.logger.Debug("added initial raft node to transport", zap.Uint64("raft_node_id", peerID))
+		}
 	}
-	rpeers[len(rpeers)-1] = raft.Peer{ID: uint64(rc.id)}
+	rpeers[len(rpeers)-1] = raft.Peer{ID: rc.id}
+
 	c := &raft.Config{
-		ID:                        uint64(rc.id),
+		ID:                        rc.id,
+		PreVote:                   true,
 		ElectionTick:              10,
 		HeartbeatTick:             1,
 		Storage:                   rc.raftStorage,
@@ -313,13 +324,6 @@ func (rc *RaftNode) start() {
 		MaxUncommittedEntriesSize: 1 << 30,
 	}
 	rc.logger.Info("starting raft state machine")
-	for i := range rc.peers {
-		peerID := rc.peers[i].ID
-		if peerID != uint64(rc.id) {
-			rc.transport.AddPeer(peerID, rc.peers[i].Address)
-			rc.logger.Debug("added initial raft node to transport", zap.Uint64("raft_node_id", peerID))
-		}
-	}
 
 	if oldwal {
 		rc.node = raft.RestartNode(c)
@@ -462,10 +466,7 @@ func (rc *RaftNode) serveChannels() {
 				rc.publishSnapshot(rd.Snapshot)
 			}
 			rc.raftStorage.Append(rd.Entries)
-			err = rc.transport.Send(rd.Messages)
-			if err != nil {
-				rc.logger.Warn("failed to send message to remote node", zap.Error(err))
-			}
+			rc.transport.Send(rd.Messages)
 			if ok := rc.publishEntries(rc.entriesToApply(rd.CommittedEntries)); !ok {
 				rc.stop()
 				return
@@ -487,17 +488,22 @@ func (rc *RaftNode) Process(ctx context.Context, m raftpb.Message) error {
 	return errors.New("node not started")
 }
 func (rc *RaftNode) ReportUnreachable(id uint64) {
-	rc.logger.Warn("peer reported as unreachable", zap.Uint64("raft_node_id", id))
 	rc.node.ReportUnreachable(id)
 }
 func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	rc.ReportSnapshot(id, status)
 }
 func (rc *RaftNode) IsBootstrapped() bool {
-	return rc.bootstrapped
+	if rc.node == nil {
+		return false
+	}
+	st := rc.node.Status()
+	v := atomic.LoadUint64(&st.Lead)
+	return v > 0 && rc.bootstrapped
 }
 
 func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string) error {
+	rc.logger.Info("new cluster peer reported", zap.Uint64("remote_node_id", id))
 	ch := make(chan error)
 	select {
 	case <-ctx.Done():
@@ -516,6 +522,10 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 	case <-ctx.Done():
 		return ctx.Err()
 	case err := <-ch:
+		if err != nil {
+			rc.logger.Error("failed to add new cluster peer",
+				zap.Error(err), zap.Uint64("remote_node_id", id))
+		}
 		return err
 	}
 }

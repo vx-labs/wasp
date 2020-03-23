@@ -253,6 +253,35 @@ func main() {
 			}
 
 			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
+			/*	membership.OnNodeLeave(func(id string, meta []byte) {
+				md, err := decodeMD(meta)
+				if err != nil {
+					return
+				}
+				errCh := make(chan error)
+				select {
+				case <-ctx.Done():
+					return
+				case raftNode.ConfigurationChanges() <- raft.ChangeConfCommand{
+					Ctx:   ctx,
+					ErrCh: errCh,
+					Payload: raftpb.ConfChange{
+						Type:   raftpb.ConfChangeRemoveNode,
+						NodeID: md.ID,
+					},
+				}:
+				}
+				select {
+				case <-ctx.Done():
+					return
+				case err := <-errCh:
+					if err != nil {
+						wasp.L(ctx).Error("failed to remove left node from cluster", zap.Error(err))
+					} else {
+						wasp.L(ctx).Info("node left cluster", zap.Uint64("remote_node_id", md.ID))
+					}
+				}
+			})*/
 			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode)
 			rpcTransport.Serve(server)
 			raftNode.Start(rpcTransport)
@@ -328,12 +357,33 @@ func main() {
 					wg.Done()
 				}()
 				messageLog.Consume(ctx, func(p *packet.Publish) {
-					err := wasp.ProcessPublish(state, p)
+					err := wasp.ProcessPublish(ctx, id, rpcTransport, state, true, p)
 					if err != nil {
 						wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 					}
 				})
 			}()
+			remotePublishCh := make(chan *packet.Publish, 20)
+			wg.Add(1)
+			go func() {
+				defer func() {
+					wasp.L(ctx).Info("remote publish processor stopped")
+					wg.Done()
+				}()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case p := <-remotePublishCh:
+						err := wasp.ProcessPublish(ctx, id, rpcTransport, state, false, p)
+						if err != nil {
+							wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
+						}
+					}
+				}
+			}()
+			mqttServer := rpc.NewMQTTServer(remotePublishCh)
+			mqttServer.Serve(server)
 			wg.Add(1)
 			go func() {
 				defer func() {

@@ -1,11 +1,16 @@
 package wasp
 
 import (
+	"context"
+	"time"
+
 	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/rpc"
+	"go.uber.org/zap"
 )
 
-func ProcessPublish(state State, p *packet.Publish) error {
+func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, state State, local bool, p *packet.Publish) error {
 	if p.Header.Retain {
 		err := state.RetainMessage(p)
 		if err != nil {
@@ -13,15 +18,29 @@ func ProcessPublish(state State, p *packet.Publish) error {
 		}
 		p.Header.Retain = false
 	}
-	recipients, qoss, err := state.Recipients(p.Topic, p.Header.Qos)
+	peers, recipients, qoss, err := state.Recipients(p.Topic, p.Header.Qos)
 	if err != nil {
 		return err
 	}
+	peersDone := map[uint64]struct{}{}
 	for idx := range recipients {
-		session := state.GetSession(recipients[idx])
-		if session != nil {
-			p.Header.Qos = qoss[idx]
-			session.Send(p)
+		if peers[idx] == id {
+			session := state.GetSession(recipients[idx])
+			if session != nil {
+				p.Header.Qos = qoss[idx]
+				session.Send(p)
+			}
+		} else if local {
+			if _, ok := peersDone[peers[idx]]; !ok {
+				peersDone[peers[idx]] = struct{}{}
+				ctx, cancel := context.WithTimeout(ctx, 100*time.Millisecond)
+				err := transport.DistributeMessage(ctx, peers[idx], p)
+				cancel()
+				if err != nil {
+					L(ctx).Warn("failed to distribute message to remote peer",
+						zap.Error(err), zap.Uint64("remote_peer_id", peers[idx]))
+				}
+			}
 		}
 	}
 	return nil
