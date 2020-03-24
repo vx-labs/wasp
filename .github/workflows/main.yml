@@ -1,14 +1,23 @@
-name: Publish Docker
-on: [push]
+---
+name: build and publish
+on:
+  - push
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@master
-    - name: Publish to Registry
-      uses: elgohr/Publish-Docker-Github-Action@master
-      with:
-        name: vxlabs/wasp
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-        tags: "latest,${{ github.sha }}"
+      - name: Checkout repository
+        uses: actions/checkout@master
+      - name: Build and push Docker container
+        uses: docker/build-push-action@v1
+        with:
+          username: "${{ secrets.DOCKER_USERNAME }}"
+          password: "${{ secrets.DOCKER_PASSWORD }}"
+          repository: vxlabs/wasp
+          tags: "latest,${{ github.sha }}"
+      - name: Notify Slack
+        uses: rtCamp/action-slack-notify@v2.0.0
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+
+
