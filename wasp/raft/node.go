@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path"
-	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap/zapcore"
@@ -57,21 +56,23 @@ func (p Peers) MarshalLogArray(e zapcore.ArrayEncoder) error {
 
 // A key-value stream backed by raft
 type RaftNode struct {
-	id           uint64 // client ID for raft session
-	address      string // local node listening address
-	bootstrapped bool
-	server       *grpc.Server
-	proposeC     <-chan Command         // proposed messages (k,v)
-	confChangeC  chan ChangeConfCommand // proposed cluster config changes
-	commitC      chan []byte            // entries committed to log (k,v)
-	errorC       chan error             // errors from raft session
-	logger       *zap.Logger
-	peers        []Peer // raft peer URLs
-	join         bool   // node is joining an existing cluster
-	waldir       string // path to WAL directory
-	snapdir      string // path to snapshot directory
-	getSnapshot  func() ([]byte, error)
-	lastIndex    uint64 // index of log at start
+	currentLeader uint64
+	isLeader      bool
+	id            uint64 // client ID for raft session
+	address       string // local node listening address
+	bootstrapped  bool
+	server        *grpc.Server
+	proposeC      <-chan Command         // proposed messages (k,v)
+	confChangeC   chan ChangeConfCommand // proposed cluster config changes
+	commitC       chan []byte            // entries committed to log (k,v)
+	errorC        chan error             // errors from raft session
+	logger        *zap.Logger
+	peers         []Peer // raft peer URLs
+	join          bool   // node is joining an existing cluster
+	waldir        string // path to WAL directory
+	snapdir       string // path to snapshot directory
+	getSnapshot   func() ([]byte, error)
+	lastIndex     uint64 // index of log at start
 
 	confState     raftpb.ConfState
 	snapshotIndex uint64
@@ -124,6 +125,8 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 	errorC := make(chan error)
 
 	rc := &RaftNode{
+		currentLeader:    0,
+		isLeader:         false,
 		address:          config.NodeAddress,
 		server:           config.Server,
 		proposeC:         proposeC,
@@ -325,7 +328,7 @@ func (rc *RaftNode) start() {
 		rpeers[i] = raft.Peer{ID: peerID}
 		if peerID != rc.id {
 			rc.transport.AddPeer(peerID, rc.peers[i].Address)
-			rc.logger.Debug("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
+			rc.logger.Info("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
 		}
 	}
 	rpeers[len(rpeers)-1] = raft.Peer{ID: rc.id}
@@ -478,6 +481,25 @@ func (rc *RaftNode) serveChannels() {
 
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
+			if rd.SoftState != nil {
+				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
+				if newLeader {
+					rc.currentLeader = rd.SoftState.Lead
+					if rc.currentLeader == rc.id {
+						rc.logger.Info("raft leadership acquired")
+						rc.isLeader = true
+					} else {
+						if rc.isLeader {
+							rc.logger.Warn("raft leadership lost")
+							rc.isLeader = false
+						}
+					}
+				}
+
+				if rd.SoftState.Lead == raft.None {
+					rc.currentLeader = 0
+				}
+			}
 			rc.wal.Save(rd.HardState, rd.Entries)
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				rc.saveSnap(rd.Snapshot)
@@ -516,9 +538,7 @@ func (rc *RaftNode) IsBootstrapped() bool {
 	if rc.node == nil {
 		return false
 	}
-	st := rc.node.Status()
-	v := atomic.LoadUint64(&st.Lead)
-	return v > 0 && rc.bootstrapped
+	return rc.currentLeader > 0 && rc.bootstrapped
 }
 
 func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string) error {
@@ -549,19 +569,6 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 }
 
 func (rc *RaftNode) Shutdown(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case rc.ConfigurationChanges() <- ChangeConfCommand{
-		Ctx:   ctx,
-		ErrCh: nil,
-		Payload: raftpb.ConfChange{
-			Type:    raftpb.ConfChangeRemoveNode,
-			NodeID:  rc.id,
-			Context: []byte(rc.address),
-		},
-	}:
-	}
 	rc.stop()
 	select {
 	case <-ctx.Done():
