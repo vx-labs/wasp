@@ -2,6 +2,7 @@ package wasp
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -45,7 +46,7 @@ func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fs
 				cancel()
 				if err != nil {
 					L(ctx).Warn("failed to distribute message to remote peer",
-						zap.Error(err), zap.Uint64("remote_peer_id", peers[idx]))
+						zap.Error(err), zap.String("remote_peer_id", fmt.Sprintf("%x", peers[idx])))
 				}
 			}
 		}

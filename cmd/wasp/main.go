@@ -215,7 +215,7 @@ func main() {
 			if err != nil {
 				wasp.L(ctx).Fatal("failed to get node ID", zap.Error(err))
 			}
-			ctx = wasp.AddFields(ctx, zap.Uint64("node_id", id))
+			ctx = wasp.AddFields(ctx, zap.String("node_id", fmt.Sprintf("%x", id)))
 
 			wg := sync.WaitGroup{}
 			publishes := make(chan *packet.Publish, 20)
