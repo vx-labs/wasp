@@ -27,6 +27,7 @@ type Tree interface {
 	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
 	Dump() ([]byte, error)
 	Load([]byte) error
+	Count() int
 }
 
 func NewTree() Tree {
@@ -67,6 +68,12 @@ func (t *tree) Remove(pattern []byte, sub string) error {
 	defer t.mtx.Unlock()
 	return t.root.remove(format.Topic(pattern), sub)
 }
+
+func (this *tree) Count() int {
+	this.mtx.RLock()
+	defer this.mtx.RUnlock()
+	return this.root.count(0)
+}
 func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
 	defer this.mtx.RUnlock()
@@ -83,6 +90,13 @@ func newNode() *Node {
 	}
 }
 
+func (n *Node) count(counter int) int {
+	c := counter + len(n.Recipients)
+	for key := range n.Children {
+		c = n.Children[key].count(c)
+	}
+	return c
+}
 func (n *Node) insert(peer uint64, topic format.Topic, qos int32, sub string) error {
 	topic, token := topic.Next()
 

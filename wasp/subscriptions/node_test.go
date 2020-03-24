@@ -39,3 +39,12 @@ func TestTree_Match(t *testing.T) {
 	require.Contains(t, recipientIds, "test")
 	require.Contains(t, recipientIds, "test2")
 }
+func TestTree_Count(t *testing.T) {
+	myTree := &tree{
+		root: newNode(),
+	}
+	require.NoError(t, myTree.Insert(1, []byte("test/a"), 0, "test"))
+	require.NoError(t, myTree.Insert(1, []byte("test/+"), 1, "test2"))
+	require.NoError(t, myTree.Insert(2, []byte("test/b/c"), 1, "test3"))
+	require.Equal(t, 3, myTree.Count())
+}

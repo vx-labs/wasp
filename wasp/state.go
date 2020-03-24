@@ -3,10 +3,19 @@ package wasp
 import (
 	"encoding/json"
 
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
 	"github.com/vx-labs/wasp/wasp/topics"
+)
+
+var (
+	subscriptionsCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "wasp_subscription_count",
+		Help: "The total number of MQTT subscriptions",
+	})
 )
 
 type State interface {
@@ -59,6 +68,7 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
+	subscriptionsCount.Set(float64(s.subscriptions.Count()))
 	err = s.topics.Load(dump.Topics)
 	if err != nil {
 		return err
@@ -81,9 +91,11 @@ func (s *state) MarshalBinary() ([]byte, error) {
 	return json.Marshal(dump)
 }
 func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) error {
+	subscriptionsCount.Inc()
 	return s.subscriptions.Insert(peer, pattern, qos, id)
 }
 func (s *state) Unsubscribe(id string, pattern []byte) error {
+	subscriptionsCount.Dec()
 	return s.subscriptions.Remove(pattern, id)
 }
 func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {
