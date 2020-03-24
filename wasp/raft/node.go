@@ -210,7 +210,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) bool {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
 					rc.transport.AddPeer(cc.NodeID, string(cc.Context))
-					rc.logger.Info("added new raft node to transport", zap.String("raft_node_id", fmt.Sprintf("%x", cc.NodeID)))
+					rc.logger.Info("added new raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", cc.NodeID)))
 				}
 			case raftpb.ConfChangeRemoveNode:
 				if cc.NodeID == rc.id {
@@ -218,7 +218,7 @@ func (rc *RaftNode) publishEntries(ents []raftpb.Entry) bool {
 					continue
 				}
 				rc.transport.RemovePeer(cc.NodeID)
-				rc.logger.Info("removed raft node from transport", zap.String("raft_node_id", fmt.Sprintf("%x", cc.NodeID)))
+				rc.logger.Info("removed raft node from transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", cc.NodeID)))
 			}
 		}
 
@@ -325,7 +325,7 @@ func (rc *RaftNode) start() {
 		rpeers[i] = raft.Peer{ID: peerID}
 		if peerID != rc.id {
 			rc.transport.AddPeer(peerID, rc.peers[i].Address)
-			rc.logger.Debug("added initial raft node to transport", zap.String("raft_node_id", fmt.Sprintf("%x", peerID)))
+			rc.logger.Debug("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
 		}
 	}
 	rpeers[len(rpeers)-1] = raft.Peer{ID: rc.id}
@@ -542,7 +542,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 	case err := <-ch:
 		if err != nil {
 			rc.logger.Error("failed to add new cluster peer",
-				zap.Error(err), zap.String("raft_node_id", fmt.Sprintf("%x", id)))
+				zap.Error(err), zap.String("hex_raft_node_id", fmt.Sprintf("%x", id)))
 		}
 		return err
 	}

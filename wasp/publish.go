@@ -46,7 +46,7 @@ func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fs
 				cancel()
 				if err != nil {
 					L(ctx).Warn("failed to distribute message to remote peer",
-						zap.Error(err), zap.String("remote_peer_id", fmt.Sprintf("%x", peers[idx])))
+						zap.Error(err), zap.String("hex_remote_peer_id", fmt.Sprintf("%x", peers[idx])))
 				}
 			}
 		}
