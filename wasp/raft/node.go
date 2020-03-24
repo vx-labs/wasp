@@ -9,6 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/vx-labs/wasp/wasp/rpc"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/fileutil"
@@ -35,6 +37,21 @@ type ChangeConfCommand struct {
 type Peer struct {
 	ID      uint64
 	Address string
+}
+
+func (p Peer) MarshalLogObject(e zapcore.ObjectEncoder) error {
+	e.AddUint64("peer_id", p.ID)
+	e.AddString("peer_address", p.Address)
+	return nil
+}
+
+type Peers []Peer
+
+func (p Peers) MarshalLogArray(e zapcore.ArrayEncoder) error {
+	for idx := range p {
+		e.AppendObject(p[idx])
+	}
+	return nil
 }
 
 // A key-value stream backed by raft
@@ -80,7 +97,7 @@ type Config struct {
 	NodeAddress string
 	Server      *grpc.Server
 	DataDir     string
-	Peers       []Peer
+	Peers       Peers
 	Join        bool
 	GetSnapshot func() ([]byte, error)
 	ProposeC    <-chan Command

@@ -289,9 +289,9 @@ func main() {
 				}
 			}
 			if raftConfig.Join {
-				wasp.L(ctx).Debug("joining raft cluster")
+				wasp.L(ctx).Info("joining raft cluster", zap.Array("raft_peers", raftConfig.Peers))
 			} else {
-				wasp.L(ctx).Debug("bootstraping raft cluster")
+				wasp.L(ctx).Info("bootstraping raft cluster", zap.Array("raft_peers", raftConfig.Peers))
 			}
 
 			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
