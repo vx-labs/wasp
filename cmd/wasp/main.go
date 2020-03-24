@@ -245,13 +245,14 @@ func main() {
 					config.GetString("consul-service-name"), config.GetString("consul-service-tag"),
 					config.GetInt("raft-bootstrap-expect"))
 				if err != nil {
-					wasp.L(ctx).Fatal("failed to find other peers on consul", zap.Error(err))
+					wasp.L(ctx).Fatal("failed to find other peers on Consul", zap.Error(err))
 				}
-				wasp.L(ctx).Info("discovered nodes using consul",
+				wasp.L(ctx).Info("discovered nodes using Consul",
 					zap.Duration("consul_discovery_duration", time.Since(discoveryStarted)), zap.Int("node_count", len(consulJoinList)))
 				joinList = append(joinList, consulJoinList...)
 			}
 			if len(joinList) > 0 {
+				joinStarted := time.Now()
 				retryTicker := time.NewTicker(3 * time.Second)
 				for {
 					err = membership.Join(joinList)
@@ -263,6 +264,8 @@ func main() {
 					<-retryTicker.C
 				}
 				retryTicker.Stop()
+				wasp.L(ctx).Info("joined gossip mesh",
+					zap.Duration("gossip_join_duration", time.Since(joinStarted)), zap.Strings("gossip_node_list", joinList))
 			}
 			raftConfig := raft.Config{
 				NodeID:      id,
@@ -274,22 +277,23 @@ func main() {
 				ProposeC:    commandsCh,
 				ConfChangeC: confCh,
 			}
-			if n := config.GetInt("raft-bootstrap-expect"); n > 1 {
-				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", n))
-				raftConfig.Peers, err = waitForNodes(ctx, membership, n, api.RaftContext{
+			if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
+				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
+				raftConfig.Peers, err = waitForNodes(ctx, membership, expectedCount, api.RaftContext{
 					ID:      id,
 					Address: raftAddress,
 				})
 				if err != nil {
 					if err == ErrExistingClusterFound {
-						wasp.L(ctx).Debug("found existing cluster")
+						wasp.L(ctx).Info("discovered existing raft cluster")
 						raftConfig.Join = true
 					} else {
-						wasp.L(ctx).Fatal("cluster bootstrap failed", zap.Error(err))
+						wasp.L(ctx).Fatal("failed to discover nodes on gossip mesh", zap.Error(err))
 					}
-				} else {
-					wasp.L(ctx).Debug("found nodes")
 				}
+				wasp.L(ctx).Info("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(raftConfig.Peers)))
+			} else {
+				wasp.L(ctx).Info("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
 			}
 			if raftConfig.Join {
 				wasp.L(ctx).Info("joining raft cluster", zap.Array("raft_peers", raftConfig.Peers))
@@ -508,7 +512,7 @@ func main() {
 				}
 			}
 			for _, listener := range listeners {
-				wasp.L(ctx).Info("listener started", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
+				wasp.L(ctx).Debug("listener started", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 			}
 			sigc := make(chan os.Signal, 1)
 			signal.Notify(sigc,

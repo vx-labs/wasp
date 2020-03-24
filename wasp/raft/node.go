@@ -40,7 +40,7 @@ type Peer struct {
 }
 
 func (p Peer) MarshalLogObject(e zapcore.ObjectEncoder) error {
-	e.AddUint64("peer_id", p.ID)
+	e.AddString("hex_peer_id", fmt.Sprintf("%x", p.ID))
 	e.AddString("peer_address", p.Address)
 	return nil
 }
@@ -493,10 +493,12 @@ func (rc *RaftNode) serveChannels() {
 							rc.logger.Warn("raft leadership lost")
 							rc.isLeader = false
 						}
+						rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
 					}
 				}
 
 				if rd.SoftState.Lead == raft.None {
+					rc.logger.Warn("raft cluster has no leader")
 					rc.currentLeader = 0
 				}
 			}

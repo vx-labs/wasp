@@ -108,13 +108,13 @@ EOH
 
         image      = "${service_image}"
         args       = [
+          "--data-dir", "$${NOMAD_TASK_DIR}",
           "--use-vault",
           "--consul-join",
           "--consul-service-name", "wasp",
           "--consul-service-tag", "gossip",
           "--wss-port", "443", "--tls-port", "8883", "--tcp-port", "1883",
           "--tls-cn", "broker.iot.cloud.vx-labs.net",
-          "-n", "${replica_count}",
           "--raft-advertized-address", "$${NOMAD_IP_rpc}", "--raft-advertized-port", "$${NOMAD_HOST_PORT_rpc}",
           "--serf-advertized-address", "$${NOMAD_IP_gossip}", "--serf-advertized-port", "$${NOMAD_HOST_PORT_gossip}",
         ]
@@ -131,7 +131,7 @@ EOH
 
       resources {
         cpu    = 200
-        memory = 64
+        memory = 128
 
         network {
           mbits = 10
