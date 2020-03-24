@@ -12,7 +12,7 @@ import (
 type State interface {
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
-	Recipients(topic []byte, qos int32) ([]uint64, []string, []int32, error)
+	Recipients(topic []byte) ([]uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
 	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
@@ -23,7 +23,7 @@ type State interface {
 	MarshalBinary() ([]byte, error)
 }
 type ReadState interface {
-	Recipients(topic []byte, qos int32) ([]uint64, []string, []int32, error)
+	Recipients(topic []byte) ([]uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
 	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
@@ -86,11 +86,11 @@ func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) err
 func (s *state) Unsubscribe(id string, pattern []byte) error {
 	return s.subscriptions.Remove(pattern, id)
 }
-func (s *state) Recipients(topic []byte, qos int32) ([]uint64, []string, []int32, error) {
+func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {
 	recipients := []string{}
 	recipientQos := []int32{}
 	recipientPeer := []uint64{}
-	return recipientPeer, recipients, recipientQos, s.subscriptions.Match(topic, qos, &recipientPeer, &recipients, &recipientQos)
+	return recipientPeer, recipients, recipientQos, s.subscriptions.Match(topic, &recipientPeer, &recipients, &recipientQos)
 }
 
 func (s *state) GetSession(id string) *sessions.Session {

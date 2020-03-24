@@ -24,7 +24,7 @@ var (
 type Tree interface {
 	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
-	Match(topic []byte, qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) error
+	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
 	Dump() ([]byte, error)
 	Load([]byte) error
 }
@@ -67,14 +67,14 @@ func (t *tree) Remove(pattern []byte, sub string) error {
 	defer t.mtx.Unlock()
 	return t.root.remove(format.Topic(pattern), sub)
 }
-func (this *tree) Match(topic []byte, qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) error {
+func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
 	defer this.mtx.RUnlock()
 
 	*subs = (*subs)[0:0]
 	*qoss = (*qoss)[0:0]
 
-	return this.root.match(topic, qos, peers, subs, qoss)
+	return this.root.match(topic, peers, subs, qoss)
 }
 
 func newNode() *Node {
@@ -143,31 +143,27 @@ func (n *Node) remove(topic format.Topic, sub string) error {
 	return nil
 }
 
-func (this *Node) matchQos(qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) {
+func (this *Node) appendRecipents(peers *[]uint64, subs *[]string, qoss *[]int32) {
 	for i, sub := range this.Recipients {
-		// If the published QoS is higher than the subscriber QoS, then we skip the
-		// subscriber. Otherwise, add to the list.
-		if qos <= this.Qos[i] {
-			*subs = append(*subs, sub)
-			*qoss = append(*qoss, qos)
-			*peers = append(*peers, this.Peer[i])
-		}
+		*subs = append(*subs, sub)
+		*qoss = append(*qoss, this.Qos[i])
+		*peers = append(*peers, this.Peer[i])
 	}
 }
-func (this *Node) match(topic format.Topic, qos int32, peers *[]uint64, subs *[]string, qoss *[]int32) error {
+func (this *Node) match(topic format.Topic, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	topic, token := topic.Next()
 
 	if token == "" {
-		this.matchQos(qos, peers, subs, qoss)
+		this.appendRecipents(peers, subs, qoss)
 		return nil
 	}
 
 	for k, n := range this.Children {
 		// If the key is "#", then these subscribers are added to the result set
 		if k == MWC {
-			n.matchQos(qos, peers, subs, qoss)
+			n.appendRecipents(peers, subs, qoss)
 		} else if k == SWC || k == token {
-			if err := n.match(topic, qos, peers, subs, qoss); err != nil {
+			if err := n.match(topic, peers, subs, qoss); err != nil {
 				return err
 			}
 		}

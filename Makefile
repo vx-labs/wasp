@@ -8,3 +8,5 @@ deploy:
 	terraform apply -auto-approve -var image_tag=${VERSION}
 nuke:
 	terraform destroy -auto-approve -var image_tag=${VERSION}
+watch::
+	while true; do inotifywait -qq -r -e create,close_write,modify,move,delete ./ && clear; date; echo; go test ./...; done
