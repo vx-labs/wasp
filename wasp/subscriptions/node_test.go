@@ -36,7 +36,6 @@ func TestTree_Match(t *testing.T) {
 	require.Equal(t, 1, len(recipientIds))
 	require.Equal(t, "test3", recipientIds[0])
 	require.NoError(t, myTree.Match([]byte("test/a"), &recipientPeers, &recipientIds, &recipientQos))
-	require.Equal(t, "test", recipientIds[0])
-	require.Equal(t, "test2", recipientIds[1])
-	require.Equal(t, uint64(1), recipientPeers[1])
+	require.Contains(t, recipientIds, "test")
+	require.Contains(t, recipientIds, "test2")
 }

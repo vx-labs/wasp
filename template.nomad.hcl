@@ -41,7 +41,7 @@ job "wasp" {
 
       template {
         change_mode = "restart"
-        destination = "secrets/environment"
+        destination = "local/environment"
         env         = true
 
         data = <<EOH
