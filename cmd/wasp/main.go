@@ -92,7 +92,7 @@ func encodeMD(id uint64, raftAddress string) []byte {
 	return p
 }
 
-func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNumber int, localContext api.RaftContext) ([]raft.Peer, error) {
+func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNumber int, localContext api.RaftContext, rpcDialer rpc.Dialer) ([]raft.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)
@@ -104,8 +104,8 @@ func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNu
 			if err != nil {
 				continue
 			}
-			conn, err := grpc.Dial(md.RaftAddress,
-				grpc.WithInsecure(), grpc.WithBlock(), grpc.WithTimeout(300*time.Millisecond))
+			conn, err := rpcDialer(md.RaftAddress,
+				grpc.WithBlock(), grpc.WithTimeout(300*time.Millisecond))
 			if err != nil {
 				if err == context.DeadlineExceeded {
 					continue
@@ -173,6 +173,8 @@ func findPeers(name, tag string, minimumCount int) ([]string, error) {
 
 func main() {
 	config := viper.New()
+	config.SetEnvPrefix("WASP")
+	config.AutomaticEnv()
 	cmd := &cobra.Command{
 		Use: "wasp",
 		PreRun: func(cmd *cobra.Command, _ []string) {
@@ -195,6 +197,9 @@ func main() {
 			config.BindPFlag("raft-bootstrap-expect", cmd.Flags().Lookup("raft-bootstrap-expect"))
 			config.BindPFlag("consul-service-name", cmd.Flags().Lookup("consul-service-name"))
 			config.BindPFlag("consul-service-tag", cmd.Flags().Lookup("consul-service-tag"))
+			config.BindPFlag("rpc-tls-certificate-authority-file", cmd.Flags().Lookup("rpc-tls-certificate-authority-file"))
+			config.BindPFlag("rpc-tls-certificate-file", cmd.Flags().Lookup("rpc-tls-certificate-file"))
+			config.BindPFlag("rpc-tls-private-key-file", cmd.Flags().Lookup("rpc-tls-private-key-file"))
 
 			if !cmd.Flags().Changed("serf-advertized-port") {
 				config.Set("serf-advertized-port", config.Get("serf-port"))
@@ -222,7 +227,17 @@ func main() {
 			commandsCh := make(chan raft.Command)
 			confCh := make(chan raft.ChangeConfCommand)
 			state := wasp.NewState()
-			server := rpc.Listen()
+
+			if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
+				wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will be disabled.")
+			}
+			server := rpc.Server(rpc.ServerConfig{
+				TLSCertificatePath: config.GetString("rpc-tls-certificate-file"),
+				TLSPrivateKeyPath:  config.GetString("rpc-tls-private-key-file"),
+			})
+			rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
+				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
+			})
 			clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 			if err != nil {
 				wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
@@ -282,7 +297,7 @@ func main() {
 				raftConfig.Peers, err = waitForNodes(ctx, membership, expectedCount, api.RaftContext{
 					ID:      id,
 					Address: raftAddress,
-				})
+				}, rpcDialer)
 				if err != nil {
 					if err == ErrExistingClusterFound {
 						wasp.L(ctx).Info("discovered existing raft cluster")
@@ -331,7 +346,7 @@ func main() {
 					}
 				}
 			})*/
-			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode)
+			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode, rpcDialer)
 			rpcTransport.Serve(server)
 			raftNode.Start(rpcTransport)
 			snapshotter := <-raftNode.Snapshotter()
@@ -568,5 +583,10 @@ func main() {
 
 	cmd.Flags().String("tls-cn", "localhost", "Get ACME certificat for this Common Name.")
 	cmd.Flags().IntP("raft-bootstrap-expect", "n", 3, "Wasp will wait for this number of nodes to be available before bootstraping a cluster.")
+
+	cmd.Flags().String("rpc-tls-certificate-authority-file", "", "x509 certificate authority used by RPC Server.")
+	cmd.Flags().String("rpc-tls-certificate-file", "", "x509 certificate used by RPC Server.")
+	cmd.Flags().String("rpc-tls-private-key-file", "", "Private key used by RPC Server.")
+	cmd.AddCommand(TLSHelper(config))
 	cmd.Execute()
 }

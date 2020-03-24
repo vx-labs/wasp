@@ -6,7 +6,6 @@ job "wasp" {
     max_parallel     = 1
     min_healthy_time = "30s"
     healthy_deadline = "3m"
-    health_check     = "task_states"
     auto_revert      = true
     canary           = 0
   }
@@ -41,7 +40,8 @@ job "wasp" {
       }
 
       template {
-        destination = "local/proxy.conf"
+        change_mode = "restart"
+        destination = "secrets/environment"
         env         = true
 
         data = <<EOH
@@ -49,9 +49,9 @@ job "wasp" {
 LE_EMAIL="{{.Data.acme_email}}"
 PSK_PASSWORD="{{ .Data.static_tokens }}"
 JWT_SIGN_KEY="{{ .Data.jwt_sign_key }}"
-TLS_CERTIFICATE="{{ env "NOMAD_TASK_DIR" }}/cert.pem"
-TLS_PRIVATE_KEY="{{ env "NOMAD_TASK_DIR" }}/key.pem"
-TLS_CA_CERTIFICATE="{{ env "NOMAD_TASK_DIR" }}/ca.pem"
+WASP_RPC_TLS_CERTIFICATE_FILE="{{ env "NOMAD_TASK_DIR" }}/cert.pem"
+WASP_RPC_TLS_PRIVATE_KEY_FILE="{{ env "NOMAD_TASK_DIR" }}/key.pem"
+WASP_RPC_TLS_CERTIFICATE_AUTHORITY_FILE="{{ env "NOMAD_TASK_DIR" }}/ca.pem"
 no_proxy="10.0.0.0/8,172.16.0.0/12,*.service.consul"
 {{end}}
         EOH
@@ -64,7 +64,7 @@ no_proxy="10.0.0.0/8,172.16.0.0/12,*.service.consul"
 
         data = <<EOH
 {{- $cn := printf "common_name=%s" (env "NOMAD_ALLOC_ID") -}}
-{{- $ipsans := printf "ip_sans=%s" (env "NOMAD_IP_health") -}}
+{{- $ipsans := printf "ip_sans=%s" (env "NOMAD_IP_rpc") -}}
 {{- $path := printf "pki/issue/grpc" -}}
 {{ with secret $path $cn $ipsans "ttl=48h" }}{{ .Data.certificate }}{{ end }}
 EOH
@@ -77,7 +77,7 @@ EOH
 
         data = <<EOH
 {{- $cn := printf "common_name=%s" (env "NOMAD_ALLOC_ID") -}}
-{{- $ipsans := printf "ip_sans=%s" (env "NOMAD_IP_health") -}}
+{{- $ipsans := printf "ip_sans=%s" (env "NOMAD_IP_rpc") -}}
 {{- $path := printf "pki/issue/grpc" -}}
 {{ with secret $path $cn $ipsans "ttl=48h" }}{{ .Data.private_key }}{{ end }}
 EOH
@@ -90,7 +90,7 @@ EOH
 
         data = <<EOH
 {{- $cn := printf "common_name=%s" (env "NOMAD_ALLOC_ID") -}}
-{{- $ipsans := printf "ip_sans=%s" (env "NOMAD_IP_health") -}}
+{{- $ipsans := printf "ip_sans=%s" (env "NOMAD_IP_rpc") -}}
 {{- $path := printf "pki/issue/grpc" -}}
 {{ with secret $path $cn $ipsans "ttl=48h" }}{{ .Data.issuing_ca }}{{ end }}
 EOH

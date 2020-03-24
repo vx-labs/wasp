@@ -33,6 +33,7 @@ type Transport struct {
 	nodeID              uint64
 	nodeAddress         string
 	raft                RaftInstance
+	rpcDialer           Dialer
 	mtx                 sync.RWMutex
 	healthcheckerCtx    context.Context
 	healthcheckerCancel context.CancelFunc
@@ -40,10 +41,11 @@ type Transport struct {
 	peers               map[uint64]*Peer
 }
 
-func NewTransport(id uint64, address string, raft RaftInstance) *Transport {
+func NewTransport(id uint64, address string, raft RaftInstance, rpcDialer Dialer) *Transport {
 	t := &Transport{
 		nodeID:            id,
 		nodeAddress:       address,
+		rpcDialer:         rpcDialer,
 		raft:              raft,
 		peers:             map[uint64]*Peer{},
 		healthcheckerDone: make(chan struct{}),
@@ -98,7 +100,7 @@ func (t *Transport) AddPeer(id uint64, address string) {
 		}
 		old.Conn.Close()
 	}
-	conn, err := grpc.Dial(address, grpc.WithInsecure())
+	conn, err := t.rpcDialer(address)
 	if err != nil {
 		return
 	}

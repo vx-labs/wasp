@@ -10,6 +10,8 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/gorilla/websocket v1.4.1
+	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
+	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/consul v1.7.2 // indirect
 	github.com/hashicorp/consul/api v1.4.0
 	github.com/hashicorp/memberlist v0.2.0
