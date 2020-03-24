@@ -114,6 +114,7 @@ EOH
           "--consul-service-name", "wasp",
           "--consul-service-tag", "gossip",
           "--wss-port", "443", "--tls-port", "8883", "--tcp-port", "1883",
+          "--metrics-port", "8089",
           "--tls-cn", "broker.iot.cloud.vx-labs.net",
           "--raft-advertized-address", "$${NOMAD_IP_rpc}", "--raft-advertized-port", "$${NOMAD_HOST_PORT_rpc}",
           "--serf-advertized-address", "$${NOMAD_IP_gossip}", "--serf-advertized-port", "$${NOMAD_HOST_PORT_gossip}",
@@ -126,6 +127,7 @@ EOH
           mqttwss = 443
           gossip  = 1799
           rpc     = 1899
+          metrics = 8089
         }
       }
 
@@ -140,6 +142,7 @@ EOH
           port "mqttwss" {}
           port "rpc" {}
           port "gossip" {}
+          port "metrics" {}
         }
       }
 
@@ -220,6 +223,19 @@ EOH
         check {
           type     = "tcp"
           port     = "gossip"
+          interval = "30s"
+          timeout  = "2s"
+        }
+      }
+      service {
+        name = "wasp"
+        port = "metrics"
+        tags = ["prometheus"]
+
+        check {
+          type     = "http"
+          path     = "/metrics"
+          port     = "metrics"
           interval = "30s"
           timeout  = "2s"
         }

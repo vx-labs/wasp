@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/vaultacme"
@@ -41,6 +42,12 @@ type listenerConfig struct {
 	name     string
 	port     int
 	listener net.Listener
+}
+
+func runProm(port int) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), mux)
 }
 
 type MemberlistMemberProvider interface {
@@ -178,6 +185,7 @@ func main() {
 	cmd := &cobra.Command{
 		Use: "wasp",
 		PreRun: func(cmd *cobra.Command, _ []string) {
+			config.BindPFlag("metrics-port", cmd.Flags().Lookup("metrics-port"))
 			config.BindPFlag("tcp-port", cmd.Flags().Lookup("tcp-port"))
 			config.BindPFlag("tls-port", cmd.Flags().Lookup("tls-port"))
 			config.BindPFlag("wss-port", cmd.Flags().Lookup("wss-port"))
@@ -529,6 +537,7 @@ func main() {
 			for _, listener := range listeners {
 				wasp.L(ctx).Debug("listener started", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 			}
+			runProm(config.GetInt("metrics-port"))
 			sigc := make(chan os.Signal, 1)
 			signal.Notify(sigc,
 				syscall.SIGINT,
@@ -568,6 +577,7 @@ func main() {
 	cmd.Flags().String("consul-service-name", "wasp", "Consul auto-join service name.")
 	cmd.Flags().String("consul-service-tag", "gossip", "Consul auto-join service tag.")
 
+	cmd.Flags().Int("metrics-port", 0, "Start Prometheus HTTP metrics server on this port.")
 	cmd.Flags().IntP("tcp-port", "t", 0, "Start TCP listener on this port.")
 	cmd.Flags().IntP("tls-port", "s", 0, "Start TLS listener on this port.")
 	cmd.Flags().IntP("wss-port", "w", 0, "Start Secure WS listener on this port.")

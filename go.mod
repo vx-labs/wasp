@@ -19,7 +19,7 @@ require (
 	github.com/mattn/go-colorable v0.1.6
 	github.com/oklog/ulid v1.3.1
 	github.com/pkg/errors v0.8.1
-	github.com/prometheus/client_golang v1.5.1 // indirect
+	github.com/prometheus/client_golang v1.5.1
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.5.1
