@@ -58,6 +58,7 @@ func (p Peers) MarshalLogArray(e zapcore.ArrayEncoder) error {
 type RaftNode struct {
 	currentLeader uint64
 	isLeader      bool
+	hasLeader     bool
 	id            uint64 // client ID for raft session
 	address       string // local node listening address
 	bootstrapped  bool
@@ -127,6 +128,7 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 	rc := &RaftNode{
 		currentLeader:    0,
 		isLeader:         false,
+		hasLeader:        false,
 		address:          config.NodeAddress,
 		server:           config.Server,
 		proposeC:         proposeC,
@@ -484,6 +486,9 @@ func (rc *RaftNode) serveChannels() {
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
 				if newLeader {
+					if !rc.hasLeader {
+						rc.hasLeader = true
+					}
 					rc.currentLeader = rd.SoftState.Lead
 					if rc.currentLeader == rc.id {
 						rc.logger.Info("raft leadership acquired")
@@ -498,7 +503,10 @@ func (rc *RaftNode) serveChannels() {
 				}
 
 				if rd.SoftState.Lead == raft.None {
-					rc.logger.Warn("raft cluster has no leader")
+					if rc.hasLeader {
+						rc.hasLeader = false
+						rc.logger.Warn("raft cluster has no leader")
+					}
 					rc.currentLeader = 0
 				}
 			}
