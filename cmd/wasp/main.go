@@ -165,7 +165,7 @@ func findPeers(name, tag string, minimumCount int) ([]string, error) {
 		}
 		out := make([]string, len(services))
 		for idx := range services {
-			out[idx] = services[idx].ServiceAddress
+			out[idx] = fmt.Sprintf("%s:%d", services[idx].ServiceAddress, services[idx].ServicePort)
 		}
 		return out, nil
 	}
