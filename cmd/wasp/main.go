@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -181,6 +182,7 @@ func findPeers(name, tag string, minimumCount int) ([]string, error) {
 func main() {
 	config := viper.New()
 	config.SetEnvPrefix("WASP")
+	config.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	config.AutomaticEnv()
 	cmd := &cobra.Command{
 		Use: "wasp",
