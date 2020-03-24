@@ -15,9 +15,3 @@ jobs:
           password: "${{ secrets.DOCKER_PASSWORD }}"
           repository: vxlabs/wasp
           tags: "latest,${{ github.sha }}"
-      - name: Notify Slack
-        uses: rtCamp/action-slack-notify@v2.0.0
-        env:
-          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
-
-
