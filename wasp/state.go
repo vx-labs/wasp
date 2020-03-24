@@ -20,6 +20,10 @@ var (
 		Name: "wasp_retained_messages_count",
 		Help: "The total number of MQTT retained messages.",
 	})
+	sessionsCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "wasp_sessions_count",
+		Help: "The total number of MQTT sessions connected to this node.",
+	})
 )
 
 type State interface {
@@ -120,9 +124,11 @@ func (s *state) GetSession(id string) *sessions.Session {
 	return s.sessions.Get(id)
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
+	sessionsCount.Inc()
 	s.sessions.Save(id, session)
 }
 func (s *state) CloseSession(id string) {
+	sessionsCount.Dec()
 	s.sessions.Delete(id)
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
