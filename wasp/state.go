@@ -13,8 +13,12 @@ import (
 
 var (
 	subscriptionsCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_subscription_count",
-		Help: "The total number of MQTT subscriptions",
+		Name: "wasp_subscriptions_count",
+		Help: "The total number of MQTT subscriptions.",
+	})
+	retainedMessagesCount = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "wasp_retained_messages_count",
+		Help: "The total number of MQTT retained messages.",
 	})
 )
 
@@ -73,6 +77,7 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
+	retainedMessagesCount.Set(float64(s.topics.Count()))
 	return nil
 }
 func (s *state) MarshalBinary() ([]byte, error) {
@@ -91,12 +96,18 @@ func (s *state) MarshalBinary() ([]byte, error) {
 	return json.Marshal(dump)
 }
 func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) error {
-	subscriptionsCount.Inc()
-	return s.subscriptions.Insert(peer, pattern, qos, id)
+	err := s.subscriptions.Insert(peer, pattern, qos, id)
+	if err == nil {
+		subscriptionsCount.Inc()
+	}
+	return err
 }
 func (s *state) Unsubscribe(id string, pattern []byte) error {
-	subscriptionsCount.Dec()
-	return s.subscriptions.Remove(pattern, id)
+	err := s.subscriptions.Remove(pattern, id)
+	if err == nil {
+		subscriptionsCount.Dec()
+	}
+	return err
 }
 func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {
 	recipients := []string{}
@@ -116,12 +127,24 @@ func (s *state) CloseSession(id string) {
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
 	if len(msg.Payload) > 0 {
-		return s.topics.Insert(msg)
+		err := s.topics.Insert(msg)
+		if err == nil {
+			retainedMessagesCount.Set(float64(s.topics.Count()))
+		}
+		return err
 	}
-	return s.topics.Remove(msg.Topic)
+	err := s.topics.Remove(msg.Topic)
+	if err == nil {
+		retainedMessagesCount.Set(float64(s.topics.Count()))
+	}
+	return err
 }
 func (s *state) DeleteRetainedMessage(topic []byte) error {
-	return s.topics.Remove(topic)
+	err := s.topics.Remove(topic)
+	if err == nil {
+		retainedMessagesCount.Set(float64(s.topics.Count()))
+	}
+	return err
 }
 func (s *state) RetainedMessages(topic []byte) ([]*packet.Publish, error) {
 	out := []*packet.Publish{}

@@ -29,6 +29,7 @@ type Store interface {
 	Match(topic []byte, msg *[]*packet.Publish) error
 	Dump() ([]byte, error)
 	Load([]byte) error
+	Count() int
 }
 
 func NewTree() Store {
@@ -58,6 +59,11 @@ func (t *tree) Load(buf []byte) error {
 	}
 	t.root = root
 	return nil
+}
+func (t *tree) Count() int {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+	return t.root.count(0)
 }
 func (t *tree) Insert(msg *packet.Publish) error {
 	t.mtx.Lock()
@@ -135,6 +141,15 @@ func (n *Node) remove(topic format.Topic) error {
 	return nil
 }
 
+func (n *Node) count(counter int) int {
+	if n.Msg != nil && len(n.Msg.Payload) > 0 {
+		counter++
+	}
+	for key := range n.Children {
+		counter = n.Children[key].count(counter)
+	}
+	return counter
+}
 func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
 	topic, token := topic.Next()
 	if token == "" {
