@@ -240,18 +240,21 @@ func main() {
 			))
 			joinList := config.GetStringSlice("join-node")
 			if config.GetBool("consul-join") {
+				discoveryStarted := time.Now()
 				consulJoinList, err := findPeers(
 					config.GetString("consul-service-name"), config.GetString("consul-service-tag"),
 					config.GetInt("raft-bootstrap-expect"))
 				if err != nil {
 					wasp.L(ctx).Fatal("failed to find other peers on consul", zap.Error(err))
 				}
+				wasp.L(ctx).Info("discovered nodes using consul",
+					zap.Duration("consul_discovery_duration", time.Since(discoveryStarted)), zap.Int("node_count", len(consulJoinList)))
 				joinList = append(joinList, consulJoinList...)
 			}
 			if len(joinList) > 0 {
 				retryTicker := time.NewTicker(3 * time.Second)
 				for {
-					err = membership.Join(config.GetStringSlice("join-node"))
+					err = membership.Join(joinList)
 					if err != nil {
 						wasp.L(ctx).Warn("failed to join cluster", zap.Error(err))
 					} else {
