@@ -106,8 +106,8 @@ EOH
           }
         }
 
-        image      = "${service_image}"
-        args       = [
+        image = "${service_image}"
+        args = [
           "--data-dir", "$${NOMAD_TASK_DIR}",
           "--use-vault",
           "--consul-join",
@@ -121,11 +121,11 @@ EOH
         force_pull = true
 
         port_map {
-          mqtt   = 1883
+          mqtt    = 1883
           mqtts   = 8883
-          mqttwss   = 443
-          gossip = 1799
-          rpc = 1899
+          mqttwss = 443
+          gossip  = 1799
+          rpc     = 1899
         }
       }
 
@@ -135,9 +135,9 @@ EOH
 
         network {
           mbits = 10
-          port  "mqtt"{}
-          port  "mqtts"{}
-          port  "mqttwss"{}
+          port "mqtt" {}
+          port "mqtts" {}
+          port "mqttwss" {}
           port "rpc" {}
           port "gossip" {}
         }
