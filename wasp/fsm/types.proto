@@ -15,6 +15,10 @@ message SubscriptionDeleted {
   string SessionID = 1;
   bytes Pattern = 2;
 }
+
+message PeerLost {
+  uint64 Peer = 1;
+}
 message StateTransitionSet { repeated StateTransition events = 1; }
 
 message StateTransition {
@@ -23,5 +27,6 @@ message StateTransition {
     RetainedMessageDeleted RetainedMessageDeleted = 2;
     SubscriptionCreated SessionSubscribed = 3;
     SubscriptionDeleted SessionUnsubscribed = 4;
+    PeerLost PeerLost = 5;
   }
 }

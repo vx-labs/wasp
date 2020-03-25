@@ -13,6 +13,7 @@ import (
 type State interface {
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
+	RemoveSubscriptionsForPeer(peer uint64)
 	Recipients(topic []byte) ([]uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
 	SaveSession(id string, session *sessions.Session)
@@ -97,6 +98,13 @@ func (s *state) Unsubscribe(id string, pattern []byte) error {
 	}
 	return err
 }
+func (s *state) RemoveSubscriptionsForPeer(peer uint64) {
+	count := s.subscriptions.RemovePeer(peer)
+	if count > 0 {
+		stats.Gauge("subscriptionsCount").Sub(float64(count))
+	}
+}
+
 func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {
 	recipients := []string{}
 	recipientQos := []int32{}

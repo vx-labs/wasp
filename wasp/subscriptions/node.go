@@ -25,6 +25,7 @@ type Tree interface {
 	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
 	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
+	RemovePeer(peer uint64) int
 	Dump() ([]byte, error)
 	Load([]byte) error
 	Count() int
@@ -47,6 +48,11 @@ func (t *tree) Dump() ([]byte, error) {
 	return proto.Marshal(t.root)
 }
 
+func (t *tree) RemovePeer(peer uint64) int {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	return t.root.removePeer(peer, 0)
+}
 func (t *tree) Load(buf []byte) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
@@ -90,6 +96,26 @@ func newNode() *Node {
 	}
 }
 
+func (n *Node) removePeer(peer uint64, counter int) int {
+	for i := range n.Recipients {
+		if n.Peer[i] == peer {
+			counter++
+			n.Recipients[i] = n.Recipients[len(n.Recipients)-1]
+			n.Recipients = n.Recipients[:len(n.Recipients)-1]
+			n.Qos[i] = n.Qos[len(n.Qos)-1]
+			n.Qos = n.Qos[:len(n.Qos)-1]
+			n.Peer[i] = n.Peer[len(n.Peer)-1]
+			n.Peer = n.Peer[:len(n.Peer)-1]
+		}
+	}
+	for token, child := range n.Children {
+		counter = n.Children[token].removePeer(peer, counter)
+		if len(child.Recipients) == 0 && len(child.Children) == 0 {
+			delete(n.Children, token)
+		}
+	}
+	return counter
+}
 func (n *Node) count(counter int) int {
 	c := counter + len(n.Recipients)
 	for key := range n.Children {

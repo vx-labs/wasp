@@ -12,6 +12,7 @@ import (
 type State interface {
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
+	RemoveSubscriptionsForPeer(peer uint64)
 	RetainMessage(msg *packet.Publish) error
 	DeleteRetainedMessage(topic []byte) error
 }
@@ -59,7 +60,21 @@ func (f *FSM) commit(ctx context.Context, payload []byte) error {
 		}
 	}
 }
-
+func (f *FSM) Shutdown(ctx context.Context) error {
+	payload, err := encode(&StateTransition{Event: &StateTransition_PeerLost{
+		PeerLost: &PeerLost{
+			Peer: f.id,
+		},
+	}})
+	if err != nil {
+		return err
+	}
+	err = f.commit(ctx, payload)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 func (f *FSM) RetainedMessage(ctx context.Context, publish *packet.Publish) error {
 	payload, err := encode(&StateTransition{Event: &StateTransition_RetainedMessageStored{
 		RetainedMessageStored: &RetainedMessageStored{
@@ -129,6 +144,9 @@ func (f *FSM) Apply(b []byte) error {
 		case *StateTransition_SessionUnsubscribed:
 			input := event.SessionUnsubscribed
 			err = f.state.Unsubscribe(input.SessionID, input.Pattern)
+		case *StateTransition_PeerLost:
+			input := event.PeerLost
+			f.state.RemoveSubscriptionsForPeer(input.Peer)
 		}
 		if err != nil {
 			return err

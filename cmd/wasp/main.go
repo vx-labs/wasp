@@ -235,7 +235,6 @@ func main() {
 			wg := sync.WaitGroup{}
 			publishes := make(chan *packet.Publish, 20)
 			commandsCh := make(chan raft.Command)
-			confCh := make(chan raft.ChangeConfCommand)
 			state := wasp.NewState()
 
 			if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
@@ -300,7 +299,6 @@ func main() {
 				Join:        false,
 				GetSnapshot: state.MarshalBinary,
 				ProposeC:    commandsCh,
-				ConfChangeC: confCh,
 			}
 			if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
 				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
@@ -327,35 +325,6 @@ func main() {
 			}
 
 			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
-			/*	membership.OnNodeLeave(func(id string, meta []byte) {
-				md, err := decodeMD(meta)
-				if err != nil {
-					return
-				}
-				errCh := make(chan error)
-				select {
-				case <-ctx.Done():
-					return
-				case raftNode.ConfigurationChanges() <- raft.ChangeConfCommand{
-					Ctx:   ctx,
-					ErrCh: errCh,
-					Payload: raftpb.ConfChange{
-						Type:   raftpb.ConfChangeRemoveNode,
-						NodeID: md.ID,
-					},
-				}:
-				}
-				select {
-				case <-ctx.Done():
-					return
-				case err := <-errCh:
-					if err != nil {
-						wasp.L(ctx).Error("failed to remove left node from cluster", zap.Error(err))
-					} else {
-						wasp.L(ctx).Info("node left cluster", zap.Uint64("remote_node_id", md.ID))
-					}
-				}
-			})*/
 			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode, rpcDialer)
 			rpcTransport.Serve(server)
 			raftNode.Start(rpcTransport)
@@ -551,11 +520,15 @@ func main() {
 				listener.listener.Close()
 				wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 			}
+			err = stateMachine.Shutdown(ctx)
+			if err != nil {
+				wasp.L(ctx).Error("failed to leave raft cluster", zap.Error(err))
+			}
 			err = raftNode.Shutdown(ctx)
 			if err != nil {
 				wasp.L(ctx).Error("failed to shutdown raft", zap.Error(err))
 			} else {
-				wasp.L(ctx).Info("raft shutdown")
+				wasp.L(ctx).Info("raft node stopped")
 			}
 			cancel()
 			server.GracefulStop()
