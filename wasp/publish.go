@@ -8,6 +8,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/rpc"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"go.uber.org/zap"
 )
 
@@ -19,6 +20,15 @@ func getLowerQos(a, b int32) int32 {
 }
 
 func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
+	start := time.Now()
+	defer func() {
+		duration := float64(time.Since(start)) / float64(time.Millisecond)
+		if local {
+			stats.Summary("publishLocalProcessingTime").Observe(duration)
+		} else {
+			stats.Summary("publishRemoteProcessingTime").Observe(duration)
+		}
+	}()
 	if p.Header.Retain {
 		if len(p.Payload) == 0 {
 			err := fsm.DeleteRetainedMessage(ctx, p.Topic)

@@ -3,27 +3,11 @@ package wasp
 import (
 	"encoding/json"
 
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
 	"github.com/vx-labs/wasp/wasp/topics"
-)
-
-var (
-	subscriptionsCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_subscriptions_count",
-		Help: "The total number of MQTT subscriptions.",
-	})
-	retainedMessagesCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_retained_messages_count",
-		Help: "The total number of MQTT retained messages.",
-	})
-	sessionsCount = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_sessions_count",
-		Help: "The total number of MQTT sessions connected to this node.",
-	})
 )
 
 type State interface {
@@ -76,12 +60,12 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	subscriptionsCount.Set(float64(s.subscriptions.Count()))
+	stats.Gauge("subscriptionsCount").Set(float64(s.subscriptions.Count()))
 	err = s.topics.Load(dump.Topics)
 	if err != nil {
 		return err
 	}
-	retainedMessagesCount.Set(float64(s.topics.Count()))
+	stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
 	return nil
 }
 func (s *state) MarshalBinary() ([]byte, error) {
@@ -102,14 +86,14 @@ func (s *state) MarshalBinary() ([]byte, error) {
 func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) error {
 	err := s.subscriptions.Insert(peer, pattern, qos, id)
 	if err == nil {
-		subscriptionsCount.Inc()
+		stats.Gauge("subscriptionsCount").Inc()
 	}
 	return err
 }
 func (s *state) Unsubscribe(id string, pattern []byte) error {
 	err := s.subscriptions.Remove(pattern, id)
 	if err == nil {
-		subscriptionsCount.Dec()
+		stats.Gauge("subscriptionsCount").Dec()
 	}
 	return err
 }
@@ -124,31 +108,31 @@ func (s *state) GetSession(id string) *sessions.Session {
 	return s.sessions.Get(id)
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
-	sessionsCount.Inc()
+	stats.Gauge("sessionsCount").Inc()
 	s.sessions.Save(id, session)
 }
 func (s *state) CloseSession(id string) {
-	sessionsCount.Dec()
+	stats.Gauge("sessionsCount").Dec()
 	s.sessions.Delete(id)
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
 	if len(msg.Payload) > 0 {
 		err := s.topics.Insert(msg)
 		if err == nil {
-			retainedMessagesCount.Set(float64(s.topics.Count()))
+			stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
 		}
 		return err
 	}
 	err := s.topics.Remove(msg.Topic)
 	if err == nil {
-		retainedMessagesCount.Set(float64(s.topics.Count()))
+		stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
 	}
 	return err
 }
 func (s *state) DeleteRetainedMessage(topic []byte) error {
 	err := s.topics.Remove(topic)
 	if err == nil {
-		retainedMessagesCount.Set(float64(s.topics.Count()))
+		stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
 	}
 	return err
 }
