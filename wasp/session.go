@@ -11,6 +11,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
 )
@@ -79,7 +80,13 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 		}
 	}()
 	for pkt := range dec.Packet() {
+		start := time.Now()
 		err = processPacket(ctx, fsm, state, ch, session, pkt)
+		duration := float64(time.Since(start)) / float64(time.Millisecond)
+		stats.HistogramVec("sessionPacketHandling").With(map[string]string{
+			"packet_type": packet.TypeString(pkt),
+		}).Observe(duration)
+
 		if err == ErrSessionDisconnected {
 			//	L(ctx).Info("session closed")
 			return session.Conn.Close()

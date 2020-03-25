@@ -37,7 +37,18 @@ var (
 			Buckets: []float64{0.0001, 0.0002, 0.0005, 0.0008, 1, 100, 5000},
 		}),
 	}
+	histogramVecs map[string]*prometheus.HistogramVec = map[string]*prometheus.HistogramVec{
+		"sessionPacketHandling": prometheusMetricsFactory.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "wasp_session_packets_processing_time_milliseconds",
+			Help:    "The time elapsed handling session MQTT packets.",
+			Buckets: []float64{0.001, 0.01, 0.1, 1, 50, 5000},
+		}, []string{"packet_type"}),
+	}
 )
+
+func HistogramVec(name string) *prometheus.HistogramVec {
+	return histogramVecs[name]
+}
 
 func Histogram(name string) prometheus.Histogram {
 	return histograms[name]
