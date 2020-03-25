@@ -25,20 +25,22 @@ var (
 			Help: "The total number of MQTT sessions connected to this node.",
 		}),
 	}
-	summaries map[string]prometheus.Summary = map[string]prometheus.Summary{
-		"publishLocalProcessingTime": prometheusMetricsFactory.NewSummary(prometheus.SummaryOpts{
-			Name: "wasp_publish_packets_local_processing_time_ms",
-			Help: "The time elapsed resolving recipients and distributing MQTT publish messages.",
+	histograms map[string]prometheus.Histogram = map[string]prometheus.Histogram{
+		"publishLocalProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
+			Name:    "wasp_publish_packets_local_processing_time_milliseconds",
+			Help:    "The time elapsed resolving recipients and distributing MQTT publish messages.",
+			Buckets: []float64{0.0001, 0.0002, 0.0005, 0.0008, 1, 100, 5000},
 		}),
-		"publishRemoteProcessingTime": prometheusMetricsFactory.NewSummary(prometheus.SummaryOpts{
-			Name: "wasp_publish_packets_remote_processing_time_ms",
-			Help: "The time elapsed resolving recipients for MQTT publish messages.",
+		"publishRemoteProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
+			Name:    "wasp_publish_packets_remote_processing_time_milliseconds",
+			Help:    "The time elapsed resolving recipients for MQTT publish messages.",
+			Buckets: []float64{0.0001, 0.0002, 0.0005, 0.0008, 1, 100, 5000},
 		}),
 	}
 )
 
-func Summary(name string) prometheus.Summary {
-	return summaries[name]
+func Histogram(name string) prometheus.Histogram {
+	return histograms[name]
 }
 func Gauge(name string) prometheus.Gauge {
 	return gauges[name]

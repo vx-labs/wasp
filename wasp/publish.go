@@ -24,9 +24,9 @@ func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fs
 	defer func() {
 		duration := float64(time.Since(start)) / float64(time.Millisecond)
 		if local {
-			stats.Summary("publishLocalProcessingTime").Observe(duration)
+			stats.Histogram("publishLocalProcessingTime").Observe(duration)
 		} else {
-			stats.Summary("publishRemoteProcessingTime").Observe(duration)
+			stats.Histogram("publishRemoteProcessingTime").Observe(duration)
 		}
 	}()
 	if p.Header.Retain {
