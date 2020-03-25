@@ -43,6 +43,23 @@ func (t *Transport) CheckHealth(ctx context.Context, r *api.CheckHealthRequest) 
 	}
 	return &api.CheckHealthResponse{}, nil
 }
+
+func (t *Transport) GetMembers(ctx context.Context, in *api.GetMembersRequest) (*api.GetMembersResponse, error) {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+	members := []*api.Member{
+		{ID: t.nodeID, Address: t.nodeAddress, IsLeader: t.raft.IsLeader(t.nodeID)},
+	}
+
+	for id, peer := range t.peers {
+		members = append(members, &api.Member{
+			ID:       id,
+			Address:  peer.Conn.Target(),
+			IsLeader: t.raft.IsLeader(id),
+		})
+	}
+	return &api.GetMembersResponse{Members: members}, nil
+}
 func (t *Transport) Serve(grpcServer *grpc.Server) {
 	api.RegisterRaftServer(grpcServer, t)
 }

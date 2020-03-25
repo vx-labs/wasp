@@ -22,6 +22,7 @@ type RaftInstance interface {
 	Process(ctx context.Context, message raftpb.Message) error
 	ReportUnreachable(uint64)
 	ReportNewPeer(ctx context.Context, id uint64, address string) error
+	IsLeader(id uint64) bool
 }
 
 type Peer struct {

@@ -19,11 +19,22 @@ message PeerResponse { bool status = 1; }
 message CheckHealthRequest {}
 message CheckHealthResponse {}
 
+message GetMembersRequest {}
+message Member {
+  uint64 ID = 1;
+  string Address = 2;
+  bool IsLeader = 3;
+}
+message GetMembersResponse {
+  repeated Member Members = 1;
+}
+
 service Raft {
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
   rpc IsPeer(RaftContext) returns (PeerResponse) {}
   rpc CheckHealth(CheckHealthRequest) returns (CheckHealthResponse) {}
+  rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
 }
 
 message DistributeMessageRequest { packet.Publish Message = 1; }

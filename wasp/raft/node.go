@@ -18,7 +18,6 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.etcd.io/etcd/wal"
 	"go.etcd.io/etcd/wal/walpb"
-	"google.golang.org/grpc"
 
 	"go.uber.org/zap"
 )
@@ -60,15 +59,13 @@ type RaftNode struct {
 	isLeader      bool
 	hasLeader     bool
 	id            uint64 // client ID for raft session
-	address       string // local node listening address
 	bootstrapped  bool
-	server        *grpc.Server
 	proposeC      <-chan Command         // proposed messages (k,v)
 	confChangeC   chan ChangeConfCommand // proposed cluster config changes
 	commitC       chan []byte            // entries committed to log (k,v)
 	errorC        chan error             // errors from raft session
 	logger        *zap.Logger
-	peers         []Peer // raft peer URLs
+	peers         []Peer // bootstrap peers
 	join          bool   // node is joining an existing cluster
 	waldir        string // path to WAL directory
 	snapdir       string // path to snapshot directory
@@ -98,8 +95,6 @@ var defaultSnapshotCount uint64 = 10000
 
 type Config struct {
 	NodeID      uint64
-	NodeAddress string
-	Server      *grpc.Server
 	DataDir     string
 	Peers       Peers
 	Join        bool
@@ -129,8 +124,6 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		currentLeader:    0,
 		isLeader:         false,
 		hasLeader:        false,
-		address:          config.NodeAddress,
-		server:           config.Server,
 		proposeC:         proposeC,
 		confChangeC:      confChangeC,
 		commitC:          commitC,
@@ -341,7 +334,6 @@ func (rc *RaftNode) start() {
 		}
 	}
 	rpeers[len(rpeers)-1] = raft.Peer{ID: rc.id}
-
 	c := &raft.Config{
 		ID:                        rc.id,
 		PreVote:                   true,
@@ -493,6 +485,9 @@ func (rc *RaftNode) ReportUnreachable(id uint64) {
 func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	rc.ReportSnapshot(id, status)
 }
+func (rc *RaftNode) IsLeader(id uint64) bool {
+	return rc.currentLeader == id
+}
 func (rc *RaftNode) IsBootstrapped() bool {
 	if rc.node == nil {
 		return false
@@ -538,9 +533,8 @@ func (rc *RaftNode) Shutdown(ctx context.Context) error {
 		Ctx:   ctx,
 		ErrCh: ch,
 		Payload: raftpb.ConfChange{
-			Type:    raftpb.ConfChangeRemoveNode,
-			NodeID:  rc.id,
-			Context: []byte(rc.address),
+			Type:   raftpb.ConfChangeRemoveNode,
+			NodeID: rc.id,
 		},
 	}:
 	}

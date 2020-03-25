@@ -187,30 +187,7 @@ func main() {
 	cmd := &cobra.Command{
 		Use: "wasp",
 		PreRun: func(cmd *cobra.Command, _ []string) {
-			config.BindPFlag("metrics-port", cmd.Flags().Lookup("metrics-port"))
-			config.BindPFlag("tcp-port", cmd.Flags().Lookup("tcp-port"))
-			config.BindPFlag("tls-port", cmd.Flags().Lookup("tls-port"))
-			config.BindPFlag("wss-port", cmd.Flags().Lookup("wss-port"))
-			config.BindPFlag("ws-port", cmd.Flags().Lookup("ws-port"))
-			config.BindPFlag("raft-port", cmd.Flags().Lookup("raft-port"))
-			config.BindPFlag("serf-port", cmd.Flags().Lookup("serf-port"))
-			config.BindPFlag("tls-cn", cmd.Flags().Lookup("tls-cn"))
-			config.BindPFlag("data-dir", cmd.Flags().Lookup("data-dir"))
-			config.BindPFlag("debug", cmd.Flags().Lookup("debug"))
-			config.BindPFlag("consul-join", cmd.Flags().Lookup("consul-join"))
-			config.BindPFlag("use-vault", cmd.Flags().Lookup("use-vault"))
-			config.BindPFlag("join-node", cmd.Flags().Lookup("join-node"))
-			config.BindPFlag("serf-advertized-address", cmd.Flags().Lookup("serf-advertized-address"))
-			config.BindPFlag("raft-advertized-address", cmd.Flags().Lookup("raft-advertized-address"))
-			config.BindPFlag("serf-advertized-port", cmd.Flags().Lookup("serf-advertized-port"))
-			config.BindPFlag("raft-advertized-port", cmd.Flags().Lookup("raft-advertized-port"))
-			config.BindPFlag("raft-bootstrap-expect", cmd.Flags().Lookup("raft-bootstrap-expect"))
-			config.BindPFlag("consul-service-name", cmd.Flags().Lookup("consul-service-name"))
-			config.BindPFlag("consul-service-tag", cmd.Flags().Lookup("consul-service-tag"))
-			config.BindPFlag("rpc-tls-certificate-authority-file", cmd.Flags().Lookup("rpc-tls-certificate-authority-file"))
-			config.BindPFlag("rpc-tls-certificate-file", cmd.Flags().Lookup("rpc-tls-certificate-file"))
-			config.BindPFlag("rpc-tls-private-key-file", cmd.Flags().Lookup("rpc-tls-private-key-file"))
-
+			config.BindPFlags(cmd.Flags())
 			if !cmd.Flags().Changed("serf-advertized-port") {
 				config.Set("serf-advertized-port", config.Get("serf-port"))
 			}
@@ -293,8 +270,6 @@ func main() {
 			}
 			raftConfig := raft.Config{
 				NodeID:      id,
-				Server:      server,
-				NodeAddress: fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")),
 				DataDir:     config.GetString("data-dir"),
 				Join:        false,
 				GetSnapshot: state.MarshalBinary,
@@ -325,7 +300,8 @@ func main() {
 			}
 
 			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
-			rpcTransport := rpc.NewTransport(raftConfig.NodeID, raftConfig.NodeAddress, raftNode, rpcDialer)
+			rpcTransport := rpc.NewTransport(raftConfig.NodeID,
+				fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port")), raftNode, rpcDialer)
 			rpcTransport.Serve(server)
 			raftNode.Start(rpcTransport)
 			snapshotter := <-raftNode.Snapshotter()
