@@ -28,7 +28,7 @@ job "wasp" {
     }
 
     ephemeral_disk {
-      size = 300
+      size = 2000
     }
 
     task "tcp-listener" {
@@ -133,7 +133,7 @@ EOH
 
       resources {
         cpu    = 200
-        memory = 128
+        memory = 256
 
         network {
           mbits = 10
