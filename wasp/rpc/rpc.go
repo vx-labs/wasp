@@ -4,9 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"time"
-
-	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
 
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_prometheus "github.com/grpc-ecosystem/go-grpc-prometheus"
@@ -56,21 +53,15 @@ func GRPCDialer(config ClientConfig) Dialer {
 }
 
 func GRPCClientOptions(tlsCertificateAuthorityPath string, insecureSkipVerify bool) []grpc.DialOption {
-	callOpts := []grpc_retry.CallOption{
-		grpc_retry.WithBackoff(grpc_retry.BackoffLinearWithJitter(200*time.Millisecond, 0.3)),
-		grpc_retry.WithMax(3),
-	}
 	dialOpts := []grpc.DialOption{
 		grpc.WithStreamInterceptor(
 			grpc_middleware.ChainStreamClient(
 				grpc_prometheus.StreamClientInterceptor,
-				grpc_retry.StreamClientInterceptor(callOpts...),
 			),
 		),
 		grpc.WithUnaryInterceptor(
 			grpc_middleware.ChainUnaryClient(
 				grpc_prometheus.UnaryClientInterceptor,
-				grpc_retry.UnaryClientInterceptor(callOpts...),
 			),
 		),
 	}

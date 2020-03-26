@@ -31,6 +31,7 @@ func getTable(headers []string, out io.Writer) *tablewriter.Table {
 	table := tablewriter.NewWriter(out)
 	table.SetHeader(headers)
 	table.SetAlignment(tablewriter.ALIGN_LEFT)
+	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
 	table.SetCenterSeparator("")
 	table.SetColumnSeparator("")
 	table.SetRowSeparator("")
@@ -42,7 +43,7 @@ func getTable(headers []string, out io.Writer) *tablewriter.Table {
 
 	opts := []tablewriter.Colors{}
 	for range headers {
-		opts = append(opts, tablewriter.Colors{tablewriter.Bold})
+		opts = append(opts, tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor})
 	}
 	table.SetHeaderColor(opts...)
 	return table
@@ -68,7 +69,7 @@ func main() {
 				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 			})
 			host := config.GetString("host")
-			conn, err := dialer(host, grpc.WithBlock(), grpc.WithTimeout(500*time.Millisecond), grpc.WithDisableRetry())
+			conn, err := dialer(host, grpc.WithBlock(), grpc.WithTimeout(3000*time.Millisecond))
 			if err != nil {
 				l.Fatal("failed to dial Wasp server", zap.Error(err), zap.String("remote_host", host))
 			}
@@ -78,7 +79,7 @@ func main() {
 				l.Fatal("failed to list raft members", zap.Error(err))
 			}
 			l.Debug("listed raft members", zap.String("remote_host", host))
-			table := getTable([]string{"ID", "Leader ?", "Address"}, cmd.OutOrStdout())
+			table := getTable([]string{"ID", "Leader", "Address"}, cmd.OutOrStdout())
 			for _, member := range out.GetMembers() {
 				table.Append([]string{
 					fmt.Sprintf("%x", member.GetID()), fmt.Sprintf("%v", member.GetIsLeader()), member.GetAddress(),
