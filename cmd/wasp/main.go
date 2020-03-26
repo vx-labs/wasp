@@ -326,13 +326,8 @@ func main() {
 				}
 			}
 			stateMachine := fsm.NewFSM(id, state, commandsCh)
-
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wasp.L(ctx).Info("command processor stopped")
-					wg.Done()
-				}()
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("command processor stopped")
 				for {
 					select {
 					case <-ctx.Done():
@@ -341,17 +336,13 @@ func main() {
 						stateMachine.Apply(event)
 					}
 				}
-			}()
+			})
 			messageLog, err := wasp.NewMessageLog(ctx, config.GetString("data-dir"))
 			if err != nil {
 				panic(err)
 			}
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wasp.L(ctx).Info("message log gc runner stopped")
-					wg.Done()
-				}()
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("message log gc runner stopped")
 				ticker := time.NewTicker(5 * time.Minute)
 				defer ticker.Stop()
 				for {
@@ -362,27 +353,19 @@ func main() {
 						messageLog.GC()
 					}
 				}
-			}()
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wasp.L(ctx).Info("publish processor stopped")
-					wg.Done()
-				}()
+			})
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("publish processor stopped")
 				messageLog.Consume(ctx, func(p *packet.Publish) {
 					err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, true, p)
 					if err != nil {
 						wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 					}
 				})
-			}()
+			})
 			remotePublishCh := make(chan *packet.Publish, 20)
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wasp.L(ctx).Info("remote publish processor stopped")
-					wg.Done()
-				}()
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("remote publish processor stopped")
 				for {
 					select {
 					case <-ctx.Done():
@@ -394,15 +377,11 @@ func main() {
 						}
 					}
 				}
-			}()
+			})
 			mqttServer := rpc.NewMQTTServer(remotePublishCh)
 			mqttServer.Serve(server)
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wasp.L(ctx).Info("publish storer stopped")
-					wg.Done()
-				}()
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("publish storer stopped")
 				buf := make([]*packet.Publish, 0, 100)
 				ticker := time.NewTicker(20 * time.Millisecond)
 				defer ticker.Stop()
@@ -429,18 +408,15 @@ func main() {
 						}
 					}
 				}
-			}()
-			wg.Add(1)
-			go func() {
-				defer func() {
-					wasp.L(ctx).Info("cluster listener stopped")
-					wg.Done()
-				}()
+			})
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("cluster listener stopped")
+
 				err := server.Serve(clusterListener)
 				if err != nil {
 					wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
 				}
-			}()
+			})
 			handler := func(m transport.Metadata) error {
 				go func() {
 					ctx, cancel := context.WithCancel(ctx)
