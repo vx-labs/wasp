@@ -26,9 +26,7 @@ message Member {
   bool IsLeader = 3;
   bool IsAlive = 4;
 }
-message GetMembersResponse {
-  repeated Member Members = 1;
-}
+message GetMembersResponse { repeated Member Members = 1; }
 
 service Raft {
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
@@ -44,4 +42,11 @@ message DistributeMessageResponse {}
 service MQTT {
   rpc DistributeMessage(DistributeMessageRequest)
       returns (DistributeMessageResponse) {}
+}
+
+message ShutdownRequest {}
+message ShutdownResponse {}
+
+service Node {
+  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse) {}
 }

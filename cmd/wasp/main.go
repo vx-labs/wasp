@@ -179,7 +179,16 @@ func findPeers(name, tag string, minimumCount int) ([]string, error) {
 	}
 }
 
+type nodeRPCServer struct {
+	cancel chan<- struct{}
+}
+
+func (n *nodeRPCServer) Shutdown(ctx context.Context, _ *api.ShutdownRequest) (*api.ShutdownResponse, error) {
+	n.cancel <- struct{}{}
+	return &api.ShutdownResponse{}, nil
+}
 func main() {
+	cancelCh := make(chan struct{})
 	config := viper.New()
 	config.SetEnvPrefix("WASP")
 	config.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
@@ -221,6 +230,7 @@ func main() {
 				TLSCertificatePath: config.GetString("rpc-tls-certificate-file"),
 				TLSPrivateKeyPath:  config.GetString("rpc-tls-private-key-file"),
 			})
+			api.RegisterNodeServer(server, &nodeRPCServer{cancel: cancelCh})
 			rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
 				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 			})
@@ -490,7 +500,10 @@ func main() {
 				syscall.SIGINT,
 				syscall.SIGTERM,
 				syscall.SIGQUIT)
-			<-sigc
+			select {
+			case <-sigc:
+			case <-cancelCh:
+			}
 			wasp.L(ctx).Info("shutting down wasp")
 			for _, listener := range listeners {
 				listener.listener.Close()
