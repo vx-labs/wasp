@@ -24,6 +24,7 @@ message Member {
   uint64 ID = 1;
   string Address = 2;
   bool IsLeader = 3;
+  bool IsAlive = 4;
 }
 message GetMembersResponse {
   repeated Member Members = 1;

@@ -100,10 +100,14 @@ func main() {
 				l.Fatal("failed to list raft members", zap.Error(err))
 			}
 			l.Debug("listed raft members", zap.String("remote_host", host))
-			table := getTable([]string{"ID", "Leader", "Address"}, cmd.OutOrStdout())
+			table := getTable([]string{"ID", "Leader", "Address", "Health"}, cmd.OutOrStdout())
 			for _, member := range out.GetMembers() {
+				healthString := "healthy"
+				if !member.IsAlive {
+					healthString = "unhealthy"
+				}
 				table.Append([]string{
-					fmt.Sprintf("%x", member.GetID()), fmt.Sprintf("%v", member.GetIsLeader()), member.GetAddress(),
+					fmt.Sprintf("%x", member.GetID()), fmt.Sprintf("%v", member.GetIsLeader()), member.GetAddress(), healthString,
 				})
 			}
 			table.Render()
