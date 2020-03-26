@@ -6,6 +6,8 @@ import (
 	"io"
 	"time"
 
+	consul "github.com/hashicorp/consul/api"
+
 	"github.com/mattn/go-colorable"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -49,6 +51,18 @@ func getTable(headers []string, out io.Writer) *tablewriter.Table {
 	return table
 }
 
+func findServer(service, tag string) (string, error) {
+	client, err := consul.NewClient(consul.DefaultConfig())
+	if err != nil {
+		return "", err
+	}
+	services, _, err := client.Catalog().Service(service, tag, &consul.QueryOptions{})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%s:%d", services[0].ServiceAddress, services[0].ServicePort), nil
+}
+
 func main() {
 	config := viper.New()
 	ctx := context.Background()
@@ -69,6 +83,13 @@ func main() {
 				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 			})
 			host := config.GetString("host")
+			if host == "" && config.GetBool("use-consul") {
+				var err error
+				host, err = findServer(config.GetString("consul-service-name"), config.GetString("consul-service-tag"))
+				if err != nil {
+					l.Fatal("failed to find Wasp server using Consul", zap.Error(err))
+				}
+			}
 			conn, err := dialer(host, grpc.WithBlock(), grpc.WithTimeout(3000*time.Millisecond))
 			if err != nil {
 				l.Fatal("failed to dial Wasp server", zap.Error(err), zap.String("remote_host", host))
@@ -89,6 +110,9 @@ func main() {
 		},
 	})
 	rootCmd.AddCommand(raft)
+	rootCmd.PersistentFlags().Bool("use-consul", true, "Use Hashicorp Consul to find Wasp server.")
+	rootCmd.PersistentFlags().String("consul-service-name", "wasp", "Consul service name.")
+	rootCmd.PersistentFlags().String("consul-service-tag", "rpc", "Consul service tag.")
 	rootCmd.PersistentFlags().String("host", "", "remote GRPC endpoint")
 	rootCmd.PersistentFlags().String("rpc-tls-certificate-authority-file", "", "x509 certificate authority used by RPC Client.")
 
