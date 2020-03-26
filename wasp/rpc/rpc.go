@@ -1,6 +1,9 @@
 package rpc
 
 import (
+	"crypto/tls"
+	"crypto/x509"
+	"fmt"
 	"time"
 
 	grpc_retry "github.com/grpc-ecosystem/go-grpc-middleware/retry"
@@ -21,6 +24,7 @@ type ServerConfig struct {
 }
 type ClientConfig struct {
 	TLSCertificateAuthorityPath string
+	InsecureSkipVerify          bool
 }
 
 func Server(config ServerConfig) *grpc.Server {
@@ -47,11 +51,11 @@ type Dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, err
 
 func GRPCDialer(config ClientConfig) Dialer {
 	return func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
-		return grpc.Dial(address, append(opts, GRPCClientOptions(config.TLSCertificateAuthorityPath)...)...)
+		return grpc.Dial(address, append(opts, GRPCClientOptions(config.TLSCertificateAuthorityPath, config.InsecureSkipVerify)...)...)
 	}
 }
 
-func GRPCClientOptions(tlsCertificateAuthorityPath string) []grpc.DialOption {
+func GRPCClientOptions(tlsCertificateAuthorityPath string, insecureSkipVerify bool) []grpc.DialOption {
 	callOpts := []grpc_retry.CallOption{
 		grpc_retry.WithBackoff(grpc_retry.BackoffLinearWithJitter(200*time.Millisecond, 0.3)),
 		grpc_retry.WithMax(3),
@@ -77,5 +81,13 @@ func GRPCClientOptions(tlsCertificateAuthorityPath string) []grpc.DialOption {
 		}
 		return append(dialOpts, grpc.WithTransportCredentials(tlsConfig))
 	}
-	return append(dialOpts, grpc.WithInsecure())
+	systemCertPool, err := x509.SystemCertPool()
+	if err != nil {
+		panic(fmt.Sprintf("failed to load system certificate authorities: %v", err))
+	}
+	tlsConfig := credentials.NewTLS(&tls.Config{
+		InsecureSkipVerify: insecureSkipVerify,
+		RootCAs:            systemCertPool,
+	})
+	return append(dialOpts, grpc.WithTransportCredentials(tlsConfig))
 }
