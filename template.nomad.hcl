@@ -209,10 +209,13 @@ EOH
         tags = ["rpc"]
 
         check {
-          type     = "tcp"
-          port     = "rpc"
-          interval = "30s"
-          timeout  = "2s"
+          type            = "grpc"
+          port            = "rpc"
+          interval        = "30s"
+          timeout         = "2s"
+          grpc_service    = "raft"
+          grpc_use_tls    = true
+          tls_skip_verify = true
         }
       }
       service {
