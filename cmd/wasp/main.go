@@ -24,6 +24,8 @@ import (
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func run(config *viper.Viper) {
@@ -38,7 +40,7 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Fatal("failed to get node ID", zap.Error(err))
 	}
 	ctx = wasp.AddFields(ctx, zap.String("hex_node_id", fmt.Sprintf("%x", id)))
-
+	healthServer := health.NewServer()
 	wg := sync.WaitGroup{}
 	stateLoaded := make(chan struct{})
 	cancelCh := make(chan struct{})
@@ -53,6 +55,7 @@ func run(config *viper.Viper) {
 		TLSCertificatePath: config.GetString("rpc-tls-certificate-file"),
 		TLSPrivateKeyPath:  config.GetString("rpc-tls-private-key-file"),
 	})
+	healthpb.RegisterHealthServer(server, healthServer)
 	api.RegisterNodeServer(server, rpc.NewNodeRPCServer(cancelCh))
 	rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
@@ -357,17 +360,22 @@ func run(config *viper.Viper) {
 	for _, listener := range listeners {
 		wasp.L(ctx).Debug("listener started", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 	}
-	stats.ListenAndServe(config.GetInt("metrics-port"))
+	go stats.ListenAndServe(config.GetInt("metrics-port"))
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
+	healthServer.SetServingStatus("mqtt", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("node", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("raft", healthpb.HealthCheckResponse_SERVING)
+	healthServer.Resume()
 	select {
 	case <-sigc:
 	case <-cancelCh:
 	}
 	wasp.L(ctx).Info("shutting down wasp")
+	healthServer.Shutdown()
 	for _, listener := range listeners {
 		listener.listener.Close()
 		wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))

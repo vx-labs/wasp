@@ -10,6 +10,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/api"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 var (
@@ -77,9 +78,9 @@ func (t *Transport) runHealthchecks(ctx context.Context) error {
 	defer t.mtx.Unlock()
 	for _, conn := range t.peers {
 		ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
-		_, err := api.NewRaftClient(conn.Conn).CheckHealth(ctx, &api.CheckHealthRequest{})
+		resp, err := healthpb.NewHealthClient(conn.Conn).Check(ctx, &healthpb.HealthCheckRequest{})
 		cancel()
-		if err != nil {
+		if err != nil || resp.Status != healthpb.HealthCheckResponse_SERVING {
 			if conn.Enabled {
 				conn.Enabled = false
 			}
