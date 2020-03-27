@@ -31,7 +31,6 @@ message GetMembersResponse { repeated Member Members = 1; }
 service Raft {
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
-  rpc IsPeer(RaftContext) returns (PeerResponse) {}
   rpc CheckHealth(CheckHealthRequest) returns (CheckHealthResponse) {}
   rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
 }

@@ -270,9 +270,9 @@ func main() {
 				GetSnapshot: state.MarshalBinary,
 			}
 			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
+			raftNode.Serve(server)
 			rpcTransport := rpc.NewTransport(raftConfig.NodeID,
 				fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port")), raftNode, rpcDialer)
-			rpcTransport.Serve(server)
 
 			runAsync(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("cluster listener stopped")
