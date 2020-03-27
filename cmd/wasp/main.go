@@ -21,6 +21,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/membership"
 	"github.com/vx-labs/wasp/wasp/raft"
 	"github.com/vx-labs/wasp/wasp/rpc"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
 )
@@ -52,7 +53,7 @@ func run(config *viper.Viper) {
 		TLSCertificatePath: config.GetString("rpc-tls-certificate-file"),
 		TLSPrivateKeyPath:  config.GetString("rpc-tls-private-key-file"),
 	})
-	api.RegisterNodeServer(server, &nodeRPCServer{cancel: cancelCh})
+	api.RegisterNodeServer(server, rpc.NewNodeRPCServer(cancelCh))
 	rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
@@ -356,7 +357,7 @@ func run(config *viper.Viper) {
 	for _, listener := range listeners {
 		wasp.L(ctx).Debug("listener started", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 	}
-	runProm(config.GetInt("metrics-port"))
+	stats.ListenAndServe(config.GetInt("metrics-port"))
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
 		syscall.SIGINT,

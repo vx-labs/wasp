@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -13,9 +12,7 @@ import (
 
 	"github.com/spf13/viper"
 
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
-	"github.com/vx-labs/wasp/wasp/api"
 )
 
 var (
@@ -26,12 +23,6 @@ type listenerConfig struct {
 	name     string
 	port     int
 	listener net.Listener
-}
-
-func runProm(port int) {
-	mux := http.NewServeMux()
-	mux.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), mux)
 }
 
 func localPrivateHost() string {
@@ -89,14 +80,6 @@ func findPeers(name, tag string, minimumCount int) ([]string, error) {
 	}
 }
 
-type nodeRPCServer struct {
-	cancel chan<- struct{}
-}
-
-func (n *nodeRPCServer) Shutdown(ctx context.Context, _ *api.ShutdownRequest) (*api.ShutdownResponse, error) {
-	n.cancel <- struct{}{}
-	return &api.ShutdownResponse{}, nil
-}
 func main() {
 	config := viper.New()
 	config.SetEnvPrefix("WASP")
