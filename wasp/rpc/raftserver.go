@@ -13,26 +13,11 @@ func (t *Transport) ProcessMessage(ctx context.Context, message *raftpb.Message)
 	return &api.Payload{}, t.raft.Process(ctx, *message)
 }
 func (t *Transport) JoinCluster(ctx context.Context, r *api.RaftContext) (*api.JoinClusterResponse, error) {
-	if t.raft == nil || !t.raft.IsBootstrapped() {
+	if t.raft == nil {
 		return nil, errors.New("node not ready")
 	}
 	out := &api.JoinClusterResponse{}
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	for id, peer := range t.peers {
-		out.Peers = append(out.Peers, &api.RaftContext{
-			ID:      id,
-			Address: peer.Conn.Target(),
-		})
-	}
-	out.Peers = append(out.Peers, &api.RaftContext{
-		ID:      t.nodeID,
-		Address: t.nodeAddress,
-	})
-	if _, ok := t.peers[r.ID]; !ok {
-		return out, t.raft.ReportNewPeer(ctx, r.ID, r.Address)
-	}
-	return out, nil
+	return out, t.raft.ReportNewPeer(ctx, r.ID, r.Address)
 }
 func (t *Transport) IsPeer(ctx context.Context, r *api.RaftContext) (*api.PeerResponse, error) {
 	return nil, nil

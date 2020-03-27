@@ -20,7 +20,6 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/spf13/cobra"
@@ -106,33 +105,16 @@ func waitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNu
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
+		clusterChecked := 0
 		nodes := mesh.Members()
 		for idx := range nodes {
-			md, err := decodeMD(nodes[idx].Meta)
+			_, err := decodeMD(nodes[idx].Meta)
 			if err != nil {
 				continue
 			}
-			conn, err := rpcDialer(md.RaftAddress,
-				grpc.WithBlock(), grpc.WithTimeout(300*time.Millisecond))
-			if err != nil {
-				if err == context.DeadlineExceeded {
-					continue
-				} else {
-					return nil, err
-				}
-			}
-			ctx, cancel = context.WithTimeout(ctx, 500*time.Millisecond)
-			clusterPeers, err := api.NewRaftClient(conn).JoinCluster(ctx, &localContext)
-			cancel()
-			if err == nil {
-				peers := []raft.Peer{}
-				for _, clusterPeer := range clusterPeers.GetPeers() {
-					peers = append(peers, raft.Peer{ID: clusterPeer.ID, Address: clusterPeer.Address})
-				}
-				return peers, ErrExistingClusterFound
-			}
+			clusterChecked++
 		}
-		if len(nodes) >= expectedNumber {
+		if clusterChecked >= expectedNumber {
 			peers := make([]raft.Peer, len(nodes))
 			for idx := range peers {
 				md, err := decodeMD(nodes[idx].Meta)
@@ -219,6 +201,7 @@ func main() {
 			ctx = wasp.AddFields(ctx, zap.String("hex_node_id", fmt.Sprintf("%x", id)))
 
 			wg := sync.WaitGroup{}
+			stateLoaded := make(chan struct{})
 			publishes := make(chan *packet.Publish, 20)
 			commandsCh := make(chan raft.Command)
 			state := wasp.NewState()
@@ -234,6 +217,9 @@ func main() {
 			rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
 				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 			})
+			remotePublishCh := make(chan *packet.Publish, 20)
+			mqttServer := rpc.NewMQTTServer(remotePublishCh)
+			mqttServer.Serve(server)
 			clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 			if err != nil {
 				wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
@@ -268,7 +254,7 @@ func main() {
 				for {
 					err = membership.Join(joinList)
 					if err != nil {
-						wasp.L(ctx).Warn("failed to join cluster", zap.Error(err))
+						wasp.L(ctx).Warn("failed to join gossip mesh", zap.Error(err))
 					} else {
 						break
 					}
@@ -281,39 +267,90 @@ func main() {
 			raftConfig := raft.Config{
 				NodeID:      id,
 				DataDir:     config.GetString("data-dir"),
-				Join:        false,
 				GetSnapshot: state.MarshalBinary,
-				ProposeC:    commandsCh,
 			}
-			if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
-				wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-				raftConfig.Peers, err = waitForNodes(ctx, membership, expectedCount, api.RaftContext{
-					ID:      id,
-					Address: raftAddress,
-				}, rpcDialer)
-				if err != nil {
-					if err == ErrExistingClusterFound {
-						wasp.L(ctx).Info("discovered existing raft cluster")
-						raftConfig.Join = true
-					} else {
-						wasp.L(ctx).Fatal("failed to discover nodes on gossip mesh", zap.Error(err))
-					}
-				}
-				wasp.L(ctx).Info("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(raftConfig.Peers)))
-			} else {
-				wasp.L(ctx).Info("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
-			}
-			if raftConfig.Join {
-				wasp.L(ctx).Info("joining raft cluster", zap.Array("raft_peers", raftConfig.Peers))
-			} else {
-				wasp.L(ctx).Info("bootstraping raft cluster", zap.Array("raft_peers", raftConfig.Peers))
-			}
-
 			raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
 			rpcTransport := rpc.NewTransport(raftConfig.NodeID,
 				fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port")), raftNode, rpcDialer)
 			rpcTransport.Serve(server)
-			raftNode.Start(rpcTransport)
+
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("cluster listener stopped")
+
+				err := server.Serve(clusterListener)
+				if err != nil {
+					wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
+				}
+			})
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("raft node stopped")
+				join := false
+				peers := raft.Peers{}
+				if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
+					wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
+					peers, err = waitForNodes(ctx, membership, expectedCount, api.RaftContext{
+						ID:      id,
+						Address: raftAddress,
+					}, rpcDialer)
+					if err != nil {
+						if err == ErrExistingClusterFound {
+							wasp.L(ctx).Info("discovered existing raft cluster")
+							join = true
+						} else {
+							wasp.L(ctx).Fatal("failed to discover nodes on gossip mesh", zap.Error(err))
+						}
+					}
+					wasp.L(ctx).Info("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(peers)))
+				} else {
+					wasp.L(ctx).Info("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
+				}
+				if join {
+					wasp.L(ctx).Info("joining raft cluster", zap.Array("raft_peers", peers))
+				} else {
+					wasp.L(ctx).Info("bootstraping raft cluster", zap.Array("raft_peers", peers))
+				}
+				go func() {
+					defer close(stateLoaded)
+					select {
+					case removed := <-raftNode.Ready():
+						if removed {
+							wasp.L(ctx).Debug("local node is not a cluster member, will attempt join")
+							ticker := time.NewTicker(1 * time.Second)
+							defer ticker.Stop()
+							for {
+								for _, peer := range peers {
+									conn, err := rpcDialer(peer.Address)
+									if err != nil {
+										wasp.L(ctx).Error("failed to dial peer")
+										continue
+									}
+									ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+									_, err = api.NewRaftClient(conn).JoinCluster(ctx, &api.RaftContext{
+										ID:      id,
+										Address: raftAddress,
+									})
+									cancel()
+									conn.Close()
+									if err != nil {
+										wasp.L(ctx).Warn("failed to join raft cluster", zap.Error(err))
+									} else {
+										wasp.L(ctx).Info("joined cluster")
+										return
+									}
+								}
+								select {
+								case <-ticker.C:
+								case <-ctx.Done():
+									return
+								}
+							}
+						}
+					case <-ctx.Done():
+						return
+					}
+				}()
+				raftNode.Run(ctx, peers, join, rpcTransport)
+			})
 			snapshotter := <-raftNode.Snapshotter()
 
 			snapshot, err := snapshotter.Load()
@@ -326,6 +363,25 @@ func main() {
 				}
 			}
 			stateMachine := fsm.NewFSM(id, state, commandsCh)
+			runAsync(ctx, &wg, func(ctx context.Context) {
+				defer wasp.L(ctx).Info("command publisher stopped")
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case event := <-commandsCh:
+						err := raftNode.Apply(event.Ctx, event.Payload)
+						select {
+						case <-ctx.Done():
+							event.ErrCh <- ctx.Err()
+						case <-event.Ctx.Done():
+							event.ErrCh <- event.Ctx.Err()
+						case event.ErrCh <- err:
+						}
+						close(event.ErrCh)
+					}
+				}
+			})
 			runAsync(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("command processor stopped")
 				for {
@@ -363,7 +419,6 @@ func main() {
 					}
 				})
 			})
-			remotePublishCh := make(chan *packet.Publish, 20)
 			runAsync(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("remote publish processor stopped")
 				for {
@@ -378,8 +433,7 @@ func main() {
 					}
 				}
 			})
-			mqttServer := rpc.NewMQTTServer(remotePublishCh)
-			mqttServer.Serve(server)
+
 			runAsync(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("publish storer stopped")
 				buf := make([]*packet.Publish, 0, 100)
@@ -409,14 +463,6 @@ func main() {
 					}
 				}
 			})
-			runAsync(ctx, &wg, func(ctx context.Context) {
-				defer wasp.L(ctx).Info("cluster listener stopped")
-
-				err := server.Serve(clusterListener)
-				if err != nil {
-					wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
-				}
-			})
 			handler := func(m transport.Metadata) error {
 				go func() {
 					ctx, cancel := context.WithCancel(ctx)
@@ -426,6 +472,7 @@ func main() {
 				}()
 				return nil
 			}
+			<-stateLoaded
 			listeners := []listenerConfig{}
 			if port := config.GetInt("tcp-port"); port > 0 {
 				ln, err := transport.NewTCPTransport(port, handler)
@@ -487,13 +534,13 @@ func main() {
 			}
 			err = stateMachine.Shutdown(ctx)
 			if err != nil {
-				wasp.L(ctx).Error("failed to leave raft cluster", zap.Error(err))
+				wasp.L(ctx).Error("failed to stop state machine", zap.Error(err))
 			}
-			err = raftNode.Shutdown(ctx)
+			err = raftNode.Leave(ctx)
 			if err != nil {
-				wasp.L(ctx).Error("failed to shutdown raft", zap.Error(err))
+				wasp.L(ctx).Error("failed to leave raft cluster", zap.Error(err))
 			} else {
-				wasp.L(ctx).Info("raft node stopped")
+				wasp.L(ctx).Info("raft cluster left")
 			}
 			cancel()
 			server.GracefulStop()

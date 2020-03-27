@@ -12,7 +12,7 @@ message RaftContext {
   string Address = 2;
 }
 
-message JoinClusterResponse { repeated RaftContext Peers = 1; }
+message JoinClusterResponse {}
 
 message PeerResponse { bool status = 1; }
 
