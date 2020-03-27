@@ -32,5 +32,5 @@ require (
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20191106202628-ed6320f186d4
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
-	google.golang.org/grpc v1.23.1
+	google.golang.org/grpc v1.28.0
 )
