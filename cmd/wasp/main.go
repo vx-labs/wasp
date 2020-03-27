@@ -27,6 +27,7 @@ import (
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/async"
 	"github.com/vx-labs/wasp/wasp/fsm"
 	"github.com/vx-labs/wasp/wasp/membership"
 	"github.com/vx-labs/wasp/wasp/raft"
@@ -274,7 +275,7 @@ func main() {
 			rpcTransport := rpc.NewTransport(raftConfig.NodeID,
 				fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port")), raftNode, rpcDialer)
 
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("cluster listener stopped")
 
 				err := server.Serve(clusterListener)
@@ -282,7 +283,7 @@ func main() {
 					wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
 				}
 			})
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("raft node stopped")
 				join := false
 				peers := raft.Peers{}
@@ -363,7 +364,7 @@ func main() {
 				}
 			}
 			stateMachine := fsm.NewFSM(id, state, commandsCh)
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("command publisher stopped")
 				for {
 					select {
@@ -382,7 +383,7 @@ func main() {
 					}
 				}
 			})
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("command processor stopped")
 				for {
 					select {
@@ -397,7 +398,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("message log gc runner stopped")
 				ticker := time.NewTicker(5 * time.Minute)
 				defer ticker.Stop()
@@ -410,7 +411,7 @@ func main() {
 					}
 				}
 			})
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("publish processor stopped")
 				messageLog.Consume(ctx, func(p *packet.Publish) {
 					err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, true, p)
@@ -419,7 +420,7 @@ func main() {
 					}
 				})
 			})
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("remote publish processor stopped")
 				for {
 					select {
@@ -434,7 +435,7 @@ func main() {
 				}
 			})
 
-			runAsync(ctx, &wg, func(ctx context.Context) {
+			async.Run(ctx, &wg, func(ctx context.Context) {
 				defer wasp.L(ctx).Info("publish storer stopped")
 				buf := make([]*packet.Publish, 0, 100)
 				ticker := time.NewTicker(20 * time.Millisecond)
