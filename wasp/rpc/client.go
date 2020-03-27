@@ -18,7 +18,6 @@ var (
 )
 
 type RaftInstance interface {
-	IsBootstrapped() bool
 	Process(ctx context.Context, message raftpb.Message) error
 	ReportUnreachable(uint64)
 	ReportNewPeer(ctx context.Context, id uint64, address string) error

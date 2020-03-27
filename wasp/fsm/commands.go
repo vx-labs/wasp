@@ -48,12 +48,10 @@ func (f *FSM) commit(ctx context.Context, payload []byte) error {
 	out := make(chan error)
 	select {
 	case <-ctx.Done():
-		close(out)
 		return ctx.Err()
 	case f.commandsCh <- raft.Command{Ctx: ctx, ErrCh: out, Payload: payload}:
 		select {
 		case <-ctx.Done():
-			close(out)
 			return ctx.Err()
 		case err := <-out:
 			return err
@@ -69,11 +67,7 @@ func (f *FSM) Shutdown(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	err = f.commit(ctx, payload)
-	if err != nil {
-		return err
-	}
-	return nil
+	return f.commit(ctx, payload)
 }
 func (f *FSM) RetainedMessage(ctx context.Context, publish *packet.Publish) error {
 	payload, err := encode(&StateTransition{Event: &StateTransition_RetainedMessageStored{
