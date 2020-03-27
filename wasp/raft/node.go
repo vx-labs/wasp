@@ -53,9 +53,7 @@ type RaftNode struct {
 	id            uint64 // client ID for raft session
 	address       string
 	currentLeader uint64
-	isLeader      bool
 	hasLeader     bool
-	bootstrapped  bool
 	commitC       chan []byte // entries committed to log (k,v)
 	logger        *zap.Logger
 	waldir        string // path to WAL directory
@@ -105,7 +103,6 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		id:               id,
 		address:          config.NodeAddress,
 		currentLeader:    0,
-		isLeader:         false,
 		hasLeader:        false,
 		commitC:          commitC,
 		logger:           logger,
@@ -174,6 +171,10 @@ func (rc *RaftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 		nents = ents[rc.appliedIndex-firstIdx+1:]
 	}
 	return nents
+}
+
+func (rc *RaftNode) isLeader() bool {
+	return rc.currentLeader == rc.id
 }
 
 // publishEntries writes committed log entries to commit channel and returns
@@ -301,16 +302,10 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 					rc.currentLeader = rd.SoftState.Lead
 					if rc.currentLeader == rc.id {
 						rc.logger.Info("raft leadership acquired")
-						rc.isLeader = true
 					} else {
-						if rc.isLeader {
-							rc.logger.Warn("raft leadership lost")
-							rc.isLeader = false
-						}
 						rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
 					}
 				}
-
 				if rd.SoftState.Lead == raft.None {
 					if rc.hasLeader {
 						rc.hasLeader = false
@@ -359,7 +354,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 	if rc.node == nil {
 		return errors.New("node not ready")
 	}
-	if !rc.isLeader {
+	if !rc.isLeader() {
 		return errors.New("node not leader")
 	}
 	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
@@ -378,7 +373,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 }
 
 func (rc *RaftNode) Leave(ctx context.Context) error {
-	if rc.isLeader && len(rc.node.Status().Progress) == 1 {
+	if rc.isLeader() && len(rc.node.Status().Progress) == 1 {
 		return nil
 	}
 	rc.logger.Debug("leaving raft cluster")

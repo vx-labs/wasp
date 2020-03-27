@@ -26,7 +26,7 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 	if rc.node == nil {
 		return nil, errors.New("node not ready")
 	}
-	if !rc.isLeader {
+	if !rc.isLeader() {
 		return nil, errors.New("node not leader")
 	}
 	out := &api.JoinClusterResponse{}
