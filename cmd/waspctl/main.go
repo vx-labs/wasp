@@ -93,7 +93,7 @@ func main() {
 					l.Fatal("failed to find Wasp server using Consul", zap.Error(err))
 				}
 			}
-			conn, err := dialer(host, grpc.WithBlock(), grpc.WithTimeout(3000*time.Millisecond))
+			conn, err := dialer(host, grpc.WithTimeout(3000*time.Millisecond))
 			if err != nil {
 				l.Fatal("failed to dial Wasp server", zap.Error(err), zap.String("remote_host", host))
 			}
