@@ -22,9 +22,12 @@ import (
 func logger() *zap.Logger {
 	config := zap.NewProductionEncoderConfig()
 	config.EncodeLevel = zapcore.CapitalColorLevelEncoder
+	config.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
+		enc.AppendString(t.Format(time.Kitchen))
+	}
 	return zap.New(zapcore.NewCore(
 		zapcore.NewConsoleEncoder(config),
-		zapcore.AddSync(colorable.NewColorableStdout()),
+		zapcore.AddSync(colorable.NewColorableStderr()),
 		zapcore.InfoLevel,
 	))
 }
