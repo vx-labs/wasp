@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,10 +12,6 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/spf13/cobra"
-)
-
-var (
-	ErrExistingClusterFound = errors.New("existing cluster found")
 )
 
 type listenerConfig struct {
@@ -106,6 +101,7 @@ func main() {
 
 	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
 	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
+	cmd.Flags().Bool("insecure", false, "Disable GRPC client-side TLS validation.")
 	cmd.Flags().Bool("consul-join", false, "Use Hashicorp Consul to find other gossip members. Wasp won't handle service registration in Consul, you must do it before running Wasp.")
 	cmd.Flags().String("consul-service-name", "wasp", "Consul auto-join service name.")
 	cmd.Flags().String("consul-service-tag", "gossip", "Consul auto-join service tag.")

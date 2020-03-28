@@ -107,7 +107,7 @@ func int64ToBytes(u uint64) []byte {
 }
 
 func (s *messageLog) Consume(ctx context.Context, f func(*packet.Publish)) error {
-	return s.db.Subscribe(ctx, func(list *pb.KVList) {
+	return s.db.Subscribe(ctx, func(list *pb.KVList) error {
 		for _, kv := range list.Kv {
 			value := &packet.Publish{}
 			err := proto.Unmarshal(kv.GetValue(), value)
@@ -116,5 +116,6 @@ func (s *messageLog) Consume(ctx context.Context, f func(*packet.Publish)) error
 			}
 			f(value)
 		}
+		return nil
 	}, []byte{0})
 }
