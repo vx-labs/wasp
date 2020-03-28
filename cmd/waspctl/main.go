@@ -86,7 +86,7 @@ func main() {
 				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 			})
 			host := config.GetString("host")
-			if host == "" && config.GetBool("use-consul") {
+			if cmd.Flags().Changed("host") && config.GetBool("use-consul") {
 				var err error
 				host, err = findServer(config.GetString("consul-service-name"), config.GetString("consul-service-tag"))
 				if err != nil {
@@ -144,10 +144,10 @@ func main() {
 	})
 	rootCmd.AddCommand(raft)
 	rootCmd.AddCommand(node)
-	rootCmd.PersistentFlags().Bool("use-consul", true, "Use Hashicorp Consul to find Wasp server.")
+	rootCmd.PersistentFlags().BoolP("use-consul", "c", false, "Use Hashicorp Consul to find Wasp server.")
 	rootCmd.PersistentFlags().String("consul-service-name", "wasp", "Consul service name.")
 	rootCmd.PersistentFlags().String("consul-service-tag", "rpc", "Consul service tag.")
-	rootCmd.PersistentFlags().String("host", "", "remote GRPC endpoint")
+	rootCmd.PersistentFlags().String("host", "127.0.0.1:1899", "remote GRPC endpoint")
 	rootCmd.PersistentFlags().String("rpc-tls-certificate-authority-file", "", "x509 certificate authority used by RPC Client.")
 
 	rootCmd.Execute()
