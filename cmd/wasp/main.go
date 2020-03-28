@@ -49,7 +49,7 @@ func run(config *viper.Viper) {
 	state := wasp.NewState()
 
 	if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
-		wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will be disabled.")
+		wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")
 	}
 	server := rpc.Server(rpc.ServerConfig{
 		TLSCertificatePath: config.GetString("rpc-tls-certificate-file"),

@@ -1,43 +1,16 @@
 package main
 
 import (
-	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/pem"
 	"log"
-	"math/big"
-	"net"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/vx-labs/wasp/wasp/rpc"
 )
-
-func listLocalIP() []net.IP {
-	out := []net.IP{}
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		panic(err)
-	}
-	for _, i := range ifaces {
-		addrs, err := i.Addrs()
-		if err != nil {
-			panic(err)
-		}
-		for _, addr := range addrs {
-			switch v := addr.(type) {
-			case *net.IPNet:
-				out = append(out, v.IP)
-			case *net.IPAddr:
-				out = append(out, v.IP)
-			}
-		}
-	}
-	return out
-}
 
 func TLSHelper(config *viper.Viper) *cobra.Command {
 	c := &cobra.Command{
@@ -50,24 +23,7 @@ func TLSHelper(config *viper.Viper) *cobra.Command {
 		Run: func(cmd *cobra.Command, _ []string) {
 			log.Printf("INFO: generating self-signed TLS certificate.")
 			log.Printf("INFO: if this operation seems too long, check this host's entropy.")
-			privkey, err := rsa.GenerateKey(rand.Reader, 2048)
-			if err != nil {
-				log.Printf("ERR: %v", err)
-				return
-			}
-			certTemplate := &x509.Certificate{
-				NotAfter:     time.Now().Add(12 * 30 * 24 * time.Hour),
-				SerialNumber: big.NewInt(1),
-				IPAddresses:  listLocalIP(),
-				DNSNames:     []string{"*"},
-				Subject: pkix.Name{
-					CommonName: os.Getenv("HOSTNAME"),
-				},
-				ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
-				KeyUsage:    x509.KeyUsageDigitalSignature,
-			}
-
-			certBody, err := x509.CreateCertificate(rand.Reader, certTemplate, certTemplate, privkey.Public(), privkey)
+			tlsCert, err := rpc.GenerateSelfSignedCertificate(os.Getenv("HOSTNAME"), []string{"*"}, rpc.ListLocalIP())
 			if err != nil {
 				log.Printf("ERR: %v", err)
 				return
@@ -84,8 +40,8 @@ func TLSHelper(config *viper.Viper) *cobra.Command {
 				return
 			}
 			defer keyFile.Close()
-			pem.Encode(keyFile, &pem.Block{Type: "PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(privkey)})
-			pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: certBody})
+			pem.Encode(keyFile, &pem.Block{Type: "PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(tlsCert.PrivateKey.(*rsa.PrivateKey))})
+			pem.Encode(certFile, &pem.Block{Type: "CERTIFICATE", Bytes: tlsCert.Leaf.Raw})
 		},
 	}
 	c.Flags().StringP("certificate-file", "c", "./run_config/cert.pem", "Write certificate to this file")
