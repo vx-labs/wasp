@@ -78,8 +78,6 @@ type RaftNode struct {
 	ready     chan bool
 }
 
-var defaultSnapshotCount uint64 = 10000
-
 type Config struct {
 	NodeID      uint64
 	NodeAddress string
@@ -110,7 +108,7 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		snapdir:          path.Join(datadir, "raft", "snapshots"),
 		getSnapshot:      getSnapshot,
 		raftStorage:      raft.NewMemoryStorage(),
-		snapCount:        defaultSnapshotCount,
+		snapCount:        1000,
 		left:             make(chan struct{}),
 		ready:            make(chan bool),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),

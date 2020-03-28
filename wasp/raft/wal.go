@@ -1,6 +1,7 @@
 package raft
 
 import (
+	"log"
 	"os"
 
 	"go.etcd.io/etcd/raft/raftpb"
@@ -42,10 +43,18 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 	w := rc.openWAL(snapshot, logger)
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
-		logger.Fatal("failed to replay WAL", zap.Error(err))
+		rc.logger.Fatal("failed to replay WAL", zap.Error(err))
 	}
 	if snapshot != nil {
-		rc.raftStorage.ApplySnapshot(*snapshot)
+		rc.logger.Debug("applying snapshot")
+		err = rc.raftStorage.ApplySnapshot(*snapshot)
+		if err != nil {
+			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
+		}
+		rc.appliedIndex = snapshot.Metadata.Index
+		rc.snapshotIndex = snapshot.Metadata.Index
+		rc.confState = snapshot.Metadata.ConfState
+		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", rc.appliedIndex))
 	}
 	rc.raftStorage.SetHardState(st)
 
@@ -53,6 +62,7 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 	rc.raftStorage.Append(ents)
 	if len(ents) > 0 {
 		rc.lastIndex = ents[len(ents)-1].Index
+		log.Print(rc.lastIndex)
 	} else {
 		rc.ready <- rc.removed
 		close(rc.ready)
