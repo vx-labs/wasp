@@ -8,6 +8,7 @@ import (
 
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
+	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
@@ -22,6 +23,7 @@ type RaftInstance interface {
 	Process(ctx context.Context, message raftpb.Message) error
 	ReportUnreachable(uint64)
 	ReportNewPeer(ctx context.Context, id uint64, address string) error
+	ReportSnapshot(to uint64, status raft.SnapshotStatus)
 	IsLeader(id uint64) bool
 }
 
@@ -120,23 +122,37 @@ func (t *Transport) RemovePeer(id uint64) {
 		delete(t.peers, id)
 	}
 }
+func isMsgSnap(m raftpb.Message) bool { return m.Type == raftpb.MsgSnap }
+
 func (t *Transport) Send(messages []raftpb.Message) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 	for _, message := range messages {
+		if message.To == 0 {
+			continue
+		}
 		conn, ok := t.peers[message.To]
 		if !ok {
 			continue
 		}
 		if !conn.Enabled {
 			t.raft.ReportUnreachable(message.To)
+			if isMsgSnap(message) {
+				t.raft.ReportSnapshot(message.To, raft.SnapshotFailure)
+			}
 			continue
 		}
 		_, err := api.NewRaftClient(conn.Conn).ProcessMessage(context.TODO(), &message)
 		if err != nil {
-			t.raft.ReportUnreachable(message.To)
 			conn.Enabled = false
+			t.raft.ReportUnreachable(message.To)
+			if isMsgSnap(message) {
+				t.raft.ReportSnapshot(message.To, raft.SnapshotFailure)
+			}
 			continue
+		}
+		if isMsgSnap(message) {
+			t.raft.ReportSnapshot(message.To, raft.SnapshotFinish)
 		}
 	}
 }

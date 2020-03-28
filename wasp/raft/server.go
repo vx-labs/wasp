@@ -12,7 +12,11 @@ import (
 )
 
 func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message) (*api.Payload, error) {
-	return &api.Payload{}, rc.Process(ctx, *message)
+	err := rc.Process(ctx, *message)
+	if err != nil {
+		rc.logger.Warn("failed to process raft message", zap.Error(err))
+	}
+	return &api.Payload{}, nil
 }
 
 func (rc *RaftNode) CheckHealth(ctx context.Context, r *api.CheckHealthRequest) (*api.CheckHealthResponse, error) {

@@ -55,6 +55,7 @@ type RaftNode struct {
 	currentLeader uint64
 	hasLeader     bool
 	commitC       chan []byte // entries committed to log (k,v)
+	msgSnapC      chan raftpb.Message
 	logger        *zap.Logger
 	waldir        string // path to WAL directory
 	snapdir       string // path to snapshot directory
@@ -108,6 +109,7 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		snapdir:          path.Join(datadir, "raft", "snapshots"),
 		getSnapshot:      getSnapshot,
 		raftStorage:      raft.NewMemoryStorage(),
+		msgSnapC:         make(chan raftpb.Message, 16),
 		snapCount:        1000,
 		left:             make(chan struct{}),
 		ready:            make(chan bool),
@@ -280,6 +282,7 @@ func (rc *RaftNode) Apply(ctx context.Context, buf []byte) error {
 }
 
 func (rc *RaftNode) serveChannels(ctx context.Context) {
+	go rc.processSnapshotRequests(ctx)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -316,13 +319,12 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.wal.Save(rd.HardState, rd.Entries)
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				rc.logger.Info("received remote snapshot")
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
-				rc.publishSnapshot(rd.Snapshot)
+				rc.publishSnapshot(ctx, rd.Snapshot)
 			}
 			rc.raftStorage.Append(rd.Entries)
-			rc.transport.Send(rd.Messages)
+			rc.transport.Send(rc.processMessagesBeforeSending(rd.Messages))
 			if err := rc.publishEntries(ctx, rc.entriesToApply(rd.CommittedEntries)); err != nil {
 				if err != context.Canceled {
 					rc.logger.Error("failed to publish raft entries", zap.Error(err))
@@ -335,6 +337,43 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 	}
 }
 
+func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-rc.msgSnapC:
+			data, err := rc.getSnapshot()
+			if err != nil {
+				log.Panic(err)
+			}
+			snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &rc.confState, data)
+			if err != nil {
+				panic(err)
+			}
+			msg.Snapshot = snap
+			rc.transport.Send([]raftpb.Message{msg})
+		}
+	}
+}
+func (rc *RaftNode) processMessagesBeforeSending(ms []raftpb.Message) []raftpb.Message {
+	for i := len(ms) - 1; i >= 0; i-- {
+		if ms[i].Type == raftpb.MsgSnap {
+			// There are two separate data store: the store for v2, and the KV for v3.
+			// The msgSnap only contains the most recent snapshot of store without KV.
+			// So we need to redirect the msgSnap to etcd server main loop for merging in the
+			// current store snapshot and KV snapshot.
+			select {
+			case rc.msgSnapC <- ms[i]:
+			default:
+				// drop msgSnap if the inflight chan if full.
+			}
+			ms[i].To = 0
+		}
+	}
+	return ms
+}
+
 func (rc *RaftNode) Process(ctx context.Context, m raftpb.Message) error {
 	if rc.node != nil {
 		return rc.node.Step(ctx, m)
@@ -345,7 +384,7 @@ func (rc *RaftNode) ReportUnreachable(id uint64) {
 	rc.node.ReportUnreachable(id)
 }
 func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
-	rc.ReportSnapshot(id, status)
+	rc.node.ReportSnapshot(id, status)
 }
 func (rc *RaftNode) IsLeader(id uint64) bool {
 	return rc.currentLeader == id

@@ -233,7 +233,19 @@ func run(config *viper.Viper) {
 			case <-ctx.Done():
 				return
 			case event := <-raftNode.Commits():
-				stateMachine.Apply(event)
+				if event == nil {
+					snapshot, err := snapshotter.Load()
+					if err != nil {
+						wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
+					}
+					err = state.Load(snapshot.Data)
+					if err != nil {
+						wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
+					}
+					wasp.L(ctx).Info("loaded snapshot into state")
+				} else {
+					stateMachine.Apply(event)
+				}
 			}
 		}
 	})
