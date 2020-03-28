@@ -16,10 +16,6 @@ message SubscriptionDeleted {
   bytes Pattern = 2;
 }
 
-message MessagesPublished {
-  repeated packet.Publish publishes = 1 ;
-}
-
 message PeerLost {
   uint64 Peer = 1;
 }
@@ -32,6 +28,5 @@ message StateTransition {
     SubscriptionCreated SessionSubscribed = 3;
     SubscriptionDeleted SessionUnsubscribed = 4;
     PeerLost PeerLost = 5;
-    MessagesPublished MessagesPublished = 6;
   }
 }

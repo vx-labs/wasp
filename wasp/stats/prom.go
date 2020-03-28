@@ -26,9 +26,14 @@ var (
 		}),
 	}
 	histograms map[string]prometheus.Histogram = map[string]prometheus.Histogram{
-		"publishProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
-			Name:    "wasp_publish_packets_processing_time_milliseconds",
+		"publishLocalProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
+			Name:    "wasp_publish_packets_local_processing_time_milliseconds",
 			Help:    "The time elapsed resolving recipients and distributing MQTT publish messages.",
+			Buckets: []float64{0.0001, 0.0002, 0.0005, 0.0008, 1, 100, 5000},
+		}),
+		"publishRemoteProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
+			Name:    "wasp_publish_packets_remote_processing_time_milliseconds",
+			Help:    "The time elapsed resolving recipients for MQTT publish messages.",
 			Buckets: []float64{0.0001, 0.0002, 0.0005, 0.0008, 1, 100, 5000},
 		}),
 	}

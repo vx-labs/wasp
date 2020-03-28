@@ -112,6 +112,7 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		left:             make(chan struct{}),
 		ready:            make(chan bool),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
+		removed:          true,
 		// rest of structure populated after WAL replay
 	}
 	if !fileutil.Exist(rc.snapdir) {
@@ -261,6 +262,7 @@ func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
 	if oldwal || join {
 		rc.node = raft.RestartNode(c)
 	} else {
+		rc.removed = false
 		rc.node = raft.StartNode(c, rpeers)
 	}
 	rc.logger.Info("raft state machine started", zap.Uint64("index", rc.appliedIndex))

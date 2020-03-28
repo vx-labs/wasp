@@ -156,8 +156,8 @@ func run(config *viper.Viper) {
 		go func() {
 			defer close(stateLoaded)
 			select {
-			case needJoin := <-raftNode.Ready():
-				if needJoin || join {
+			case removed := <-raftNode.Ready():
+				if join && removed {
 					wasp.L(ctx).Debug("local node is not a cluster member, will attempt join")
 					ticker := time.NewTicker(1 * time.Second)
 					defer ticker.Stop()
@@ -237,6 +237,46 @@ func run(config *viper.Viper) {
 			}
 		}
 	})
+	messageLog, err := wasp.NewMessageLog(ctx, config.GetString("data-dir"))
+	if err != nil {
+		panic(err)
+	}
+	async.Run(ctx, &wg, func(ctx context.Context) {
+		defer wasp.L(ctx).Info("message log gc runner stopped")
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				messageLog.GC()
+			}
+		}
+	})
+	async.Run(ctx, &wg, func(ctx context.Context) {
+		defer wasp.L(ctx).Info("publish processor stopped")
+		messageLog.Consume(ctx, func(p *packet.Publish) {
+			err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, true, p)
+			if err != nil {
+				wasp.L(ctx).Info("publish processing failed", zap.Error(err))
+			}
+		})
+	})
+	async.Run(ctx, &wg, func(ctx context.Context) {
+		defer wasp.L(ctx).Info("remote publish processor stopped")
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case p := <-remotePublishCh:
+				err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, false, p)
+				if err != nil {
+					wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
+				}
+			}
+		}
+	})
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Info("publish storer stopped")
@@ -249,7 +289,7 @@ func run(config *viper.Viper) {
 				return
 			case <-ticker.C:
 				if len(buf) > 0 {
-					err := stateMachine.PublishMessages(ctx, buf)
+					err := wasp.StorePublish(messageLog, buf)
 					if err != nil {
 						wasp.L(ctx).Error("publish storing failed", zap.Error(err))
 					}
@@ -258,7 +298,7 @@ func run(config *viper.Viper) {
 			case p := <-publishes:
 				buf = append(buf, p)
 				if len(buf) == 100 {
-					err := stateMachine.PublishMessages(ctx, buf)
+					err := wasp.StorePublish(messageLog, buf)
 					if err != nil {
 						wasp.L(ctx).Error("publish storing failed", zap.Error(err))
 					}
@@ -355,5 +395,11 @@ func run(config *viper.Viper) {
 	server.GracefulStop()
 	clusterListener.Close()
 	wg.Wait()
+	err = messageLog.Close()
+	if err != nil {
+		wasp.L(ctx).Error("failed to close message log", zap.Error(err))
+	} else {
+		wasp.L(ctx).Info("message log closed")
+	}
 	wasp.L(ctx).Info("wasp shutdown")
 }
