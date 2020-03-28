@@ -58,6 +58,7 @@ func run(config *viper.Viper) {
 	healthpb.RegisterHealthServer(server, healthServer)
 	api.RegisterNodeServer(server, rpc.NewNodeRPCServer(cancelCh))
 	rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
+		InsecureSkipVerify:          config.GetBool("insecure"),
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
 	remotePublishCh := make(chan *packet.Publish, 20)
@@ -136,7 +137,7 @@ func run(config *viper.Viper) {
 				Address: raftAddress,
 			}, rpcDialer)
 			if err != nil {
-				if err == ErrExistingClusterFound {
+				if err == membership.ErrExistingClusterFound {
 					wasp.L(ctx).Info("discovered existing raft cluster")
 					join = true
 				} else {
@@ -155,8 +156,8 @@ func run(config *viper.Viper) {
 		go func() {
 			defer close(stateLoaded)
 			select {
-			case removed := <-raftNode.Ready():
-				if removed {
+			case needJoin := <-raftNode.Ready():
+				if needJoin || join {
 					wasp.L(ctx).Debug("local node is not a cluster member, will attempt join")
 					ticker := time.NewTicker(1 * time.Second)
 					defer ticker.Stop()

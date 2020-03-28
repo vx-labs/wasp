@@ -258,7 +258,7 @@ func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
 		MaxUncommittedEntriesSize: 1 << 30,
 	}
 	rc.logger.Debug("starting raft state machine")
-	if oldwal {
+	if oldwal || join {
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.node = raft.StartNode(c, rpeers)
@@ -314,6 +314,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.wal.Save(rd.HardState, rd.Entries)
 			if !raft.IsEmptySnap(rd.Snapshot) {
+				rc.logger.Info("received remote snapshot")
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
 				rc.publishSnapshot(rd.Snapshot)
