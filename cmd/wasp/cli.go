@@ -125,7 +125,7 @@ func main() {
 	cmd.Flags().StringP("data-dir", "d", "/tmp/wasp", "Wasp persistent message log location.")
 
 	cmd.Flags().String("tls-cn", "localhost", "Get ACME certificat for this Common Name.")
-	cmd.Flags().IntP("raft-bootstrap-expect", "n", 3, "Wasp will wait for this number of nodes to be available before bootstraping a cluster.")
+	cmd.Flags().IntP("raft-bootstrap-expect", "n", 1, "Wasp will wait for this number of nodes to be available before bootstraping a cluster.")
 
 	cmd.Flags().String("rpc-tls-certificate-authority-file", "", "x509 certificate authority used by RPC Server.")
 	cmd.Flags().String("rpc-tls-certificate-file", "", "x509 certificate used by RPC Server.")

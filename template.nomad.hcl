@@ -110,6 +110,7 @@ EOH
         args = [
           "--data-dir", "$${NOMAD_TASK_DIR}",
           "--use-vault",
+          "--raft-bootstrap-expect", "3",
           "--consul-join",
           "--consul-service-name", "wasp",
           "--consul-service-tag", "gossip",
