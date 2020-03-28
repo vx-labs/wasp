@@ -2,8 +2,11 @@ package main
 
 import (
 	"context"
+	crypto_rand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io"
+	"math/rand"
 	"time"
 
 	consul "github.com/hashicorp/consul/api"
@@ -19,16 +22,20 @@ import (
 	"google.golang.org/grpc"
 )
 
-func logger() *zap.Logger {
+func logger(enableDebug bool) *zap.Logger {
 	config := zap.NewProductionEncoderConfig()
 	config.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	config.EncodeTime = func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 		enc.AppendString(t.Format(time.Kitchen))
 	}
+	level := zapcore.InfoLevel
+	if enableDebug {
+		level = zapcore.DebugLevel
+	}
 	return zap.New(zapcore.NewCore(
 		zapcore.NewConsoleEncoder(config),
 		zapcore.AddSync(colorable.NewColorableStderr()),
-		zapcore.InfoLevel,
+		level,
 	))
 }
 
@@ -54,7 +61,8 @@ func getTable(headers []string, out io.Writer) *tablewriter.Table {
 	return table
 }
 
-func findServer(service, tag string) (string, error) {
+func findServer(l *zap.Logger, service, tag string) (string, error) {
+	l.Debug("discovering Wasp server using Consul", zap.String("consul_service_name", service), zap.String("consul_service_tag", tag))
 	client, err := consul.NewClient(consul.DefaultConfig())
 	if err != nil {
 		return "", err
@@ -63,13 +71,55 @@ func findServer(service, tag string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%s:%d", services[0].ServiceAddress, services[0].ServicePort), nil
+	var idx int
+	if len(services) > 1 {
+		l.Debug("discovered multiple Wasp servers using Consul", zap.Int("wasp_server_count", len(services)))
+		idx = rand.Intn(len(services))
+	} else if len(services) == 1 {
+		idx = 0
+	} else {
+		l.Fatal("no Wasp server discovered using Consul")
+	}
+	return fmt.Sprintf("%s:%d", services[idx].ServiceAddress, services[idx].ServicePort), nil
 }
 
+func mustDial(ctx context.Context, cmd *cobra.Command, config *viper.Viper) (*grpc.ClientConn, *zap.Logger) {
+	l := logger(config.GetBool("debug"))
+	dialer := rpc.GRPCDialer(rpc.ClientConfig{
+		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
+	})
+	host := config.GetString("host")
+	if !cmd.Flags().Changed("host") && config.GetBool("use-consul") {
+		var err error
+		serviceName := config.GetString("consul-service-name")
+		serviceTag := config.GetString("consul-service-tag")
+		host, err = findServer(l, serviceName, serviceTag)
+		if err != nil {
+			l.Fatal("failed to find Wasp server using Consul", zap.Error(err))
+		}
+	}
+	l = l.With(zap.String("remote_host", host))
+	l.Debug("using remote host")
+	l.Debug("dialing wasp server", zap.String("remote_host", host))
+	conn, err := dialer(host, grpc.WithTimeout(3000*time.Millisecond))
+	if err != nil {
+		l.Fatal("failed to dial Wasp server", zap.Error(err))
+	}
+	return conn, l
+}
+
+func seedRand() {
+	var b [8]byte
+	_, err := crypto_rand.Read(b[:])
+	if err != nil {
+		panic("cannot seed math/rand package with cryptographically secure random number generator")
+	}
+	rand.Seed(int64(binary.LittleEndian.Uint64(b[:])))
+}
 func main() {
+	seedRand()
 	config := viper.New()
 	ctx := context.Background()
-	l := logger()
 	rootCmd := &cobra.Command{
 		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
 			config.BindPFlags(cmd.Flags())
@@ -85,27 +135,11 @@ func main() {
 	raft.AddCommand(&cobra.Command{
 		Use: "members",
 		Run: func(cmd *cobra.Command, _ []string) {
-			dialer := rpc.GRPCDialer(rpc.ClientConfig{
-				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
-			})
-			host := config.GetString("host")
-			if cmd.Flags().Changed("host") && config.GetBool("use-consul") {
-				var err error
-				host, err = findServer(config.GetString("consul-service-name"), config.GetString("consul-service-tag"))
-				if err != nil {
-					l.Fatal("failed to find Wasp server using Consul", zap.Error(err))
-				}
-			}
-			conn, err := dialer(host, grpc.WithTimeout(3000*time.Millisecond))
-			if err != nil {
-				l.Fatal("failed to dial Wasp server", zap.Error(err), zap.String("remote_host", host))
-			}
-			l.Debug("connected to Wasp server", zap.String("remote_host", host))
+			conn, l := mustDial(ctx, cmd, config)
 			out, err := api.NewRaftClient(conn).GetMembers(ctx, &api.GetMembersRequest{})
 			if err != nil {
 				l.Fatal("failed to list raft members", zap.Error(err))
 			}
-			l.Debug("listed raft members", zap.String("remote_host", host))
 			table := getTable([]string{"ID", "Leader", "Address", "Health"}, cmd.OutOrStdout())
 			for _, member := range out.GetMembers() {
 				healthString := "healthy"
@@ -122,23 +156,8 @@ func main() {
 	node.AddCommand(&cobra.Command{
 		Use: "shutdown",
 		Run: func(cmd *cobra.Command, args []string) {
-			dialer := rpc.GRPCDialer(rpc.ClientConfig{
-				TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
-			})
-			host := config.GetString("host")
-			if host == "" && config.GetBool("use-consul") {
-				var err error
-				host, err = findServer(config.GetString("consul-service-name"), config.GetString("consul-service-tag"))
-				if err != nil {
-					l.Fatal("failed to find Wasp server using Consul", zap.Error(err))
-				}
-			}
-			conn, err := dialer(host, grpc.WithBlock(), grpc.WithTimeout(3000*time.Millisecond))
-			if err != nil {
-				l.Fatal("failed to dial Wasp server", zap.Error(err), zap.String("remote_host", host))
-			}
-			l.Debug("connected to Wasp server", zap.String("remote_host", host))
-			_, err = api.NewNodeClient(conn).Shutdown(ctx, &api.ShutdownRequest{})
+			conn, l := mustDial(ctx, cmd, config)
+			_, err := api.NewNodeClient(conn).Shutdown(ctx, &api.ShutdownRequest{})
 			if err != nil {
 				l.Fatal("failed to shutdown node", zap.Error(err))
 			}
@@ -147,6 +166,7 @@ func main() {
 	})
 	rootCmd.AddCommand(raft)
 	rootCmd.AddCommand(node)
+	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity.")
 	rootCmd.PersistentFlags().BoolP("use-consul", "c", false, "Use Hashicorp Consul to find Wasp server.")
 	rootCmd.PersistentFlags().String("consul-service-name", "wasp", "Consul service name.")
 	rootCmd.PersistentFlags().String("consul-service-tag", "rpc", "Consul service tag.")
