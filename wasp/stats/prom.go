@@ -17,7 +17,7 @@ var (
 			Help: "The total count of outgoing bytes.",
 		}, []string{"protocol"}),
 		"ingressBytes": prometheusMetricsFactory.NewGaugeVec(prometheus.GaugeOpts{
-			Name: "wasp_egress_bytes",
+			Name: "wasp_ingress_bytes",
 			Help: "The total count of incoming bytes.",
 		}, []string{"protocol"}),
 	}

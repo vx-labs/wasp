@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
 )
@@ -21,7 +20,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan
 	defer cancel()
 	switch p := pkt.(type) {
 	case *packet.Connect:
-		return session.Conn.Close()
+		return session.Close()
 	case *packet.Publish:
 		select {
 		case publishes <- p:
@@ -29,7 +28,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan
 			return ctx.Err()
 		}
 		if p.Header.Qos == 1 {
-			encoder.New(session.Conn).PubAck(&packet.PubAck{
+			session.Encoder.PubAck(&packet.PubAck{
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			})
@@ -42,7 +41,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan
 			}
 			session.AddTopic(p.Topic[idx])
 		}
-		err := encoder.New(session.Conn).SubAck(&packet.SubAck{
+		err := session.Encoder.SubAck(&packet.SubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 			Qos:       p.Qos,
@@ -56,7 +55,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan
 				return err
 			}
 			for _, message := range messages {
-				err = encoder.New(session.Conn).Publish(message)
+				err = session.Encoder.Publish(message)
 				if err != nil {
 					return err
 				}
@@ -70,14 +69,14 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan
 			}
 			session.RemoveTopic(p.Topic[idx])
 		}
-		return encoder.New(session.Conn).UnsubAck(&packet.UnsubAck{
+		return session.Encoder.UnsubAck(&packet.UnsubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 		})
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:
-		return encoder.New(session.Conn).PingResp(&packet.PingResp{
+		return session.Encoder.PingResp(&packet.PingResp{
 			Header: p.Header,
 		})
 	}

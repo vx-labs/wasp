@@ -8,7 +8,6 @@ require (
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/coreos/pkg v0.0.0-20180928190104-399ea9e2e55f // indirect
 	github.com/dgraph-io/badger v1.6.1
-	github.com/dustin/go-humanize v1.0.0 // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.3.5
 	github.com/gorilla/websocket v1.4.1
@@ -28,7 +27,7 @@ require (
 	github.com/spf13/cobra v0.0.5
 	github.com/spf13/viper v1.3.2
 	github.com/stretchr/testify v1.5.1
-	github.com/vx-labs/mqtt-protocol v4.2.2+incompatible
+	github.com/vx-labs/mqtt-protocol v4.3.3+incompatible
 	go.etcd.io/etcd v0.0.0-20200319002442-e784ba73c229
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20191106202628-ed6320f186d4

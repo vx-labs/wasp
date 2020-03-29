@@ -10,11 +10,12 @@ import (
 )
 
 type Session struct {
-	ID     string
-	Lwt    *packet.Publish
-	Conn   io.WriteCloser
-	mtx    sync.Mutex
-	topics [][]byte
+	ID      string
+	Lwt     *packet.Publish
+	conn    io.WriteCloser
+	Encoder *encoder.Encoder
+	mtx     sync.Mutex
+	topics  [][]byte
 }
 
 func (s *Session) ProcessConnect(connect *packet.Connect) error {
@@ -47,14 +48,19 @@ func (s *Session) RemoveTopic(t []byte) {
 func (s *Session) GetTopics() [][]byte {
 	return s.topics
 }
-func (s *Session) Send(publish *packet.Publish) error {
-	publish.MessageId = 1
-	return encoder.New(s.Conn).Publish(publish)
+func (s *Session) Close() error {
+	return s.conn.Close()
 }
 
-func NewSession(c io.WriteCloser) *Session {
+func (s *Session) Send(publish *packet.Publish) error {
+	publish.MessageId = 1
+	return s.Encoder.Publish(publish)
+}
+
+func NewSession(c io.WriteCloser, stats encoder.StatRecorder) *Session {
 	return &Session{
-		Conn: c,
+		conn:    c,
+		Encoder: encoder.New(c, encoder.WithStatRecorder(stats)),
 	}
 }
 

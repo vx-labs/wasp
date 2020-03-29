@@ -26,10 +26,14 @@ var (
 
 func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
 	defer c.Close()
-	session := sessions.NewSession(c)
+	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
+		"protocol": "mqtt",
+	}))
 	enc := encoder.New(c)
 	keepAlive := int32(30)
-	dec := decoder.Async(c)
+	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
+		"protocol": "mqtt",
+	})))
 	defer dec.Cancel()
 	c.SetDeadline(
 		time.Now().Add(10 * time.Second),
@@ -89,7 +93,7 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 
 		if err == ErrSessionDisconnected {
 			//	L(ctx).Info("session closed")
-			return session.Conn.Close()
+			return session.Close()
 		}
 		if err != nil {
 			L(ctx).Warn("session packet processing failed", zap.Error(err))
