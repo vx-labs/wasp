@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/vx-labs/wasp/wasp/rpc"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/fileutil"
 	"go.etcd.io/etcd/raft"
@@ -296,6 +297,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
+			start := time.Now()
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
 				if newLeader {
@@ -333,6 +335,8 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.maybeTriggerSnapshot()
 			rc.node.Advance()
+			duration := float64(time.Since(start)) / float64(time.Millisecond)
+			stats.Histogram("raftLoopProcessingTime").Observe(duration)
 		}
 	}
 }
