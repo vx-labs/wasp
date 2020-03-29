@@ -10,8 +10,18 @@ import (
 )
 
 var (
-	prometheusMetricsFactory promauto.Factory            = promauto.With(prometheus.DefaultRegisterer)
-	gauges                   map[string]prometheus.Gauge = map[string]prometheus.Gauge{
+	prometheusMetricsFactory promauto.Factory                = promauto.With(prometheus.DefaultRegisterer)
+	gaugeVecs                map[string]*prometheus.GaugeVec = map[string]*prometheus.GaugeVec{
+		"egressBytes": prometheusMetricsFactory.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "wasp_egress_bytes",
+			Help: "The total count of outgoing bytes.",
+		}, []string{"protocol"}),
+		"ingressBytes": prometheusMetricsFactory.NewGaugeVec(prometheus.GaugeOpts{
+			Name: "wasp_egress_bytes",
+			Help: "The total count of incoming bytes.",
+		}, []string{"protocol"}),
+	}
+	gauges map[string]prometheus.Gauge = map[string]prometheus.Gauge{
 		"subscriptionsCount": prometheusMetricsFactory.NewGauge(prometheus.GaugeOpts{
 			Name: "wasp_subscriptions_count",
 			Help: "The total number of MQTT subscriptions.",
@@ -48,6 +58,10 @@ var (
 
 func HistogramVec(name string) *prometheus.HistogramVec {
 	return histogramVecs[name]
+}
+
+func GaugeVec(name string) *prometheus.GaugeVec {
+	return gaugeVecs[name]
 }
 
 func Histogram(name string) prometheus.Histogram {
