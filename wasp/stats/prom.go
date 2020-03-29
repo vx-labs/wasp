@@ -3,11 +3,16 @@ package stats
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+func MilisecondsElapsed(from time.Time) float64 {
+	return float64(time.Since(from)) / float64(time.Millisecond)
+}
 
 var (
 	prometheusMetricsFactory promauto.Factory                = promauto.With(prometheus.DefaultRegisterer)
@@ -58,6 +63,11 @@ var (
 			Help:    "The time elapsed handling session MQTT packets.",
 			Buckets: []float64{0.001, 0.01, 0.1, 1, 50, 5000},
 		}, []string{"packet_type"}),
+		"raftRPCHandling": prometheusMetricsFactory.NewHistogramVec(prometheus.HistogramOpts{
+			Name:    "wasp_raft_rpc_time_miliseconds",
+			Help:    "The time elasped calling raft RPCs.",
+			Buckets: []float64{0.1, 5, 50},
+		}, []string{"message_type", "result"}),
 	}
 )
 

@@ -335,8 +335,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.maybeTriggerSnapshot()
 			rc.node.Advance()
-			duration := float64(time.Since(start)) / float64(time.Millisecond)
-			stats.Histogram("raftLoopProcessingTime").Observe(duration)
+			stats.Histogram("raftLoopProcessingTime").Observe(stats.MilisecondsElapsed(start))
 		}
 	}
 }

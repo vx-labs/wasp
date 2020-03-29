@@ -22,11 +22,10 @@ func getLowerQos(a, b int32) int32 {
 func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
 	start := time.Now()
 	defer func() {
-		duration := float64(time.Since(start)) / float64(time.Millisecond)
 		if local {
-			stats.Histogram("publishLocalProcessingTime").Observe(duration)
+			stats.Histogram("publishLocalProcessingTime").Observe(stats.MilisecondsElapsed(start))
 		} else {
-			stats.Histogram("publishRemoteProcessingTime").Observe(duration)
+			stats.Histogram("publishRemoteProcessingTime").Observe(stats.MilisecondsElapsed(start))
 		}
 	}()
 	if p.Header.Retain {

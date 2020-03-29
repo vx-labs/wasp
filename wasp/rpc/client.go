@@ -6,8 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
@@ -127,7 +129,9 @@ func isMsgSnap(m raftpb.Message) bool { return m.Type == raftpb.MsgSnap }
 func (t *Transport) Send(messages []raftpb.Message) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-	for _, message := range messages {
+	for idx := range messages {
+		message := messages[idx]
+		start := time.Now()
 		if message.To == 0 {
 			continue
 		}
@@ -136,6 +140,7 @@ func (t *Transport) Send(messages []raftpb.Message) {
 			continue
 		}
 		if !conn.Enabled {
+			stats.HistogramVec("raftRPCHandling").With(prometheus.Labels{"result": "failure", "message_type": message.Type.String()}).Observe(stats.MilisecondsElapsed(start))
 			t.raft.ReportUnreachable(message.To)
 			if isMsgSnap(message) {
 				t.raft.ReportSnapshot(message.To, raft.SnapshotFailure)
@@ -145,6 +150,7 @@ func (t *Transport) Send(messages []raftpb.Message) {
 		_, err := api.NewRaftClient(conn.Conn).ProcessMessage(context.TODO(), &message)
 		if err != nil {
 			conn.Enabled = false
+			stats.HistogramVec("raftRPCHandling").With(prometheus.Labels{"result": "failure", "message_type": message.Type.String()}).Observe(stats.MilisecondsElapsed(start))
 			t.raft.ReportUnreachable(message.To)
 			if isMsgSnap(message) {
 				t.raft.ReportSnapshot(message.To, raft.SnapshotFailure)
@@ -154,6 +160,7 @@ func (t *Transport) Send(messages []raftpb.Message) {
 		if isMsgSnap(message) {
 			t.raft.ReportSnapshot(message.To, raft.SnapshotFinish)
 		}
+		stats.HistogramVec("raftRPCHandling").With(prometheus.Labels{"result": "success", "message_type": message.Type.String()}).Observe(stats.MilisecondsElapsed(start))
 	}
 }
 
