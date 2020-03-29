@@ -416,23 +416,33 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 }
 
 func (rc *RaftNode) Leave(ctx context.Context) error {
-	if rc.isLeader() && len(rc.node.Status().Progress) == 1 {
-		return nil
+	for {
+		reqCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		if rc.isLeader() && len(rc.node.Status().Progress) == 1 {
+			cancel()
+			return nil
+		}
+		rc.logger.Debug("leaving raft cluster")
+		err := rc.node.ProposeConfChange(reqCtx, raftpb.ConfChange{
+			Type:   raftpb.ConfChangeRemoveNode,
+			NodeID: rc.id,
+		})
+		if err != nil {
+			rc.logger.Error("failed to leave raft cluster",
+				zap.Error(err))
+		}
+		select {
+		case <-ctx.Done():
+			cancel()
+			return ctx.Err()
+		case <-rc.left:
+			cancel()
+			rc.logger.Info("left raft cluster")
+			return nil
+		case <-reqCtx.Done():
+			rc.logger.Info("left timed out, retrying")
+			cancel()
+			continue
+		}
 	}
-	rc.logger.Debug("leaving raft cluster")
-	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
-		Type:   raftpb.ConfChangeRemoveNode,
-		NodeID: rc.id,
-	})
-	if err != nil {
-		rc.logger.Error("failed to leave raft cluster",
-			zap.Error(err))
-	}
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-rc.left:
-	}
-	rc.logger.Info("left raft cluster")
-	return nil
 }

@@ -136,10 +136,7 @@ func (t *Transport) Send(messages []raftpb.Message) {
 			continue
 		}
 		conn, ok := t.peers[message.To]
-		if !ok {
-			continue
-		}
-		if !conn.Enabled {
+		if !ok || !conn.Enabled {
 			stats.HistogramVec("raftRPCHandling").With(prometheus.Labels{"result": "failure", "message_type": message.Type.String()}).Observe(stats.MilisecondsElapsed(start))
 			t.raft.ReportUnreachable(message.To)
 			if isMsgSnap(message) {

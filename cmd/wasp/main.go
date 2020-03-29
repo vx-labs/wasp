@@ -217,9 +217,7 @@ func run(config *viper.Viper) {
 				err := raftNode.Apply(event.Ctx, event.Payload)
 				select {
 				case <-ctx.Done():
-					event.ErrCh <- ctx.Err()
 				case <-event.Ctx.Done():
-					event.ErrCh <- event.Ctx.Err()
 				case event.ErrCh <- err:
 				}
 				close(event.ErrCh)
@@ -388,7 +386,6 @@ func run(config *viper.Viper) {
 	case <-cancelCh:
 	}
 	wasp.L(ctx).Info("shutting down wasp")
-	healthServer.Shutdown()
 	for _, listener := range listeners {
 		listener.listener.Close()
 		wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
@@ -403,6 +400,7 @@ func run(config *viper.Viper) {
 	} else {
 		wasp.L(ctx).Info("raft cluster left")
 	}
+	healthServer.Shutdown()
 	cancel()
 	server.GracefulStop()
 	clusterListener.Close()
