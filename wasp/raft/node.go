@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"go.uber.org/zap/zapcore"
+	"google.golang.org/grpc"
 
-	"github.com/vx-labs/wasp/wasp/rpc"
+	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/fileutil"
@@ -49,24 +50,30 @@ func (p Peers) MarshalLogArray(e zapcore.ArrayEncoder) error {
 	return nil
 }
 
+type Membership interface {
+	Call(id uint64, f func(*grpc.ClientConn) error) error
+	Members() []*api.Member
+}
+
 // A key-value stream backed by raft
 type RaftNode struct {
-	id            uint64 // client ID for raft session
-	address       string
-	currentLeader uint64
-	hasLeader     bool
-	commitC       chan []byte // entries committed to log (k,v)
-	msgSnapC      chan raftpb.Message
-	logger        *zap.Logger
-	waldir        string // path to WAL directory
-	snapdir       string // path to snapshot directory
-	getSnapshot   func() ([]byte, error)
-	lastIndex     uint64 // index of log at start
+	id                  uint64 // client ID for raft session
+	address             string
+	currentLeader       uint64
+	hasLeader           bool
+	hasBeenBootstrapped bool
+	commitC             chan []byte // entries committed to log (k,v)
+	msgSnapC            chan raftpb.Message
+	logger              *zap.Logger
+	waldir              string // path to WAL directory
+	snapdir             string // path to snapshot directory
+	getSnapshot         func() ([]byte, error)
+	lastIndex           uint64 // index of log at start
 
-	confState     raftpb.ConfState
-	snapshotIndex uint64
-	appliedIndex  uint64
-
+	confState        raftpb.ConfState
+	snapshotIndex    uint64
+	appliedIndex     uint64
+	membership       Membership
 	node             raft.Node
 	removed          bool
 	raftStorage      *raft.MemoryStorage
@@ -75,9 +82,8 @@ type RaftNode struct {
 	snapshotterReady chan *snap.Snapshotter // signals when snapshotter is ready
 
 	snapCount uint64
-	transport *rpc.Transport
 	left      chan struct{}
-	ready     chan bool
+	ready     chan struct{}
 }
 
 type Config struct {
@@ -92,7 +98,7 @@ type Config struct {
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func NewNode(config Config, logger *zap.Logger) *RaftNode {
+func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 
 	id := config.NodeID
 	datadir := config.DataDir
@@ -102,6 +108,7 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 	rc := &RaftNode{
 		id:               id,
 		address:          config.NodeAddress,
+		membership:       mesh,
 		currentLeader:    0,
 		hasLeader:        false,
 		commitC:          commitC,
@@ -113,7 +120,7 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 		msgSnapC:         make(chan raftpb.Message, 16),
 		snapCount:        1000,
 		left:             make(chan struct{}),
-		ready:            make(chan bool),
+		ready:            make(chan struct{}),
 		snapshotterReady: make(chan *snap.Snapshotter, 1),
 		removed:          true,
 		// rest of structure populated after WAL replay
@@ -132,9 +139,15 @@ func NewNode(config Config, logger *zap.Logger) *RaftNode {
 	rc.confState = snap.Metadata.ConfState
 	rc.snapshotIndex = snap.Metadata.Index
 	rc.appliedIndex = snap.Metadata.Index
+
+	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
+
 	return rc
 }
-func (rc *RaftNode) Ready() <-chan bool {
+func (rc *RaftNode) IsRemovedFromCluster() bool {
+	return rc.removed
+}
+func (rc *RaftNode) Ready() <-chan struct{} {
 	return rc.ready
 }
 func (rc *RaftNode) Commits() <-chan []byte {
@@ -194,7 +207,6 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			case <-ctx.Done():
 				return ctx.Err()
 			}
-
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
@@ -206,9 +218,6 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 						rc.logger.Info("local node added to cluster")
 						rc.left = make(chan struct{})
 						rc.removed = false
-					} else {
-						rc.transport.AddPeer(cc.NodeID, string(cc.Context))
-						rc.logger.Info("added new raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", cc.NodeID)))
 					}
 				}
 			case raftpb.ConfChangeRemoveNode:
@@ -216,25 +225,19 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 					rc.logger.Info("local node removed from cluster")
 					rc.removed = true
 					close(rc.left)
-				} else {
-					rc.transport.RemovePeer(cc.NodeID)
-					rc.logger.Info("removed raft node from transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", cc.NodeID)))
 				}
 			}
 		}
-		// after commit, update appliedIndex
 		rc.appliedIndex = ents[i].Index
 		if rc.lastIndex > 0 && rc.appliedIndex == rc.lastIndex {
 			rc.logger.Debug("state machine is ready", zap.Uint64("index", rc.appliedIndex))
-			rc.ready <- rc.removed
 			close(rc.ready)
 		}
 	}
 	return nil
 }
 
-func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, transport *rpc.Transport) {
-	rc.transport = transport
+func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool) {
 	rc.start(ctx, peers, join)
 }
 func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
@@ -246,7 +249,6 @@ func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
 		peerID := peers[i].ID
 		rpeers[i] = raft.Peer{ID: peerID}
 		if peerID != rc.id {
-			rc.transport.AddPeer(peerID, peers[i].Address)
 			rc.logger.Info("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
 		}
 	}
@@ -269,6 +271,7 @@ func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
 		rc.node = raft.StartNode(c, rpeers)
 	}
 	rc.logger.Info("raft state machine started", zap.Uint64("index", rc.appliedIndex))
+	rc.hasBeenBootstrapped = true
 	rc.serveChannels(ctx) //blocking loop
 	rc.node.Stop()
 	err := rc.wal.Close()
@@ -326,7 +329,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 				rc.publishSnapshot(ctx, rd.Snapshot)
 			}
 			rc.raftStorage.Append(rd.Entries)
-			rc.transport.Send(rc.processMessagesBeforeSending(rd.Messages))
+			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Messages))
 			if err := rc.publishEntries(ctx, rc.entriesToApply(rd.CommittedEntries)); err != nil {
 				if err != context.Canceled {
 					rc.logger.Error("failed to publish raft entries", zap.Error(err))
@@ -355,7 +358,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 				panic(err)
 			}
 			msg.Snapshot = snap
-			rc.transport.Send([]raftpb.Message{msg})
+			rc.Send(ctx, []raftpb.Message{msg})
 		}
 	}
 }

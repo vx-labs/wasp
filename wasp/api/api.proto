@@ -16,9 +16,6 @@ message JoinClusterResponse {}
 
 message PeerResponse { bool status = 1; }
 
-message CheckHealthRequest {}
-message CheckHealthResponse {}
-
 message GetMembersRequest {}
 message Member {
   uint64 ID = 1;
@@ -27,12 +24,18 @@ message Member {
   bool IsAlive = 4;
 }
 message GetMembersResponse { repeated Member Members = 1; }
+message GetStatusRequest {};
+message GetStatusResponse {
+  bool IsLeader = 1;
+  bool HasBeenBootstrapped = 2;
+  bool IsInCluster = 3;
+};
 
 service Raft {
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
-  rpc CheckHealth(CheckHealthRequest) returns (CheckHealthResponse) {}
   rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
 }
 
 message DistributeMessageRequest { packet.Publish Message = 1; }

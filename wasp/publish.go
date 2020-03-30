@@ -7,9 +7,10 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/rpc"
+	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 )
 
 func getLowerQos(a, b int32) int32 {
@@ -19,7 +20,11 @@ func getLowerQos(a, b int32) int32 {
 	return a
 }
 
-func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
+type Membership interface {
+	Call(id uint64, f func(*grpc.ClientConn) error) error
+}
+
+func ProcessPublish(ctx context.Context, id uint64, transport Membership, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
 	start := time.Now()
 	defer func() {
 		if local {
@@ -65,7 +70,10 @@ func ProcessPublish(ctx context.Context, id uint64, transport *rpc.Transport, fs
 			if _, ok := peersDone[peers[idx]]; !ok {
 				peersDone[peers[idx]] = struct{}{}
 				ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
-				err := transport.DistributeMessage(ctx, peers[idx], publish)
+				err := transport.Call(peers[idx], func(c *grpc.ClientConn) error {
+					_, err := api.NewMQTTClient(c).DistributeMessage(ctx, &api.DistributeMessageRequest{Message: publish})
+					return err
+				})
 				cancel()
 				if err != nil {
 					L(ctx).Warn("failed to distribute message to remote peer",

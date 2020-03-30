@@ -11,19 +11,23 @@ import (
 	"google.golang.org/grpc"
 )
 
+func (rc *RaftNode) waitReadiness(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-rc.Ready():
+		return nil
+	}
+}
 func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message) (*api.Payload, error) {
+	if rc.node == nil {
+		return nil, errors.New("node not ready")
+	}
 	err := rc.Process(ctx, *message)
 	if err != nil {
 		rc.logger.Warn("failed to process raft message", zap.Error(err))
 	}
 	return &api.Payload{}, nil
-}
-
-func (rc *RaftNode) CheckHealth(ctx context.Context, r *api.CheckHealthRequest) (*api.CheckHealthResponse, error) {
-	if rc.node == nil {
-		return nil, errors.New("node not ready")
-	}
-	return &api.CheckHealthResponse{}, nil
 }
 
 func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.JoinClusterResponse, error) {
@@ -48,11 +52,24 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 	}
 	return out, err
 }
+func (rc *RaftNode) GetStatus(ctx context.Context, in *api.GetStatusRequest) (*api.GetStatusResponse, error) {
+	return &api.GetStatusResponse{
+		IsLeader:            rc.isLeader(),
+		HasBeenBootstrapped: rc.hasBeenBootstrapped,
+		IsInCluster:         !rc.removed,
+	}, nil
+}
 func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (*api.GetMembersResponse, error) {
-	if rc.transport == nil {
+	if rc.node == nil {
 		return nil, errors.New("node not ready")
 	}
-	return rc.transport.GetMembers(ctx, in)
+	members := rc.membership.Members()
+	for _, member := range members {
+		if member.ID == rc.currentLeader {
+			member.IsLeader = true
+		}
+	}
+	return &api.GetMembersResponse{Members: members}, nil
 }
 
 func (rc *RaftNode) Serve(grpcServer *grpc.Server) {

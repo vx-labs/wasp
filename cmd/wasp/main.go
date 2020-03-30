@@ -24,6 +24,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -73,6 +74,8 @@ func run(config *viper.Viper) {
 		config.GetInt("serf-port"),
 		config.GetString("serf-advertized-address"),
 		config.GetInt("serf-advertized-port"),
+		config.GetInt("raft-advertized-port"),
+		rpcDialer,
 		wasp.L(ctx),
 	)
 	rpcAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
@@ -113,10 +116,8 @@ func run(config *viper.Viper) {
 		DataDir:     config.GetString("data-dir"),
 		GetSnapshot: state.MarshalBinary,
 	}
-	raftNode := raft.NewNode(raftConfig, wasp.L(ctx))
+	raftNode := raft.NewNode(raftConfig, mesh, wasp.L(ctx))
 	raftNode.Serve(server)
-	rpcTransport := rpc.NewTransport(raftConfig.NodeID,
-		fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port")), raftNode, rpcDialer)
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Info("cluster listener stopped")
@@ -132,7 +133,7 @@ func run(config *viper.Viper) {
 		peers := raft.Peers{}
 		if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
 			wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-			peers, err = membership.WaitForNodes(ctx, mesh, expectedCount, api.RaftContext{
+			peers, err = mesh.WaitForNodes(ctx, expectedCount, api.RaftContext{
 				ID:      id,
 				Address: rpcAddress,
 			}, rpcDialer)
@@ -156,27 +157,25 @@ func run(config *viper.Viper) {
 		go func() {
 			defer close(stateLoaded)
 			select {
-			case removed := <-raftNode.Ready():
-				if join && removed {
+			case <-raftNode.Ready():
+				healthServer.Resume()
+				if join && raftNode.IsRemovedFromCluster() {
 					wasp.L(ctx).Debug("local node is not a cluster member, will attempt join")
 					ticker := time.NewTicker(1 * time.Second)
 					defer ticker.Stop()
 					for {
 						for _, peer := range peers {
-							conn, err := rpcDialer(peer.Address)
-							if err != nil {
-								wasp.L(ctx).Error("failed to dial peer")
-								continue
-							}
 							ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-							_, err = api.NewRaftClient(conn).JoinCluster(ctx, &api.RaftContext{
-								ID:      id,
-								Address: rpcAddress,
+							err := mesh.Call(peer.ID, func(c *grpc.ClientConn) error {
+								_, err = api.NewRaftClient(c).JoinCluster(ctx, &api.RaftContext{
+									ID:      id,
+									Address: rpcAddress,
+								})
+								return err
 							})
 							cancel()
-							conn.Close()
 							if err != nil {
-								wasp.L(ctx).Warn("failed to join raft cluster", zap.Error(err))
+								wasp.L(ctx).Warn("failed to join raft cluster, retrying", zap.Error(err))
 							} else {
 								wasp.L(ctx).Info("joined cluster")
 								return
@@ -193,7 +192,7 @@ func run(config *viper.Viper) {
 				return
 			}
 		}()
-		raftNode.Run(ctx, peers, join, rpcTransport)
+		raftNode.Run(ctx, peers, join)
 	})
 	snapshotter := <-raftNode.Snapshotter()
 
@@ -267,7 +266,7 @@ func run(config *viper.Viper) {
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Info("publish processor stopped")
 		messageLog.Consume(ctx, func(p *packet.Publish) {
-			err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, true, p)
+			err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, true, p)
 			if err != nil {
 				wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 			}
@@ -280,7 +279,7 @@ func run(config *viper.Viper) {
 			case <-ctx.Done():
 				return
 			case p := <-remotePublishCh:
-				err := wasp.ProcessPublish(ctx, id, rpcTransport, stateMachine, state, false, p)
+				err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, false, p)
 				if err != nil {
 					wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
 				}
@@ -377,39 +376,43 @@ func run(config *viper.Viper) {
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
-	healthServer.SetServingStatus("mqtt", healthpb.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("node", healthpb.HealthCheckResponse_SERVING)
-	healthServer.SetServingStatus("raft", healthpb.HealthCheckResponse_SERVING)
-	healthServer.Resume()
 	select {
 	case <-sigc:
 	case <-cancelCh:
 	}
-	wasp.L(ctx).Info("shutting down wasp")
+	wasp.L(ctx).Info("wasp shutdown initiated")
 	for _, listener := range listeners {
 		listener.listener.Close()
-		wasp.L(ctx).Info("listener stopped", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 	}
+	wasp.L(ctx).Debug("mqtt listeners stopped")
 	err = stateMachine.Shutdown(ctx)
 	if err != nil {
 		wasp.L(ctx).Error("failed to stop state machine", zap.Error(err))
+	} else {
+		wasp.L(ctx).Debug("state machine stopped")
 	}
 	err = raftNode.Leave(ctx)
 	if err != nil {
 		wasp.L(ctx).Error("failed to leave raft cluster", zap.Error(err))
 	} else {
-		wasp.L(ctx).Info("raft cluster left")
+		wasp.L(ctx).Debug("raft cluster left")
 	}
 	healthServer.Shutdown()
-	cancel()
+	wasp.L(ctx).Debug("health server stopped")
 	server.GracefulStop()
+	wasp.L(ctx).Debug("rpc server stopped")
 	clusterListener.Close()
+	wasp.L(ctx).Debug("rpc listener stopped")
+	cancel()
 	wg.Wait()
+	wasp.L(ctx).Debug("asynchronous operations stopped")
+	mesh.Shutdown()
+	wasp.L(ctx).Debug("mesh stopped")
 	err = messageLog.Close()
 	if err != nil {
 		wasp.L(ctx).Error("failed to close message log", zap.Error(err))
 	} else {
-		wasp.L(ctx).Info("message log closed")
+		wasp.L(ctx).Debug("message log closed")
 	}
-	wasp.L(ctx).Info("wasp shutdown")
+	wasp.L(ctx).Info("wasp successfully stopped")
 }
