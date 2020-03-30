@@ -99,6 +99,9 @@ func main() {
 
 	defaultIP := localPrivateHost()
 
+	cmd.Flags().Bool("pprof", false, "Start pprof endpoint.")
+	cmd.Flags().Int("pprof-port", 8080, "Profiling (pprof) port.")
+	cmd.Flags().String("pprof-address", "127.0.0.1", "Profiling (pprof) port.")
 	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
 	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
 	cmd.Flags().Bool("insecure", false, "Disable GRPC client-side TLS validation.")

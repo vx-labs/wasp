@@ -1,7 +1,6 @@
 package raft
 
 import (
-	"log"
 	"os"
 
 	"go.etcd.io/etcd/raft/raftpb"
@@ -62,7 +61,6 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 	rc.raftStorage.Append(ents)
 	if len(ents) > 0 {
 		rc.lastIndex = ents[len(ents)-1].Index
-		log.Print(rc.lastIndex)
 	} else {
 		close(rc.ready)
 	}

@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net"
+	"net/http"
+	pprof "net/http/pprof"
 	"os"
 	"os/signal"
 	"sync"
@@ -41,6 +43,19 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Fatal("failed to get node ID", zap.Error(err))
 	}
 	ctx = wasp.AddFields(ctx, zap.String("hex_node_id", fmt.Sprintf("%x", id)))
+	if config.GetBool("pprof") {
+		address := fmt.Sprintf("%s:%d", config.GetString("pprof-address"), config.GetInt("pprof-port"))
+		go func() {
+			mux := http.NewServeMux()
+			mux.HandleFunc("/debug/pprof/", pprof.Index)
+			mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+			mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+			mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+			mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+			panic(http.ListenAndServe(address, mux))
+		}()
+		wasp.L(ctx).Info("started pprof", zap.String("pprof_url", fmt.Sprintf("http://%s/", address)))
+	}
 	healthServer := health.NewServer()
 	healthServer.Resume()
 	wg := sync.WaitGroup{}
