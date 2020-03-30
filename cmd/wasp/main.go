@@ -42,6 +42,7 @@ func run(config *viper.Viper) {
 	}
 	ctx = wasp.AddFields(ctx, zap.String("hex_node_id", fmt.Sprintf("%x", id)))
 	healthServer := health.NewServer()
+	healthServer.Resume()
 	wg := sync.WaitGroup{}
 	stateLoaded := make(chan struct{})
 	cancelCh := make(chan struct{})
@@ -158,7 +159,6 @@ func run(config *viper.Viper) {
 			defer close(stateLoaded)
 			select {
 			case <-raftNode.Ready():
-				healthServer.Resume()
 				if join && raftNode.IsRemovedFromCluster() {
 					wasp.L(ctx).Debug("local node is not a cluster member, will attempt join")
 					ticker := time.NewTicker(1 * time.Second)
