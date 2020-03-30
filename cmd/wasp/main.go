@@ -371,6 +371,10 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Debug("listener started", zap.String("listener_name", listener.name), zap.Int("listener_port", listener.port))
 	}
 	go stats.ListenAndServe(config.GetInt("metrics-port"))
+
+	healthServer.SetServingStatus("mqtt", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("node", healthpb.HealthCheckResponse_SERVING)
+	healthServer.SetServingStatus("rpc", healthpb.HealthCheckResponse_SERVING)
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
 		syscall.SIGINT,

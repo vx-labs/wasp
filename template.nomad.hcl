@@ -214,7 +214,7 @@ EOH
           port            = "rpc"
           interval        = "30s"
           timeout         = "2s"
-          grpc_service    = "raft"
+          grpc_service    = "rpc"
           grpc_use_tls    = true
           tls_skip_verify = true
         }
