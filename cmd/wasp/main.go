@@ -75,9 +75,9 @@ func run(config *viper.Viper) {
 		config.GetInt("serf-advertized-port"),
 		wasp.L(ctx),
 	)
-	raftAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
+	rpcAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
 	mesh.UpdateMetadata(membership.EncodeMD(id,
-		raftAddress,
+		rpcAddress,
 	))
 	joinList := config.GetStringSlice("join-node")
 	if config.GetBool("consul-join") {
@@ -134,7 +134,7 @@ func run(config *viper.Viper) {
 			wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
 			peers, err = membership.WaitForNodes(ctx, mesh, expectedCount, api.RaftContext{
 				ID:      id,
-				Address: raftAddress,
+				Address: rpcAddress,
 			}, rpcDialer)
 			if err != nil {
 				if err == membership.ErrExistingClusterFound {
@@ -171,7 +171,7 @@ func run(config *viper.Viper) {
 							ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 							_, err = api.NewRaftClient(conn).JoinCluster(ctx, &api.RaftContext{
 								ID:      id,
-								Address: raftAddress,
+								Address: rpcAddress,
 							})
 							cancel()
 							conn.Close()

@@ -34,7 +34,7 @@ func WaitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNu
 				if err != nil {
 					continue
 				}
-				conn, err := rpcDialer(md.RaftAddress)
+				conn, err := rpcDialer(md.RPCAddress)
 				if err != nil {
 					continue
 				}
@@ -55,7 +55,7 @@ func WaitForNodes(ctx context.Context, mesh MemberlistMemberProvider, expectedNu
 					if err != nil {
 						return nil, err
 					}
-					peers[idx] = raft.Peer{Address: md.RaftAddress, ID: md.ID}
+					peers[idx] = raft.Peer{Address: md.RPCAddress, ID: md.ID}
 				}
 				if clusterFound {
 					return peers, ErrExistingClusterFound
