@@ -106,6 +106,32 @@ func (f *FSM) Subscribe(ctx context.Context, id string, pattern []byte, qos int3
 	}
 	return f.commit(ctx, payload)
 }
+func (f *FSM) CreateSession(ctx context.Context, id string, lwt *packet.Publish) error {
+	payload, err := encode(&StateTransition{Event: &StateTransition_SessionCreated{
+		SessionCreated: &SessionCreated{
+			SessionID:   id,
+			ConnectedAt: time.Now().Unix(),
+			Peer:        f.id,
+			LWT:         lwt,
+		},
+	}})
+	if err != nil {
+		return err
+	}
+	return f.commit(ctx, payload)
+}
+func (f *FSM) DeleteSession(ctx context.Context, id string) error {
+	payload, err := encode(&StateTransition{Event: &StateTransition_SessionDeleted{
+		SessionDeleted: &SessionDeleted{
+			SessionID: id,
+			Peer:      f.id,
+		},
+	}})
+	if err != nil {
+		return err
+	}
+	return f.commit(ctx, payload)
+}
 func (f *FSM) Unsubscribe(ctx context.Context, id string, pattern []byte) error {
 	payload, err := encode(&StateTransition{Event: &StateTransition_SessionUnsubscribed{
 		SessionUnsubscribed: &SubscriptionDeleted{

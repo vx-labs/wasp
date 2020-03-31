@@ -4,7 +4,16 @@ import "github.com/vx-labs/mqtt-protocol/packet/pb.proto";
 
 message RetainedMessageStored { packet.Publish Publish = 1; }
 message RetainedMessageDeleted { bytes Topic = 1; }
-
+message SessionCreated {
+  string SessionID = 1;
+  int64 ConnectedAt = 2;
+  uint64 Peer = 3;
+  packet.Publish LWT = 4;
+}
+message SessionDeleted {
+  string SessionID = 1;
+  uint64 Peer = 2;
+}
 message SubscriptionCreated {
   string SessionID = 1;
   uint64 Peer = 2;
@@ -28,5 +37,7 @@ message StateTransition {
     SubscriptionCreated SessionSubscribed = 3;
     SubscriptionDeleted SessionUnsubscribed = 4;
     PeerLost PeerLost = 5;
+    SessionCreated SessionCreated = 6;
+    SessionDeleted SessionDeleted = 7;
   }
 }
