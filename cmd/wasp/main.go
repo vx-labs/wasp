@@ -190,7 +190,7 @@ func run(config *viper.Viper) {
 							})
 							cancel()
 							if err != nil {
-								wasp.L(ctx).Warn("failed to join raft cluster, retrying", zap.Error(err))
+								wasp.L(ctx).Debug("failed to join raft cluster, retrying", zap.Error(err))
 							} else {
 								wasp.L(ctx).Info("joined cluster")
 								return
