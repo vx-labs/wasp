@@ -42,9 +42,10 @@ message DistributeMessageRequest { packet.Publish Message = 1; }
 message DistributeMessageResponse {}
 message SessionMetadatas {
   string SessionID = 1;
-  int64 ConnectedAt = 2;
-  uint64 Peer = 3;
-  packet.Publish LWT = 4;
+  string ClientID = 2;
+  int64 ConnectedAt = 3;
+  uint64 Peer = 4;
+  packet.Publish LWT = 5;
 }
 
 message ListSessionMetadatasRequest {}

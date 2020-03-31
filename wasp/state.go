@@ -20,6 +20,7 @@ type ReadState interface {
 	RetainedMessages(topic []byte) ([]*packet.Publish, error)
 	ListSessionMetadatas() []*api.SessionMetadatas
 	GetSessionMetadatas(id string) *api.SessionMetadatas
+	GetSessionMetadatasByClientID(id string) *api.SessionMetadatas
 }
 type State interface {
 	ReadState
@@ -30,7 +31,7 @@ type State interface {
 	DeleteRetainedMessage(topic []byte) error
 	Load([]byte) error
 	MarshalBinary() ([]byte, error)
-	CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error
+	CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish) error
 	DeleteSessionMetadata(id string, peer uint64) error
 	DeleteSessionMetadatasByPeer(peer uint64)
 }
@@ -53,6 +54,16 @@ func (s *sessionMetadatasStore) ByID(id string) *api.SessionMetadatas {
 		return nil
 	}
 	return md
+}
+func (s *sessionMetadatasStore) ByClientID(id string) *api.SessionMetadatas {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	for _, md := range s.data {
+		if md.ClientID == id {
+			return md
+		}
+	}
+	return nil
 }
 func (s *sessionMetadatasStore) All() []*api.SessionMetadatas {
 	s.mtx.RLock()
@@ -189,12 +200,16 @@ func (s *state) DeleteSessionMetadatasByPeer(peer uint64) {
 func (s *state) GetSessionMetadatas(id string) *api.SessionMetadatas {
 	return s.sessionsMetadatas.ByID(id)
 }
+func (s *state) GetSessionMetadatasByClientID(id string) *api.SessionMetadatas {
+	return s.sessionsMetadatas.ByClientID(id)
+}
 func (s *state) ListSessionMetadatas() []*api.SessionMetadatas {
 	return s.sessionsMetadatas.All()
 }
-func (s *state) CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error {
+func (s *state) CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish) error {
 	s.sessionsMetadatas.Save(&api.SessionMetadatas{
 		SessionID:   id,
+		ClientID:    clientID,
 		ConnectedAt: connectedAt,
 		LWT:         lwt,
 		Peer:        peer,

@@ -17,6 +17,7 @@ import (
 )
 
 var (
+	Clock                    = time.Now
 	ErrConnectNotDone        = errors.New("CONNECT not done")
 	ErrSessionLost           = errors.New("Session lost")
 	ErrSessionDisconnected   = errors.New("Session disconnected")
@@ -64,7 +65,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		})
 	}
 	//L(ctx).Info("session connected")
-	err = fsm.CreateSessionMetadata(ctx, session.ID, session.Lwt)
+	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.Lwt)
 	if err != nil {
 		return err
 	}
@@ -88,8 +89,9 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		}
 	}()
 	defer func() {
-		metadata := state.GetSessionMetadatas(session.ID)
-		if session.Disconnected || metadata == nil || metadata.Peer != peer {
+
+		metadata := state.GetSessionMetadatasByClientID(session.ClientID)
+		if session.Disconnected || metadata == nil || metadata.SessionID != session.ID {
 			// Session has reconnected on another peer.
 			return
 		}

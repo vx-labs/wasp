@@ -6,9 +6,10 @@ message RetainedMessageStored { packet.Publish Publish = 1; }
 message RetainedMessageDeleted { bytes Topic = 1; }
 message SessionCreated {
   string SessionID = 1;
-  int64 ConnectedAt = 2;
-  uint64 Peer = 3;
-  packet.Publish LWT = 4;
+  string ClientID = 2;
+  int64 ConnectedAt = 3;
+  uint64 Peer = 4;
+  packet.Publish LWT = 5;
 }
 message SessionDeleted {
   string SessionID = 1;
