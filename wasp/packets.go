@@ -17,7 +17,7 @@ type FSM interface {
 	CreateSessionMetadata(ctx context.Context, id string, lwt *packet.Publish) error
 }
 
-func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
+func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -78,6 +78,11 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishes chan
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:
+		metadata := state.GetSessionMetadatas(session.ID)
+		if metadata == nil || metadata.Peer != peer {
+			// Session has reconnected on another peer.
+			return ErrSessionDisconnected
+		}
 		return session.Encoder.PingResp(&packet.PingResp{
 			Header: p.Header,
 		})

@@ -336,7 +336,7 @@ func run(config *viper.Viper) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-			wasp.RunSession(ctx, stateMachine, state, m.Channel, publishes)
+			wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes)
 		}()
 		return nil
 	}

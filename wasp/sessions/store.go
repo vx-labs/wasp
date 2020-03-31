@@ -10,12 +10,13 @@ import (
 )
 
 type Session struct {
-	ID      string
-	Lwt     *packet.Publish
-	conn    io.WriteCloser
-	Encoder *encoder.Encoder
-	mtx     sync.Mutex
-	topics  [][]byte
+	ID           string
+	Lwt          *packet.Publish
+	conn         io.WriteCloser
+	Encoder      *encoder.Encoder
+	Disconnected bool
+	mtx          sync.Mutex
+	topics       [][]byte
 }
 
 func (s *Session) ProcessConnect(connect *packet.Connect) error {

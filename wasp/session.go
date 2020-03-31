@@ -24,7 +24,7 @@ var (
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
 )
 
-func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
 	defer c.Close()
 	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
 		"protocol": "mqtt",
@@ -68,7 +68,6 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 	if err != nil {
 		return err
 	}
-	defer fsm.DeleteSessionMetadata(ctx, session.ID)
 	state.SaveSession(session.ID, session)
 	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer
@@ -88,15 +87,31 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 			fsm.Unsubscribe(ctx, session.ID, topics[idx])
 		}
 	}()
+	defer func() {
+		metadata := state.GetSessionMetadatas(session.ID)
+		if session.Disconnected || metadata == nil || metadata.Peer != peer {
+			// Session has reconnected on another peer.
+			return
+		}
+		fsm.DeleteSessionMetadata(ctx, session.ID)
+		err = dec.Err()
+		if err != nil {
+			L(ctx).Info("session lost", zap.String("loss_reason", err.Error()))
+			if session.Lwt != nil {
+				ch <- session.Lwt
+			}
+		}
+	}()
 	for pkt := range dec.Packet() {
 		start := time.Now()
-		err = processPacket(ctx, fsm, state, ch, session, pkt)
+		err = processPacket(ctx, peer, fsm, state, ch, session, pkt)
 		stats.HistogramVec("sessionPacketHandling").With(map[string]string{
 			"packet_type": packet.TypeString(pkt),
 		}).Observe(stats.MilisecondsElapsed(start))
 
 		if err == ErrSessionDisconnected {
 			//	L(ctx).Info("session closed")
+			session.Disconnected = true
 			return session.Close()
 		}
 		if err != nil {
@@ -105,13 +120,6 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 		c.SetDeadline(
 			time.Now().Add(2 * time.Duration(keepAlive) * time.Second),
 		)
-	}
-	err = dec.Err()
-	if err != nil {
-		L(ctx).Info("session lost", zap.String("loss_reason", err.Error()))
-	}
-	if session.Lwt != nil {
-		ch <- session.Lwt
 	}
 	return err
 }

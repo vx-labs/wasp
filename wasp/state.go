@@ -19,6 +19,7 @@ type ReadState interface {
 	CloseSession(id string)
 	RetainedMessages(topic []byte) ([]*packet.Publish, error)
 	ListSessionMetadatas() []*api.SessionMetadatas
+	GetSessionMetadatas(id string) *api.SessionMetadatas
 }
 type State interface {
 	ReadState
@@ -184,6 +185,9 @@ func (s *state) DeleteSessionMetadata(id string, peer uint64) error {
 }
 func (s *state) DeleteSessionMetadatasByPeer(peer uint64) {
 	s.sessionsMetadatas.DeletePeer(peer)
+}
+func (s *state) GetSessionMetadatas(id string) *api.SessionMetadatas {
+	return s.sessionsMetadatas.ByID(id)
 }
 func (s *state) ListSessionMetadatas() []*api.SessionMetadatas {
 	return s.sessionsMetadatas.All()
