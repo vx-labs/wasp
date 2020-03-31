@@ -34,7 +34,7 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 	if rc.node == nil {
 		return nil, errors.New("node not ready")
 	}
-	if !rc.isLeader() {
+	if !rc.IsLeader() {
 		return nil, errors.New("node not leader")
 	}
 	out := &api.JoinClusterResponse{}
@@ -54,7 +54,7 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 }
 func (rc *RaftNode) GetStatus(ctx context.Context, in *api.GetStatusRequest) (*api.GetStatusResponse, error) {
 	return &api.GetStatusResponse{
-		IsLeader:            rc.isLeader(),
+		IsLeader:            rc.IsLeader(),
 		HasBeenBootstrapped: rc.hasBeenBootstrapped,
 		IsInCluster:         !rc.removed,
 	}, nil

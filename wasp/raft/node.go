@@ -188,7 +188,7 @@ func (rc *RaftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	return nents
 }
 
-func (rc *RaftNode) isLeader() bool {
+func (rc *RaftNode) IsLeader() bool {
 	return rc.currentLeader == rc.id
 }
 
@@ -392,15 +392,12 @@ func (rc *RaftNode) ReportUnreachable(id uint64) {
 func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	rc.node.ReportSnapshot(id, status)
 }
-func (rc *RaftNode) IsLeader(id uint64) bool {
-	return rc.currentLeader == id
-}
 
 func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string) error {
 	if rc.node == nil {
 		return errors.New("node not ready")
 	}
-	if !rc.isLeader() {
+	if !rc.IsLeader() {
 		return errors.New("node not leader")
 	}
 	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
@@ -421,7 +418,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 func (rc *RaftNode) Leave(ctx context.Context) error {
 	for {
 		reqCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-		if rc.isLeader() && len(rc.node.Status().Progress) == 1 {
+		if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
 			cancel()
 			return nil
 		}

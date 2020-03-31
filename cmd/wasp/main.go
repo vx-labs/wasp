@@ -179,6 +179,9 @@ func run(config *viper.Viper) {
 					ticker := time.NewTicker(1 * time.Second)
 					defer ticker.Stop()
 					for {
+						if raftNode.IsLeader() {
+							return
+						}
 						for _, peer := range peers {
 							ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 							err := mesh.Call(peer.ID, func(c *grpc.ClientConn) error {
