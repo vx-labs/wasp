@@ -79,7 +79,7 @@ func run(config *viper.Viper) {
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
 	remotePublishCh := make(chan *packet.Publish, 20)
-	mqttServer := rpc.NewMQTTServer(remotePublishCh)
+	mqttServer := rpc.NewMQTTServer(state, remotePublishCh)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {

@@ -8,12 +8,16 @@ import (
 	"google.golang.org/grpc"
 )
 
+type State interface {
+	ListSessionMetadatas() []*api.SessionMetadatas
+}
 type MqttServer struct {
 	publishCh chan *packet.Publish
+	state     State
 }
 
-func NewMQTTServer(publishCh chan *packet.Publish) *MqttServer {
-	return &MqttServer{publishCh: publishCh}
+func NewMQTTServer(state State, publishCh chan *packet.Publish) *MqttServer {
+	return &MqttServer{state: state, publishCh: publishCh}
 }
 
 func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
@@ -23,6 +27,9 @@ func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMes
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+func (s *MqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessionMetadatasRequest) (*api.ListSessionMetadatasResponse, error) {
+	return &api.ListSessionMetadatasResponse{SessionMetadatasList: s.state.ListSessionMetadatas()}, nil
 }
 func (s *MqttServer) Serve(grpcServer *grpc.Server) {
 	api.RegisterMQTTServer(grpcServer, s)

@@ -38,12 +38,13 @@ type Gossip struct {
 func (m *Gossip) Members() []*api.Member {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
-	out := make([]*api.Member, len(m.peers))
+	out := make([]*api.Member, len(m.peers)+1)
 	idx := 0
 	for id, peer := range m.peers {
 		out[idx] = &api.Member{ID: id, Address: peer.Conn.Target(), IsAlive: peer.Enabled}
 		idx++
 	}
+	out[idx] = &api.Member{ID: m.id, Address: m.mlist.LocalNode().FullAddress().Addr, IsAlive: true}
 	return out
 }
 

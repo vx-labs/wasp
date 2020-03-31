@@ -47,9 +47,16 @@ message SessionMetadatas {
   packet.Publish LWT = 4;
 }
 
+message ListSessionMetadatasRequest {}
+message ListSessionMetadatasResponse {
+  repeated SessionMetadatas SessionMetadatasList = 1;
+}
+
 service MQTT {
   rpc DistributeMessage(DistributeMessageRequest)
       returns (DistributeMessageResponse) {}
+  rpc ListSessionMetadatas(ListSessionMetadatasRequest)
+      returns (ListSessionMetadatasResponse) {}
 }
 
 message ShutdownRequest {}

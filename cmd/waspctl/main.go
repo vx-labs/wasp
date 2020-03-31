@@ -86,6 +86,7 @@ func findServer(l *zap.Logger, service, tag string) (string, error) {
 func mustDial(ctx context.Context, cmd *cobra.Command, config *viper.Viper) (*grpc.ClientConn, *zap.Logger) {
 	l := logger(config.GetBool("debug"))
 	dialer := rpc.GRPCDialer(rpc.ClientConfig{
+		InsecureSkipVerify:          config.GetBool("insecure"),
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
 	host := config.GetString("host")
@@ -132,6 +133,28 @@ func main() {
 	node := &cobra.Command{
 		Use: "node",
 	}
+	mqtt := &cobra.Command{
+		Use: "mqtt",
+	}
+	mqtt.AddCommand(&cobra.Command{
+		Use: "list-sessions",
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			out, err := api.NewMQTTClient(conn).ListSessionMetadatas(ctx, &api.ListSessionMetadatasRequest{})
+			if err != nil {
+				l.Fatal("failed to list connected sessions", zap.Error(err))
+			}
+			table := getTable([]string{"ID", "Peer", "Connected Since"}, cmd.OutOrStdout())
+			for _, member := range out.GetSessionMetadatasList() {
+				table.Append([]string{
+					member.GetSessionID(),
+					fmt.Sprintf("%x", member.GetPeer()),
+					time.Since(time.Unix(member.GetConnectedAt(), 0)).String(),
+				})
+			}
+			table.Render()
+		},
+	})
 	raft.AddCommand(&cobra.Command{
 		Use: "members",
 		Run: func(cmd *cobra.Command, _ []string) {
@@ -166,6 +189,8 @@ func main() {
 	})
 	rootCmd.AddCommand(raft)
 	rootCmd.AddCommand(node)
+	rootCmd.AddCommand(mqtt)
+	rootCmd.PersistentFlags().BoolP("insecure", "k", false, "Disable GRPC client-side TLS validation.")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity.")
 	rootCmd.PersistentFlags().BoolP("use-consul", "c", false, "Use Hashicorp Consul to find Wasp server.")
 	rootCmd.PersistentFlags().String("consul-service-name", "wasp", "Consul service name.")
