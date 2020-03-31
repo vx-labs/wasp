@@ -26,6 +26,7 @@ type Tree interface {
 	Remove(pattern []byte, sub string) error
 	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
 	RemovePeer(peer uint64) int
+	RemoveSession(id string) int
 	Dump() ([]byte, error)
 	Load([]byte) error
 	Count() int
@@ -52,6 +53,11 @@ func (t *tree) RemovePeer(peer uint64) int {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 	return t.root.removePeer(peer, 0)
+}
+func (t *tree) RemoveSession(id string) int {
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+	return t.root.removeSession(id, 0)
 }
 func (t *tree) Load(buf []byte) error {
 	t.mtx.Lock()
@@ -96,6 +102,26 @@ func newNode() *Node {
 	}
 }
 
+func (n *Node) removeSession(id string, counter int) int {
+	for i := range n.Recipients {
+		if n.Recipients[i] == id {
+			counter++
+			n.Recipients[i] = n.Recipients[len(n.Recipients)-1]
+			n.Recipients = n.Recipients[:len(n.Recipients)-1]
+			n.Qos[i] = n.Qos[len(n.Qos)-1]
+			n.Qos = n.Qos[:len(n.Qos)-1]
+			n.Peer[i] = n.Peer[len(n.Peer)-1]
+			n.Peer = n.Peer[:len(n.Peer)-1]
+		}
+	}
+	for token, child := range n.Children {
+		counter = n.Children[token].removeSession(id, counter)
+		if len(child.Recipients) == 0 && len(child.Children) == 0 {
+			delete(n.Children, token)
+		}
+	}
+	return counter
+}
 func (n *Node) removePeer(peer uint64, counter int) int {
 	for i := range n.Recipients {
 		if n.Peer[i] == peer {
@@ -116,6 +142,7 @@ func (n *Node) removePeer(peer uint64, counter int) int {
 	}
 	return counter
 }
+
 func (n *Node) count(counter int) int {
 	c := counter + len(n.Recipients)
 	for key := range n.Children {
