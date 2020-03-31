@@ -64,6 +64,11 @@ func RunSession(ctx context.Context, fsm FSM, state ReadState, c transport.Timeo
 		})
 	}
 	//L(ctx).Info("session connected")
+	err = fsm.CreateSessionMetadata(ctx, session.ID, session.Lwt)
+	if err != nil {
+		return err
+	}
+	defer fsm.DeleteSessionMetadata(ctx, session.ID)
 	state.SaveSession(session.ID, session)
 	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer

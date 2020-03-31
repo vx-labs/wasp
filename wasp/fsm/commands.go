@@ -15,6 +15,8 @@ type State interface {
 	RemoveSubscriptionsForPeer(peer uint64)
 	RetainMessage(msg *packet.Publish) error
 	DeleteRetainedMessage(topic []byte) error
+	CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error
+	DeleteSessionMetadata(id string, peer uint64) error
 }
 
 func decode(payload []byte) ([]*StateTransition, error) {
@@ -106,7 +108,7 @@ func (f *FSM) Subscribe(ctx context.Context, id string, pattern []byte, qos int3
 	}
 	return f.commit(ctx, payload)
 }
-func (f *FSM) CreateSession(ctx context.Context, id string, lwt *packet.Publish) error {
+func (f *FSM) CreateSessionMetadata(ctx context.Context, id string, lwt *packet.Publish) error {
 	payload, err := encode(&StateTransition{Event: &StateTransition_SessionCreated{
 		SessionCreated: &SessionCreated{
 			SessionID:   id,
@@ -120,7 +122,7 @@ func (f *FSM) CreateSession(ctx context.Context, id string, lwt *packet.Publish)
 	}
 	return f.commit(ctx, payload)
 }
-func (f *FSM) DeleteSession(ctx context.Context, id string) error {
+func (f *FSM) DeleteSessionMetadata(ctx context.Context, id string) error {
 	payload, err := encode(&StateTransition{Event: &StateTransition_SessionDeleted{
 		SessionDeleted: &SessionDeleted{
 			SessionID: id,
@@ -167,6 +169,12 @@ func (f *FSM) Apply(b []byte) error {
 		case *StateTransition_PeerLost:
 			input := event.PeerLost
 			f.state.RemoveSubscriptionsForPeer(input.Peer)
+		case *StateTransition_SessionCreated:
+			input := event.SessionCreated
+			f.state.CreateSessionMetadata(input.SessionID, input.Peer, input.ConnectedAt, input.LWT)
+		case *StateTransition_SessionDeleted:
+			input := event.SessionDeleted
+			f.state.DeleteSessionMetadata(input.SessionID, input.Peer)
 		}
 		if err != nil {
 			return err

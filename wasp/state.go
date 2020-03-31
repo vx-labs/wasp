@@ -2,8 +2,10 @@ package wasp
 
 import (
 	"encoding/json"
+	"sync"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
@@ -11,19 +13,47 @@ import (
 )
 
 type State interface {
+	ReadState
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
 	RemoveSubscriptionsForPeer(peer uint64)
-	Recipients(topic []byte) ([]uint64, []string, []int32, error)
-	GetSession(id string) *sessions.Session
-	SaveSession(id string, session *sessions.Session)
-	CloseSession(id string)
 	RetainMessage(msg *packet.Publish) error
 	DeleteRetainedMessage(topic []byte) error
-	RetainedMessages(topic []byte) ([]*packet.Publish, error)
 	Load([]byte) error
 	MarshalBinary() ([]byte, error)
+	CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error
+	DeleteSessionMetadata(id string, peer uint64) error
 }
+
+type sessionMetadatasStore struct {
+	mtx  sync.RWMutex
+	data map[string]*api.SessionMetadatas
+}
+
+func (s *sessionMetadatasStore) Save(m *api.SessionMetadatas) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	s.data[m.SessionID] = m
+}
+func (s *sessionMetadatasStore) ByID(id string) *api.SessionMetadatas {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	md, ok := s.data[id]
+	if !ok {
+		return nil
+	}
+	return md
+}
+func (s *sessionMetadatasStore) Delete(id string) *api.SessionMetadatas {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	if old, ok := s.data[id]; ok {
+		delete(s.data, id)
+		return old
+	}
+	return nil
+}
+
 type ReadState interface {
 	Recipients(topic []byte) ([]uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
@@ -33,16 +63,18 @@ type ReadState interface {
 }
 
 type state struct {
-	subscriptions subscriptions.Tree
-	sessions      sessions.Store
-	topics        topics.Store
+	subscriptions     subscriptions.Tree
+	sessions          sessions.Store
+	topics            topics.Store
+	sessionsMetadatas *sessionMetadatasStore
 }
 
 func NewState() State {
 	return &state{
-		sessions:      sessions.NewStore(),
-		subscriptions: subscriptions.NewTree(),
-		topics:        topics.NewTree(),
+		sessions:          sessions.NewStore(),
+		subscriptions:     subscriptions.NewTree(),
+		topics:            topics.NewTree(),
+		sessionsMetadatas: &sessionMetadatasStore{data: make(map[string]*api.SessionMetadatas)},
 	}
 }
 
@@ -103,6 +135,19 @@ func (s *state) RemoveSubscriptionsForPeer(peer uint64) {
 	if count > 0 {
 		stats.Gauge("subscriptionsCount").Sub(float64(count))
 	}
+}
+func (s *state) DeleteSessionMetadata(id string, peer uint64) error {
+	s.sessionsMetadatas.Delete(id)
+	return nil
+}
+func (s *state) CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error {
+	s.sessionsMetadatas.Save(&api.SessionMetadatas{
+		SessionID:   id,
+		ConnectedAt: connectedAt,
+		LWT:         lwt,
+		Peer:        peer,
+	})
+	return nil
 }
 
 func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {

@@ -40,6 +40,12 @@ service Raft {
 
 message DistributeMessageRequest { packet.Publish Message = 1; }
 message DistributeMessageResponse {}
+message SessionMetadatas {
+  string SessionID = 1;
+  int64 ConnectedAt = 2;
+  uint64 Peer = 3;
+  packet.Publish LWT = 4;
+}
 
 service MQTT {
   rpc DistributeMessage(DistributeMessageRequest)
