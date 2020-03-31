@@ -103,22 +103,23 @@ func newNode() *Node {
 }
 
 func (n *Node) removeSession(id string, counter int) int {
+	cut := len(n.Recipients)
 	for i := range n.Recipients {
 		if n.Recipients[i] == id {
 			counter++
-			if len(n.Recipients) == 1 {
-				n.Recipients = n.Recipients[:0]
-				n.Qos = n.Qos[:0]
-				n.Peer = n.Peer[:0]
-			} else {
+			if i < len(n.Recipients)-1 {
 				n.Recipients[i] = n.Recipients[len(n.Recipients)-1]
-				n.Recipients = n.Recipients[:len(n.Recipients)-1]
 				n.Qos[i] = n.Qos[len(n.Qos)-1]
-				n.Qos = n.Qos[:len(n.Qos)-1]
 				n.Peer[i] = n.Peer[len(n.Peer)-1]
-				n.Peer = n.Peer[:len(n.Peer)-1]
 			}
+			cut = cut - 1
 		}
+	}
+	if cut < len(n.Recipients) {
+		n.Recipients = n.Recipients[:cut]
+		n.Qos = n.Qos[:cut]
+		n.Peer = n.Peer[:cut]
+
 	}
 	for token, child := range n.Children {
 		counter = n.Children[token].removeSession(id, counter)
@@ -129,22 +130,23 @@ func (n *Node) removeSession(id string, counter int) int {
 	return counter
 }
 func (n *Node) removePeer(peer uint64, counter int) int {
+	cut := len(n.Recipients)
 	for i := range n.Recipients {
 		if n.Peer[i] == peer {
 			counter++
-			if len(n.Recipients) == 1 {
-				n.Recipients = n.Recipients[:0]
-				n.Qos = n.Qos[:0]
-				n.Peer = n.Peer[:0]
-			} else {
+			if i < len(n.Recipients)-1 {
 				n.Recipients[i] = n.Recipients[len(n.Recipients)-1]
-				n.Recipients = n.Recipients[:len(n.Recipients)-1]
 				n.Qos[i] = n.Qos[len(n.Qos)-1]
-				n.Qos = n.Qos[:len(n.Qos)-1]
 				n.Peer[i] = n.Peer[len(n.Peer)-1]
-				n.Peer = n.Peer[:len(n.Peer)-1]
 			}
+			cut = cut - 1
 		}
+	}
+	if cut < len(n.Recipients) {
+		n.Recipients = n.Recipients[:cut]
+		n.Qos = n.Qos[:cut]
+		n.Peer = n.Peer[:cut]
+
 	}
 	for token, child := range n.Children {
 		counter = n.Children[token].removePeer(peer, counter)

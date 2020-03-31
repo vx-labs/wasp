@@ -56,5 +56,6 @@ func TestTree_RemovePeer(t *testing.T) {
 	require.NoError(t, myTree.Insert(1, []byte("test/a"), 1, "test"))
 	require.NoError(t, myTree.Insert(1, []byte("test/b"), 1, "test2"))
 	require.NoError(t, myTree.Insert(3, []byte("test/b/c"), 1, "test3"))
-	require.Equal(t, 2, myTree.RemovePeer(1))
+	require.NoError(t, myTree.Insert(3, []byte("test/b/c"), 1, "test4"))
+	require.Equal(t, 2, myTree.RemovePeer(3))
 }
