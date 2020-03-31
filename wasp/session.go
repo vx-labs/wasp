@@ -81,13 +81,6 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	c.SetDeadline(
 		time.Now().Add(2 * time.Duration(keepAlive) * time.Second),
 	)
-	err = enc.ConnAck(&packet.ConnAck{
-		Header:     connectPkt.Header,
-		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
-	})
-	if err != nil {
-		return err
-	}
 	defer func() {
 		topics := session.GetTopics()
 		for idx := range topics {
@@ -95,13 +88,12 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		}
 	}()
 	defer func() {
-
 		metadata := state.GetSessionMetadatasByClientID(session.ClientID)
-		if session.Disconnected || metadata == nil || metadata.SessionID != session.ID {
+		fsm.DeleteSessionMetadata(ctx, session.ID)
+		if metadata == nil || metadata.SessionID != session.ID || session.Disconnected {
 			// Session has reconnected on another peer.
 			return
 		}
-		fsm.DeleteSessionMetadata(ctx, session.ID)
 		err = dec.Err()
 		if err != nil {
 			L(ctx).Info("session lost", zap.String("loss_reason", err.Error()))
@@ -110,6 +102,13 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			}
 		}
 	}()
+	err = enc.ConnAck(&packet.ConnAck{
+		Header:     connectPkt.Header,
+		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
+	})
+	if err != nil {
+		return err
+	}
 	for pkt := range dec.Packet() {
 		start := time.Now()
 		err = processPacket(ctx, peer, fsm, state, ch, session, pkt)
