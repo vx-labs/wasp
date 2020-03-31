@@ -27,6 +27,7 @@ type State interface {
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
 	RemoveSubscriptionsForPeer(peer uint64)
+	RemoveSubscriptionsForSession(id string)
 	RetainMessage(msg *packet.Publish) error
 	DeleteRetainedMessage(topic []byte) error
 	Load([]byte) error
@@ -186,6 +187,12 @@ func (s *state) Unsubscribe(id string, pattern []byte) error {
 }
 func (s *state) RemoveSubscriptionsForPeer(peer uint64) {
 	count := s.subscriptions.RemovePeer(peer)
+	if count > 0 {
+		stats.Gauge("subscriptionsCount").Sub(float64(count))
+	}
+}
+func (s *state) RemoveSubscriptionsForSession(id string) {
+	count := s.subscriptions.RemoveSession(id)
 	if count > 0 {
 		stats.Gauge("subscriptionsCount").Sub(float64(count))
 	}

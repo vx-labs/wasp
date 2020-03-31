@@ -65,6 +65,12 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		})
 	}
 	//L(ctx).Info("session connected")
+	if metadata := state.GetSessionMetadatasByClientID(session.ClientID); metadata != nil {
+		err := fsm.DeleteSessionMetadata(ctx, metadata.SessionID)
+		if err != nil {
+			return err
+		}
+	}
 	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.Lwt)
 	if err != nil {
 		return err

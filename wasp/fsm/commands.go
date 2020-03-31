@@ -13,6 +13,7 @@ type State interface {
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
 	Unsubscribe(id string, pattern []byte) error
 	RemoveSubscriptionsForPeer(peer uint64)
+	RemoveSubscriptionsForSession(id string)
 	RetainMessage(msg *packet.Publish) error
 	DeleteRetainedMessage(topic []byte) error
 	CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish) error
@@ -178,6 +179,7 @@ func (f *FSM) Apply(b []byte) error {
 		case *StateTransition_SessionDeleted:
 			input := event.SessionDeleted
 			f.state.DeleteSessionMetadata(input.SessionID, input.Peer)
+			f.state.RemoveSubscriptionsForSession(input.SessionID)
 		}
 		if err != nil {
 			return err
