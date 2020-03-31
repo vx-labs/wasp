@@ -12,6 +12,13 @@ import (
 	"github.com/vx-labs/wasp/wasp/topics"
 )
 
+type ReadState interface {
+	Recipients(topic []byte) ([]uint64, []string, []int32, error)
+	GetSession(id string) *sessions.Session
+	SaveSession(id string, session *sessions.Session)
+	CloseSession(id string)
+	RetainedMessages(topic []byte) ([]*packet.Publish, error)
+}
 type State interface {
 	ReadState
 	Subscribe(peer uint64, id string, pattern []byte, qos int32) error
@@ -23,6 +30,7 @@ type State interface {
 	MarshalBinary() ([]byte, error)
 	CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error
 	DeleteSessionMetadata(id string, peer uint64) error
+	DeleteSessionMetadatasByPeer(peer uint64)
 }
 
 type sessionMetadatasStore struct {
@@ -54,12 +62,24 @@ func (s *sessionMetadatasStore) Delete(id string) *api.SessionMetadatas {
 	return nil
 }
 
-type ReadState interface {
-	Recipients(topic []byte) ([]uint64, []string, []int32, error)
-	GetSession(id string) *sessions.Session
-	SaveSession(id string, session *sessions.Session)
-	CloseSession(id string)
-	RetainedMessages(topic []byte) ([]*packet.Publish, error)
+func (s *sessionMetadatasStore) DeletePeer(peerID uint64) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	for id := range s.data {
+		if s.data[id].Peer == peerID {
+			delete(s.data, id)
+		}
+	}
+}
+func (s *sessionMetadatasStore) Dump() ([]byte, error) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	return json.Marshal(s.data)
+}
+func (s *sessionMetadatasStore) Load(buf []byte) error {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	return json.Unmarshal(buf, &s.data)
 }
 
 type state struct {
@@ -79,13 +99,18 @@ func NewState() State {
 }
 
 type StateDump struct {
-	Subscriptions []byte
-	Topics        []byte
+	Subscriptions    []byte
+	Topics           []byte
+	SessionMetadatas []byte
 }
 
 func (s *state) Load(buf []byte) error {
 	dump := StateDump{}
 	err := json.Unmarshal(buf, &dump)
+	if err != nil {
+		return err
+	}
+	err = s.sessionsMetadatas.Load(dump.SessionMetadatas)
 	if err != nil {
 		return err
 	}
@@ -110,9 +135,14 @@ func (s *state) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, nil
 	}
+	sessionMetadatasDump, err := s.sessionsMetadatas.Dump()
+	if err != nil {
+		return nil, nil
+	}
 	dump := StateDump{
-		Subscriptions: subscriptionsDump,
-		Topics:        topicsDump,
+		Subscriptions:    subscriptionsDump,
+		Topics:           topicsDump,
+		SessionMetadatas: sessionMetadatasDump,
 	}
 	return json.Marshal(dump)
 }
@@ -139,6 +169,9 @@ func (s *state) RemoveSubscriptionsForPeer(peer uint64) {
 func (s *state) DeleteSessionMetadata(id string, peer uint64) error {
 	s.sessionsMetadatas.Delete(id)
 	return nil
+}
+func (s *state) DeleteSessionMetadatasByPeer(peer uint64) {
+	s.sessionsMetadatas.DeletePeer(peer)
 }
 func (s *state) CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error {
 	s.sessionsMetadatas.Save(&api.SessionMetadatas{

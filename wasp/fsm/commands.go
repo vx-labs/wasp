@@ -17,6 +17,7 @@ type State interface {
 	DeleteRetainedMessage(topic []byte) error
 	CreateSessionMetadata(id string, peer uint64, connectedAt int64, lwt *packet.Publish) error
 	DeleteSessionMetadata(id string, peer uint64) error
+	DeleteSessionMetadatasByPeer(peer uint64)
 }
 
 func decode(payload []byte) ([]*StateTransition, error) {
@@ -169,6 +170,7 @@ func (f *FSM) Apply(b []byte) error {
 		case *StateTransition_PeerLost:
 			input := event.PeerLost
 			f.state.RemoveSubscriptionsForPeer(input.Peer)
+			f.state.DeleteSessionMetadatasByPeer(input.Peer)
 		case *StateTransition_SessionCreated:
 			input := event.SessionCreated
 			f.state.CreateSessionMetadata(input.SessionID, input.Peer, input.ConnectedAt, input.LWT)
