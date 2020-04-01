@@ -109,6 +109,7 @@ EOH
         image = "${service_image}:${service_version}"
         args = [
           "--data-dir", "$${NOMAD_TASK_DIR}",
+          "--mtls",
           "--use-vault",
           "--raft-bootstrap-expect", "3",
           "--consul-join",
@@ -197,13 +198,10 @@ EOH
         tags = ["rpc", "${service_version}"]
 
         check {
-          type            = "grpc"
+          type            = "tcp"
           port            = "rpc"
           interval        = "30s"
           timeout         = "2s"
-          grpc_service    = "rpc"
-          grpc_use_tls    = true
-          tls_skip_verify = true
         }
       }
       service {
