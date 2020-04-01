@@ -8,7 +8,6 @@ import (
 	"log"
 	"math/rand"
 	"os"
-	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -48,29 +47,7 @@ func main() {
 	node := &cobra.Command{
 		Use: "node",
 	}
-	mqtt := &cobra.Command{
-		Use: "mqtt",
-	}
-	mqtt.AddCommand(&cobra.Command{
-		Use: "list-sessions",
-		Run: func(cmd *cobra.Command, _ []string) {
-			conn, l := mustDial(ctx, cmd, config)
-			out, err := api.NewMQTTClient(conn).ListSessionMetadatas(ctx, &api.ListSessionMetadatasRequest{})
-			if err != nil {
-				l.Fatal("failed to list connected sessions", zap.Error(err))
-			}
-			table := getTable([]string{"ID", "Client ID", "Peer", "Connected Since"}, cmd.OutOrStdout())
-			for _, member := range out.GetSessionMetadatasList() {
-				table.Append([]string{
-					member.GetSessionID(),
-					member.GetClientID(),
-					fmt.Sprintf("%x", member.GetPeer()),
-					time.Since(time.Unix(member.GetConnectedAt(), 0)).String(),
-				})
-			}
-			table.Render()
-		},
-	})
+	mqtt := Mqtt(ctx, config)
 	raft.AddCommand(&cobra.Command{
 		Use: "members",
 		Run: func(cmd *cobra.Command, _ []string) {
