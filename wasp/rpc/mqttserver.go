@@ -12,20 +12,30 @@ type State interface {
 	ListSessionMetadatas() []*api.SessionMetadatas
 }
 type MqttServer struct {
-	publishCh chan *packet.Publish
-	state     State
+	localPublishCh  chan *packet.Publish
+	remotePublishCh chan *packet.Publish
+	state           State
 }
 
-func NewMQTTServer(state State, publishCh chan *packet.Publish) *MqttServer {
-	return &MqttServer{state: state, publishCh: publishCh}
+func NewMQTTServer(state State, localPublishCh, remotePublishCh chan *packet.Publish) *MqttServer {
+	return &MqttServer{state: state, localPublishCh: localPublishCh, remotePublishCh: remotePublishCh}
 }
 
 func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
-	select {
-	case s.publishCh <- r.Message:
-		return &api.DistributeMessageResponse{}, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
+	if r.ResolveRemoteRecipients {
+		select {
+		case s.localPublishCh <- r.Message:
+			return &api.DistributeMessageResponse{}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	} else {
+		select {
+		case s.remotePublishCh <- r.Message:
+			return &api.DistributeMessageResponse{}, nil
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
 }
 func (s *MqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessionMetadatasRequest) (*api.ListSessionMetadatasResponse, error) {

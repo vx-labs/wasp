@@ -38,7 +38,10 @@ service Raft {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
 }
 
-message DistributeMessageRequest { packet.Publish Message = 1; }
+message DistributeMessageRequest {
+  packet.Publish Message = 1;
+  bool ResolveRemoteRecipients = 2;
+}
 message DistributeMessageResponse {}
 message SessionMetadatas {
   string SessionID = 1;
