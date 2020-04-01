@@ -11,7 +11,8 @@ variable image_tag {
 resource "nomad_job" "messages" {
   jobspec = templatefile("${path.module}/template.nomad.hcl",
     {
-      service_image        = "${var.image_repository}:${var.image_tag}",
+      service_image        = var.image_repository,
+      service_version        = var.image_tag,
     },
   )
 }

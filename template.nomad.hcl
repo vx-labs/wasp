@@ -106,7 +106,7 @@ EOH
           }
         }
 
-        image = "${service_image}"
+        image = "${service_image}:${service_version}"
         args = [
           "--data-dir", "$${NOMAD_TASK_DIR}",
           "--use-vault",
@@ -150,13 +150,7 @@ EOH
       service {
         name = "mqtt"
         port = "mqtt"
-
-        tags = [
-          "traefik.enable=true",
-          "traefik.tcp.routers.mqtt.rule=HostSNI(`*`)",
-          "traefik.tcp.routers.mqtt.entrypoints=mqtt",
-          "traefik.tcp.routers.mqtt.service=mqtt",
-        ]
+        tags = ["${service_version}"]
 
         check {
           type     = "tcp"
@@ -170,6 +164,7 @@ EOH
         port = "mqttwss"
 
         tags = [
+          "${service_version}",
           "traefik.enable=true",
           "traefik.tcp.routers.wss.rule=HostSNI(`broker.iot.cloud.vx-labs.net`)",
           "traefik.tcp.routers.wss.entrypoints=https",
@@ -188,15 +183,7 @@ EOH
       service {
         name = "mqtts"
         port = "mqtts"
-        tags = [
-          "traefik.enable=true",
-          "traefik.tcp.routers.mqtts.rule=HostSNI(`broker.iot.cloud.vx-labs.net`)",
-          "traefik.tcp.routers.mqtts.entrypoints=mqtts",
-          "traefik.tcp.routers.mqtts.service=mqtts",
-          "traefik.tcp.routers.mqtts.tls",
-          "traefik.tcp.routers.mqtts.tls.passthrough=true",
-        ]
-
+        tags = ["${service_version}"]
         check {
           type     = "tcp"
           port     = "mqtts"
@@ -207,7 +194,7 @@ EOH
       service {
         name = "wasp"
         port = "rpc"
-        tags = ["rpc"]
+        tags = ["rpc", "${service_version}"]
 
         check {
           type            = "grpc"
@@ -222,7 +209,7 @@ EOH
       service {
         name = "wasp"
         port = "gossip"
-        tags = ["gossip"]
+        tags = ["gossip", "${service_version}"]
 
         check {
           type     = "tcp"
@@ -234,7 +221,7 @@ EOH
       service {
         name = "wasp"
         port = "metrics"
-        tags = ["prometheus"]
+        tags = ["prometheus", "${service_version}"]
 
         check {
           type     = "http"
