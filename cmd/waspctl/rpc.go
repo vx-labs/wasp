@@ -54,7 +54,6 @@ func mustDial(ctx context.Context, cmd *cobra.Command, config *viper.Viper) (*gr
 		}
 	}
 	l = l.With(zap.String("remote_host", host))
-	l.Debug("using remote host")
 	l.Debug("dialing wasp server", zap.String("remote_host", host))
 	conn, err := dialer(host, grpc.WithTimeout(3000*time.Millisecond))
 	if err != nil {

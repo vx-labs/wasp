@@ -186,6 +186,7 @@ func GRPCClientOptions(tlsCertificateAuthorityPath, tlsCertificatePath, tlsPriva
 	}
 	if tlsCertificatePath != "" && tlsPrivateKey != "" && tlsCertificateAuthorityPath != "" {
 		tlsConfig := loadTLSConfig(tlsCertificateAuthorityPath, tlsCertificatePath, tlsPrivateKey)
+		tlsConfig.InsecureSkipVerify = insecureSkipVerify
 		return append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
 	}
 	if tlsCertificateAuthorityPath != "" {
