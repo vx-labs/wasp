@@ -104,6 +104,7 @@ func main() {
 	cmd.Flags().String("pprof-address", "127.0.0.1", "Profiling (pprof) port.")
 	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
 	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
+	cmd.Flags().Bool("mtls", false, "Enforce GRPC service-side TLS certificates validation for client connections.")
 	cmd.Flags().Bool("insecure", false, "Disable GRPC client-side TLS validation.")
 	cmd.Flags().Bool("consul-join", false, "Use Hashicorp Consul to find other gossip members. Wasp won't handle service registration in Consul, you must do it before running Wasp.")
 	cmd.Flags().String("consul-service-name", "wasp", "Consul auto-join service name.")

@@ -88,6 +88,8 @@ func mustDial(ctx context.Context, cmd *cobra.Command, config *viper.Viper) (*gr
 	dialer := rpc.GRPCDialer(rpc.ClientConfig{
 		InsecureSkipVerify:          config.GetBool("insecure"),
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
+		TLSCertificatePath:          config.GetString("rpc-tls-certificate-file"),
+		TLSPrivateKeyPath:           config.GetString("rpc-tls-private-key-file"),
 	})
 	host := config.GetString("host")
 	if !cmd.Flags().Changed("host") && config.GetBool("use-consul") {
@@ -198,6 +200,7 @@ func main() {
 	rootCmd.PersistentFlags().String("consul-service-tag", "rpc", "Consul service tag.")
 	rootCmd.PersistentFlags().String("host", "127.0.0.1:1899", "remote GRPC endpoint")
 	rootCmd.PersistentFlags().String("rpc-tls-certificate-authority-file", "", "x509 certificate authority used by RPC Client.")
-
+	rootCmd.PersistentFlags().String("rpc-tls-certificate-file", "", "x509 certificate used by RPC Client.")
+	rootCmd.PersistentFlags().String("rpc-tls-private-key-file", "", "Private key used by RPC Client.")
 	rootCmd.Execute()
 }

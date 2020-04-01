@@ -69,13 +69,17 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")
 	}
 	server := rpc.Server(rpc.ServerConfig{
-		TLSCertificatePath: config.GetString("rpc-tls-certificate-file"),
-		TLSPrivateKeyPath:  config.GetString("rpc-tls-private-key-file"),
+		VerifyClientCert:            config.GetBool("mtls"),
+		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
+		TLSCertificatePath:          config.GetString("rpc-tls-certificate-file"),
+		TLSPrivateKeyPath:           config.GetString("rpc-tls-private-key-file"),
 	})
 	healthpb.RegisterHealthServer(server, healthServer)
 	api.RegisterNodeServer(server, rpc.NewNodeRPCServer(cancelCh))
 	rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
 		InsecureSkipVerify:          config.GetBool("insecure"),
+		TLSCertificatePath:          config.GetString("rpc-tls-certificate-file"),
+		TLSPrivateKeyPath:           config.GetString("rpc-tls-private-key-file"),
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
 	remotePublishCh := make(chan *packet.Publish, 20)
