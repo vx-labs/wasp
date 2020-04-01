@@ -20,10 +20,12 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Use: "list-sessions",
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			out, err := api.NewMQTTClient(conn).ListSessionMetadatas(ctx, &api.ListSessionMetadatasRequest{})
 			if err != nil {
 				l.Fatal("failed to list connected sessions", zap.Error(err))
 			}
+			cancel()
 			table := getTable([]string{"ID", "Client ID", "Peer", "Connected Since"}, cmd.OutOrStdout())
 			for _, member := range out.GetSessionMetadatasList() {
 				table.Append([]string{
@@ -44,6 +46,7 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if p := config.GetString("payload"); p != "" {
 				payload = []byte(p)
 			}
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			_, err := api.NewMQTTClient(conn).DistributeMessage(ctx, &api.DistributeMessageRequest{
 				ResolveRemoteRecipients: config.GetBool("resolve-remote-recipients"),
 				Message: &packet.Publish{
@@ -56,6 +59,7 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 					Payload: payload,
 				},
 			})
+			cancel()
 			if err != nil {
 				l.Fatal("failed to distribute message", zap.Error(err))
 			}
