@@ -195,13 +195,22 @@ EOH
       service {
         name = "wasp"
         port = "rpc"
-        tags = ["rpc", "${service_version}"]
+        tags = [
+          "rpc",
+          "${service_version}",
+          "traefik.enable=true",
+          "traefik.tcp.routers.rpc.rule=HostSNI(`rpc.iot.cloud.vx-labs.net`)",
+          "traefik.tcp.routers.rpc.entrypoints=https",
+          "traefik.tcp.routers.rpc.service=rpc",
+          "traefik.tcp.routers.rpc.tls",
+          "traefik.tcp.routers.rpc.tls.passthrough=true",
+        ]
 
         check {
-          type            = "tcp"
-          port            = "rpc"
-          interval        = "30s"
-          timeout         = "2s"
+          type     = "tcp"
+          port     = "rpc"
+          interval = "30s"
+          timeout  = "2s"
         }
       }
       service {
