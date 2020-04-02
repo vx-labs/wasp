@@ -55,8 +55,24 @@ message ListSessionMetadatasRequest {}
 message ListSessionMetadatasResponse {
   repeated SessionMetadatas SessionMetadatasList = 1;
 }
-
+message CreateSubscriptionRequest {
+  string SessionID = 1;
+  uint64 Peer = 2;
+  bytes Pattern = 3;
+  int32 QoS = 4;
+}
+message CreateSubscriptionResponse {}
+message DeleteSubscriptionRequest {
+  string SessionID = 1;
+  uint64 Peer = 2;
+  bytes Pattern = 3;
+}
+message DeleteSubscriptionResponse {}
 service MQTT {
+  rpc DeleteSubscription(DeleteSubscriptionRequest)
+      returns (DeleteSubscriptionResponse) {}
+  rpc CreateSubscription(CreateSubscriptionRequest)
+      returns (CreateSubscriptionResponse) {}
   rpc DistributeMessage(DistributeMessageRequest)
       returns (DistributeMessageResponse) {}
   rpc ListSessionMetadatas(ListSessionMetadatasRequest)

@@ -97,12 +97,15 @@ func (f *FSM) DeleteRetainedMessage(ctx context.Context, topic []byte) error {
 }
 
 func (f *FSM) Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error {
+	return f.SubscribeFrom(ctx, id, f.id, pattern, qos)
+}
+func (f *FSM) SubscribeFrom(ctx context.Context, id string, peer uint64, pattern []byte, qos int32) error {
 	payload, err := encode(&StateTransition{Event: &StateTransition_SessionSubscribed{
 		SessionSubscribed: &SubscriptionCreated{
 			SessionID: id,
 			Pattern:   pattern,
 			Qos:       qos,
-			Peer:      f.id,
+			Peer:      peer,
 		},
 	}})
 	if err != nil {

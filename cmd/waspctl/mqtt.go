@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -72,6 +73,75 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 	distributeMessage.Flags().StringP("topic", "t", "", "Set the Message topic.")
 	distributeMessage.Flags().StringP("payload", "p", "", "Set the Message payload.")
 	distributeMessage.MarkFlagRequired("topic")
+
+	createSubscription := &cobra.Command{
+		Use: "create-subscription",
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			peerIDStr := config.GetString("peer")
+			peerID, err := strconv.ParseUint(peerIDStr, 10, 64)
+			if err != nil {
+				peerID, err = strconv.ParseUint(peerIDStr, 16, 64)
+				if err != nil {
+					l.Fatal("failed to parse peer-id", zap.Error(err))
+				}
+			}
+			_, err = api.NewMQTTClient(conn).CreateSubscription(ctx, &api.CreateSubscriptionRequest{
+				SessionID: config.GetString("session-id"),
+				Pattern:   []byte(config.GetString("pattern")),
+				Peer:      peerID,
+				QoS:       config.GetInt32("qos"),
+			})
+			cancel()
+			if err != nil {
+				l.Fatal("failed to create subscription", zap.Error(err))
+			}
+		},
+	}
+	createSubscription.Flags().Int32P("qos", "q", int32(0), "Set the Subscription's  QoS.")
+	createSubscription.Flags().StringP("session-id", "i", "", "Set the Subscription's session id.")
+	createSubscription.Flags().StringP("pattern", "t", "", "Set the Subscription's pattern.")
+	createSubscription.Flags().StringP("peer", "p", "", "Set the Subscription's Peer.")
+
+	createSubscription.MarkFlagRequired("pattern")
+	createSubscription.MarkFlagRequired("peer")
+	createSubscription.MarkFlagRequired("session-id")
+
+	deleteSubscription := &cobra.Command{
+		Use: "delete-subscription",
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			peerIDStr := config.GetString("peer")
+			peerID, err := strconv.ParseUint(peerIDStr, 10, 64)
+			if err != nil {
+				peerID, err = strconv.ParseUint(peerIDStr, 16, 64)
+				if err != nil {
+					l.Fatal("failed to parse peer-id", zap.Error(err))
+				}
+			}
+			_, err = api.NewMQTTClient(conn).DeleteSubscription(ctx, &api.DeleteSubscriptionRequest{
+				SessionID: config.GetString("session-id"),
+				Pattern:   []byte(config.GetString("pattern")),
+				Peer:      peerID,
+			})
+			cancel()
+			if err != nil {
+				l.Fatal("failed to create subscription", zap.Error(err))
+			}
+		},
+	}
+	deleteSubscription.Flags().StringP("session-id", "i", "", "Set the Subscription's session id.")
+	deleteSubscription.Flags().StringP("pattern", "t", "", "Set the Subscription's pattern.")
+	deleteSubscription.Flags().StringP("peer", "p", "", "Set the Subscription's peer id.")
+
+	deleteSubscription.MarkFlagRequired("pattern")
+	deleteSubscription.MarkFlagRequired("peer")
+	deleteSubscription.MarkFlagRequired("session-id")
+
+	mqtt.AddCommand(createSubscription)
+	mqtt.AddCommand(deleteSubscription)
 	mqtt.AddCommand(distributeMessage)
 	return mqtt
 }

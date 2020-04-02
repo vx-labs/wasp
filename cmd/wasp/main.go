@@ -83,7 +83,8 @@ func run(config *viper.Viper) {
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
 	remotePublishCh := make(chan *packet.Publish, 20)
-	mqttServer := rpc.NewMQTTServer(state, publishes, remotePublishCh)
+	stateMachine := fsm.NewFSM(id, state, commandsCh)
+	mqttServer := rpc.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {
@@ -227,7 +228,6 @@ func run(config *viper.Viper) {
 			wasp.L(ctx).Warn("failed to load state snapshot", zap.Error(err))
 		}
 	}
-	stateMachine := fsm.NewFSM(id, state, commandsCh)
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Info("command publisher stopped")
 		for {

@@ -8,6 +8,15 @@ import (
 	"google.golang.org/grpc"
 )
 
+type FSM interface {
+	RetainedMessage(ctx context.Context, publish *packet.Publish) error
+	DeleteRetainedMessage(ctx context.Context, topic []byte) error
+	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
+	SubscribeFrom(ctx context.Context, id string, peer uint64, pattern []byte, qos int32) error
+	Unsubscribe(ctx context.Context, id string, pattern []byte) error
+	DeleteSessionMetadata(ctx context.Context, id string) error
+	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish) error
+}
 type State interface {
 	ListSessionMetadatas() []*api.SessionMetadatas
 }
@@ -15,10 +24,19 @@ type MqttServer struct {
 	localPublishCh  chan *packet.Publish
 	remotePublishCh chan *packet.Publish
 	state           State
+	fsm             FSM
 }
 
-func NewMQTTServer(state State, localPublishCh, remotePublishCh chan *packet.Publish) *MqttServer {
-	return &MqttServer{state: state, localPublishCh: localPublishCh, remotePublishCh: remotePublishCh}
+func NewMQTTServer(state State, fsm FSM, localPublishCh, remotePublishCh chan *packet.Publish) *MqttServer {
+	return &MqttServer{state: state, fsm: fsm, localPublishCh: localPublishCh, remotePublishCh: remotePublishCh}
+}
+
+func (s *MqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
+	return &api.CreateSubscriptionResponse{}, s.fsm.SubscribeFrom(ctx, r.SessionID, r.Peer, r.Pattern, r.QoS)
+}
+
+func (s *MqttServer) DeleteSubscription(ctx context.Context, r *api.DeleteSubscriptionRequest) (*api.DeleteSubscriptionResponse, error) {
+	return &api.DeleteSubscriptionResponse{}, s.fsm.Unsubscribe(ctx, r.SessionID, r.Pattern)
 }
 
 func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
