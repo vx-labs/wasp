@@ -74,6 +74,27 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 	distributeMessage.Flags().StringP("payload", "p", "", "Set the Message payload.")
 	distributeMessage.MarkFlagRequired("topic")
 
+	listSubscriptions := &cobra.Command{
+		Use: "list-subscriptions",
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			out, err := api.NewMQTTClient(conn).ListSubscriptions(ctx, &api.ListSubscriptionsRequest{})
+			cancel()
+			if err != nil {
+				l.Fatal("failed to list subscriptions", zap.Error(err))
+			}
+			table := getTable([]string{"Client ID", "Peer", "Pattern", "QoS"}, cmd.OutOrStdout())
+			for _, member := range out.GetSubscriptions() {
+				table.Append([]string{
+					member.GetSessionID(),
+					fmt.Sprintf("%x", member.GetPeer()),
+					string(member.GetPattern()),
+					fmt.Sprintf("%x", member.GetQoS())})
+			}
+			table.Render()
+		},
+	}
 	createSubscription := &cobra.Command{
 		Use: "create-subscription",
 		Run: func(cmd *cobra.Command, _ []string) {
@@ -97,6 +118,8 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if err != nil {
 				l.Fatal("failed to create subscription", zap.Error(err))
 			}
+			fmt.Printf("subscribed %s:%s to %s (qos %v)\n",
+				config.GetString("peer"), config.GetString("session-id"), config.GetString("pattern"), config.GetInt32("qos"))
 		},
 	}
 	createSubscription.Flags().Int32P("qos", "q", int32(0), "Set the Subscription's  QoS.")
@@ -140,6 +163,7 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 	deleteSubscription.MarkFlagRequired("peer")
 	deleteSubscription.MarkFlagRequired("session-id")
 
+	mqtt.AddCommand(listSubscriptions)
 	mqtt.AddCommand(createSubscription)
 	mqtt.AddCommand(deleteSubscription)
 	mqtt.AddCommand(distributeMessage)

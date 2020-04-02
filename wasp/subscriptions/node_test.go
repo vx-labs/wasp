@@ -59,3 +59,20 @@ func TestTree_RemovePeer(t *testing.T) {
 	require.NoError(t, myTree.Insert(3, []byte("test/b/c"), 1, "test4"))
 	require.Equal(t, 2, myTree.RemovePeer(3))
 }
+func TestTree_List(t *testing.T) {
+	myTree := &tree{
+		root: newNode(),
+	}
+	recipientIds := []string{}
+	recipientQos := []int32{}
+	recipientPeers := []uint64{}
+	recipientPattern := [][]byte{}
+
+	require.NoError(t, myTree.Insert(1, []byte("test/a"), 1, "test"))
+	require.NoError(t, myTree.Insert(1, []byte("test/b"), 1, "test2"))
+	require.NoError(t, myTree.Insert(3, []byte("test/b/c"), 1, "test3"))
+	require.NoError(t, myTree.Insert(3, []byte("test/b/c"), 1, "test4"))
+	require.NoError(t, myTree.List(&recipientPattern, &recipientPeers, &recipientIds, &recipientQos))
+	require.Equal(t, 4, len(recipientPattern))
+	require.Contains(t, recipientPattern, []byte("test/b"))
+}

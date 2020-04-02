@@ -2,6 +2,7 @@ package subscriptions
 
 //go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/wasp/subscriptions/ --go_out=plugins=grpc:. subscriptions.proto
 import (
+	"bytes"
 	"errors"
 	"sync"
 
@@ -25,6 +26,7 @@ type Tree interface {
 	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
 	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
+	List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
 	RemovePeer(peer uint64) int
 	RemoveSession(id string) int
 	Dump() ([]byte, error)
@@ -92,8 +94,20 @@ func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]i
 
 	*subs = (*subs)[0:0]
 	*qoss = (*qoss)[0:0]
+	*peers = (*peers)[0:0]
 
 	return this.root.match(topic, peers, subs, qoss)
+}
+func (this *tree) List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
+	this.mtx.RLock()
+	defer this.mtx.RUnlock()
+
+	*subs = (*subs)[0:0]
+	*qoss = (*qoss)[0:0]
+	*peers = (*peers)[0:0]
+	*topics = (*topics)[0:0]
+
+	return this.root.list(nil, topics, peers, subs, qoss)
 }
 
 func newNode() *Node {
@@ -248,6 +262,27 @@ func (this *Node) match(topic format.Topic, peers *[]uint64, subs *[]string, qos
 				return err
 			}
 		}
+	}
+
+	return nil
+}
+func (this *Node) list(key []byte, topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
+	this.appendRecipents(peers, subs, qoss)
+	for i := 0; i < len(this.Recipients); i++ {
+		*topics = append(*topics, key)
+	}
+	for k, n := range this.Children {
+		if len(key) > 0 {
+			key := bytes.Join([][]byte{key, []byte(k)}, []byte("/"))
+			if err := n.list(key, topics, peers, subs, qoss); err != nil {
+				return err
+			}
+		} else {
+			if err := n.list([]byte(k), topics, peers, subs, qoss); err != nil {
+				return err
+			}
+		}
+
 	}
 
 	return nil

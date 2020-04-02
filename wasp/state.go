@@ -2,6 +2,7 @@ package wasp
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -14,6 +15,7 @@ import (
 
 type ReadState interface {
 	Recipients(topic []byte) ([]uint64, []string, []int32, error)
+	ListSubscriptions() ([][]byte, []uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
 	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
@@ -172,6 +174,9 @@ func (s *state) MarshalBinary() ([]byte, error) {
 	return json.Marshal(dump)
 }
 func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) error {
+	if s.sessionsMetadatas.ByID(id) == nil {
+		return errors.New("session not found")
+	}
 	err := s.subscriptions.Insert(peer, pattern, qos, id)
 	if err == nil {
 		stats.Gauge("subscriptionsCount").Inc()
@@ -229,6 +234,14 @@ func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {
 	recipientQos := []int32{}
 	recipientPeer := []uint64{}
 	return recipientPeer, recipients, recipientQos, s.subscriptions.Match(topic, &recipientPeer, &recipients, &recipientQos)
+}
+
+func (s *state) ListSubscriptions() ([][]byte, []uint64, []string, []int32, error) {
+	recipients := []string{}
+	recipientQos := []int32{}
+	recipientPeer := []uint64{}
+	recipientPatterns := [][]byte{}
+	return recipientPatterns, recipientPeer, recipients, recipientQos, s.subscriptions.List(&recipientPatterns, &recipientPeer, &recipients, &recipientQos)
 }
 
 func (s *state) GetSession(id string) *sessions.Session {

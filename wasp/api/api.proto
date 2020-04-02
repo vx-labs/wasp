@@ -68,7 +68,13 @@ message DeleteSubscriptionRequest {
   bytes Pattern = 3;
 }
 message DeleteSubscriptionResponse {}
+message ListSubscriptionsResponse {
+  repeated CreateSubscriptionRequest Subscriptions = 1;
+}
+message ListSubscriptionsRequest {}
 service MQTT {
+  rpc ListSubscriptions(ListSubscriptionsRequest)
+      returns (ListSubscriptionsResponse) {}
   rpc DeleteSubscription(DeleteSubscriptionRequest)
       returns (DeleteSubscriptionResponse) {}
   rpc CreateSubscription(CreateSubscriptionRequest)

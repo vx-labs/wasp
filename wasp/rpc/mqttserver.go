@@ -19,6 +19,7 @@ type FSM interface {
 }
 type State interface {
 	ListSessionMetadatas() []*api.SessionMetadatas
+	ListSubscriptions() ([][]byte, []uint64, []string, []int32, error)
 }
 type MqttServer struct {
 	localPublishCh  chan *packet.Publish
@@ -32,11 +33,28 @@ func NewMQTTServer(state State, fsm FSM, localPublishCh, remotePublishCh chan *p
 }
 
 func (s *MqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
-	return &api.CreateSubscriptionResponse{}, s.fsm.SubscribeFrom(ctx, r.SessionID, r.Peer, r.Pattern, r.QoS)
+	err := s.fsm.SubscribeFrom(ctx, r.SessionID, r.Peer, r.Pattern, r.QoS)
+	return &api.CreateSubscriptionResponse{}, err
 }
 
 func (s *MqttServer) DeleteSubscription(ctx context.Context, r *api.DeleteSubscriptionRequest) (*api.DeleteSubscriptionResponse, error) {
 	return &api.DeleteSubscriptionResponse{}, s.fsm.Unsubscribe(ctx, r.SessionID, r.Pattern)
+}
+func (s *MqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscriptionsRequest) (*api.ListSubscriptionsResponse, error) {
+	patterns, peers, sessions, qoss, err := s.state.ListSubscriptions()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*api.CreateSubscriptionRequest, len(peers))
+	for idx := range out {
+		out[idx] = &api.CreateSubscriptionRequest{
+			SessionID: sessions[idx],
+			Pattern:   patterns[idx],
+			Peer:      peers[idx],
+			QoS:       qoss[idx],
+		}
+	}
+	return &api.ListSubscriptionsResponse{Subscriptions: out}, nil
 }
 
 func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
