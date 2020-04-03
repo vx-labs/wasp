@@ -33,6 +33,9 @@ func (mesh *Gossip) WaitForNodes(ctx context.Context, expectedNumber int, localC
 				if err != nil {
 					continue
 				}
+				if md.ClusterName != "wasp" {
+					continue
+				}
 				conn, err := rpcDialer(md.RPCAddress)
 				if err != nil {
 					continue
@@ -54,6 +57,9 @@ func (mesh *Gossip) WaitForNodes(ctx context.Context, expectedNumber int, localC
 					md, err := DecodeMD(nodes[idx].Meta)
 					if err != nil {
 						return nil, err
+					}
+					if md.ClusterName != "wasp" {
+						continue
 					}
 					peers[idx] = raft.Peer{Address: md.RPCAddress, ID: md.ID}
 				}
