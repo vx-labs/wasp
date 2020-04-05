@@ -288,15 +288,36 @@ func run(config *viper.Viper) {
 	})
 	if remote := config.GetString("syslog-tap-address"); remote != "" {
 		async.Run(ctx, &wg, func(ctx context.Context) {
-			tap, err := taps.Syslog(remote)
+			tap, err := taps.Syslog(ctx, remote)
 			if err != nil {
 				wasp.L(ctx).Warn("failed to start syslog tap", zap.Error(err))
 				return
 			}
 			defer wasp.L(ctx).Info("syslog tap stopped")
+			wasp.L(ctx).Debug("syslog tap started")
 			err = taps.Run(ctx, messageLog, tap)
 			if err != nil {
 				wasp.L(ctx).Info("syslog tap failed", zap.Error(err))
+			}
+		})
+	}
+	if target := config.GetString("nest-tap-address"); target != "" {
+		async.Run(ctx, &wg, func(ctx context.Context) {
+			remote, err := rpcDialer(target)
+			if err != nil {
+				wasp.L(ctx).Warn("failed to dial nest tap", zap.Error(err))
+				return
+			}
+			tap, err := taps.Nest(remote)
+			if err != nil {
+				wasp.L(ctx).Warn("failed to start nest tap", zap.Error(err))
+				return
+			}
+			defer wasp.L(ctx).Info("nest tap stopped")
+			wasp.L(ctx).Debug("nest tap started")
+			err = taps.Run(ctx, messageLog, tap)
+			if err != nil {
+				wasp.L(ctx).Info("nest tap failed", zap.Error(err))
 			}
 		})
 	}
