@@ -25,10 +25,11 @@ require (
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v1.5.1
-	github.com/spf13/cobra v0.0.5
-	github.com/spf13/viper v1.3.2
+	github.com/spf13/cobra v0.0.7
+	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.5.1
 	github.com/vx-labs/mqtt-protocol v4.3.4+incompatible
+	github.com/vx-labs/nest v0.0.0-20200403154954-01b69396ad2a
 	go.etcd.io/etcd v0.0.0-20200319002442-e784ba73c229
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20191106202628-ed6320f186d4
