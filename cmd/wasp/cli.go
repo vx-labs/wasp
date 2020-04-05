@@ -130,6 +130,8 @@ func main() {
 	cmd.Flags().String("rpc-tls-certificate-authority-file", "", "x509 certificate authority used by RPC Server.")
 	cmd.Flags().String("rpc-tls-certificate-file", "", "x509 certificate used by RPC Server.")
 	cmd.Flags().String("rpc-tls-private-key-file", "", "Private key used by RPC Server.")
+
+	cmd.Flags().String("syslog-tap-address", "", "Syslog address to send a copy of all message published")
 	cmd.AddCommand(TLSHelper(config))
 	cmd.Execute()
 }

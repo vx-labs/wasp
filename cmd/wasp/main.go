@@ -24,6 +24,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/raft"
 	"github.com/vx-labs/wasp/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/vx-labs/wasp/wasp/taps"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -285,6 +286,20 @@ func run(config *viper.Viper) {
 			}
 		}
 	})
+	if remote := config.GetString("syslog-tap-address"); remote != "" {
+		async.Run(ctx, &wg, func(ctx context.Context) {
+			tap, err := taps.Syslog(remote)
+			if err != nil {
+				wasp.L(ctx).Warn("failed to start syslog tap", zap.Error(err))
+				return
+			}
+			defer wasp.L(ctx).Info("syslog tap stopped")
+			err = taps.Run(ctx, messageLog, tap)
+			if err != nil {
+				wasp.L(ctx).Info("syslog tap failed", zap.Error(err))
+			}
+		})
+	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Info("publish processor stopped")
 		messageLog.Consume(ctx, func(p *packet.Publish) {
