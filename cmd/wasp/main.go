@@ -13,6 +13,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/boltdb/bolt"
+	"github.com/vx-labs/wasp/wasp/messages"
+
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/vaultacme"
@@ -269,7 +272,14 @@ func run(config *viper.Viper) {
 			}
 		}
 	})
-	messageLog, err := wasp.NewMessageLog(ctx, config.GetString("data-dir"))
+	messageLog, err := messages.New(messages.Options{
+		Path: config.GetString("data-dir"),
+		BoltOptions: &bolt.Options{
+			Timeout:         0,
+			InitialMmapSize: 256 * 1000 * 1000,
+			ReadOnly:        false,
+		},
+	})
 	if err != nil {
 		panic(err)
 	}
@@ -277,6 +287,7 @@ func run(config *viper.Viper) {
 		defer wasp.L(ctx).Info("message log gc runner stopped")
 		ticker := time.NewTicker(5 * time.Minute)
 		defer ticker.Stop()
+		messageLog.GC()
 		for {
 			select {
 			case <-ctx.Done():
