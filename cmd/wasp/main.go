@@ -323,11 +323,12 @@ func run(config *viper.Viper) {
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Info("publish processor stopped")
-		messageLog.Consume(ctx, func(p *packet.Publish) {
+		messageLog.Consume(ctx, 0, func(p *packet.Publish) error {
 			err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, true, p)
 			if err != nil {
 				wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 			}
+			return err
 		})
 	})
 	async.Run(ctx, &wg, func(ctx context.Context) {

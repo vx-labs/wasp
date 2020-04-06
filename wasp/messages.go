@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/binary"
 	"io"
+	"log"
 	"path"
 	"time"
 
 	"github.com/dgraph-io/badger"
 	"github.com/dgraph-io/badger/pb"
-	"github.com/golang/protobuf/proto"
+	"github.com/gogo/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"go.uber.org/zap"
 )
@@ -23,7 +24,7 @@ var (
 type MessageLog interface {
 	io.Closer
 	Append(b [][]byte) (err error)
-	Consume(context.Context, func(*packet.Publish)) error
+	Consume(context.Context, uint64, func(*packet.Publish) error) error
 	GC()
 }
 
@@ -87,7 +88,7 @@ func (s *messageLog) Append(b [][]byte) error {
 		if err != nil {
 			return err
 		}
-		entry := badger.NewEntry(int64ToBytes(uint64(offset)), b[idx]).WithTTL(2 * time.Hour)
+		entry := badger.NewEntry(int64ToBytes(offset), b[idx]).WithTTL(2 * time.Hour)
 		err = tx.SetEntry(entry)
 		if err != nil {
 			return err
@@ -106,16 +107,55 @@ func int64ToBytes(u uint64) []byte {
 	return buf
 }
 
-func (s *messageLog) Consume(ctx context.Context, f func(*packet.Publish)) error {
-	return s.db.Subscribe(ctx, func(list *pb.KVList) error {
+func (s *messageLog) GetRecords(ctx context.Context, fromOffset uint64, f func(*packet.Publish) error) (uint64, error) {
+	stream := s.db.NewStream()
+	stream.Prefix = []byte{0}
+	stream.ChooseKey = func(item *badger.Item) bool {
+		return fromOffset < bytesToInt64(item.Key())
+	}
+	var lastRecord uint64 = fromOffset
+	stream.Send = func(list *pb.KVList) error {
 		for _, kv := range list.Kv {
-			value := &packet.Publish{}
-			err := proto.Unmarshal(kv.GetValue(), value)
+			record := &packet.Publish{}
+			err := proto.Unmarshal(kv.Value, record)
 			if err != nil {
-				continue
+				return err
 			}
-			f(value)
+
+			err = f(record)
+			if err != nil {
+				return err
+			}
+			lastRecord = bytesToInt64(kv.Key)
 		}
 		return nil
-	}, []byte{0})
+	}
+	err := stream.Orchestrate(ctx)
+	return lastRecord, err
+}
+
+func (s *messageLog) Consume(ctx context.Context, fromOffset uint64, f func(*packet.Publish) error) error {
+	notifications := make(chan struct{}, 1)
+
+	notifications <- struct{}{}
+	defer close(notifications)
+
+	go func() {
+		var lastSeen uint64 = fromOffset
+		var err error
+		for range notifications {
+			lastSeen, err = s.GetRecords(ctx, lastSeen, f)
+			if err != nil {
+				log.Print(err) // TODO: use logger
+			}
+		}
+	}()
+
+	return s.db.Subscribe(ctx, func(list *pb.KVList) error {
+		select {
+		case notifications <- struct{}{}:
+		default:
+		}
+		return nil
+	}, nil)
 }
