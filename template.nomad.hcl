@@ -35,6 +35,7 @@ job "wasp" {
       driver = "docker"
 
       env {
+        HTTPS_PROXY="http://http.proxy.discovery.fr-par.vx-labs.net:3128"
         CONSUL_HTTP_ADDR = "$${NOMAD_IP_rpc}:8500"
         VAULT_ADDR       = "http://active.vault.service.consul:8200/"
       }
@@ -122,7 +123,8 @@ EOH
           "--metrics-port", "8089",
           "--tls-cn", "broker.iot.cloud.vx-labs.net",
           "--raft-advertized-address", "$${NOMAD_IP_rpc}", "--raft-advertized-port", "$${NOMAD_HOST_PORT_rpc}",
-          "--serf-advertized-address", "$${NOMAD_IP_gossip}", "--serf-advertized-port", "$${NOMAD_HOST_PORT_gossip}"
+          "--serf-advertized-address", "$${NOMAD_IP_gossip}", "--serf-advertized-port", "$${NOMAD_HOST_PORT_gossip}",
+          "--nest-tap-address", "messages.iot.cloud.vx-labs.net:443"
         ]
         force_pull = true
 

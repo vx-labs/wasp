@@ -282,6 +282,13 @@ func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
 
 // stop closes http, closes all channels, and stops raft.
 func (rc *RaftNode) Apply(ctx context.Context, buf []byte) error {
+	if rc.node == nil {
+		select {
+		case <-rc.Ready():
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
 	return rc.node.Propose(ctx, buf)
 }
 

@@ -3,15 +3,21 @@ package wasp
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
+
+type MessageLog interface {
+	io.Closer
+	Append(b []*packet.Publish) error
+	Consume(ctx context.Context, from uint64, f func(*packet.Publish) error) error
+}
 
 func getLowerQos(a, b int32) int32 {
 	if a > b {
@@ -85,15 +91,7 @@ func ProcessPublish(ctx context.Context, id uint64, transport Membership, fsm FS
 	return nil
 }
 func StorePublish(messageLog MessageLog, p []*packet.Publish) error {
-	buf := make([][]byte, len(p))
-	for idx := range buf {
-		payload, err := proto.Marshal(p[idx])
-		if err != nil {
-			return err
-		}
-		buf[idx] = payload
-	}
-	err := messageLog.Append(buf)
+	err := messageLog.Append(p)
 	if err != nil {
 		return err
 	}
