@@ -325,6 +325,8 @@ github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljT
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/vx-labs/mqtt-protocol v4.3.4+incompatible h1:NesXLbaGnLEMneifJq+Phlv/YR6UNqgrbaUr1pUXlHU=
 github.com/vx-labs/mqtt-protocol v4.3.4+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
+github.com/vx-labs/mqtt-protocol v4.3.5+incompatible h1:Oy6G1b8dVjtnWdiYtAhe7oFyv56c9WYnf8ErXddN7fQ=
+github.com/vx-labs/mqtt-protocol v4.3.5+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
 github.com/vx-labs/nest v0.0.0-20200403154954-01b69396ad2a h1:Ckz8wgHUsDFnVVgi4xxFYpD6zkVnJoUcdoJjw8pO1tU=
 github.com/vx-labs/nest v0.0.0-20200403154954-01b69396ad2a/go.mod h1:+5AL0hn2u12E+W53UUzRWeBJLInV0YYTQ+Wdx6W8Gjk=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=

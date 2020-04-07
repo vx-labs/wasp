@@ -22,7 +22,7 @@ require (
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.5.1
-	github.com/vx-labs/mqtt-protocol v4.3.4+incompatible
+	github.com/vx-labs/mqtt-protocol v4.3.5+incompatible
 	github.com/vx-labs/nest v0.0.0-20200403154954-01b69396ad2a
 	go.etcd.io/etcd v0.0.0-20200319002442-e784ba73c229
 	go.uber.org/zap v1.14.1
