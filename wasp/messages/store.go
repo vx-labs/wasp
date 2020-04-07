@@ -214,24 +214,29 @@ func (b *messageLog) Consume(ctx context.Context, fromOffset uint64, f func(*pac
 	var err error
 	b.subscribe(id, notifications)
 	for range notifications {
-		count, next, err := b.Get(lastSeen, buf)
-		if err != nil {
-			return err
-		}
-		for _, p := range buf[0:count] {
-			err = f(p)
+		for {
+			count, next, err := b.Get(lastSeen, buf)
 			if err != nil {
-				log.Print(err)
-				select {
-				case <-time.After(5 * time.Second):
-				case <-ctx.Done():
-					return nil
+				return err
+			}
+			for _, p := range buf[0:count] {
+				err = f(p)
+				if err != nil {
+					log.Print(err)
+					select {
+					case <-time.After(5 * time.Second):
+					case <-ctx.Done():
+						return nil
+					}
+					break
 				}
+				lastSeen++
+			}
+			lastSeen = next
+			if count < len(buf) {
 				break
 			}
-			lastSeen++
 		}
-		lastSeen = next
 	}
 	return err
 }
