@@ -18,13 +18,14 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster/membership"
+	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/async"
 	"github.com/vx-labs/wasp/wasp/fsm"
-	"github.com/vx-labs/wasp/wasp/membership"
-	"github.com/vx-labs/wasp/wasp/raft"
 	"github.com/vx-labs/wasp/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/taps"
@@ -158,7 +159,7 @@ func run(config *viper.Viper) {
 		peers := raft.Peers{}
 		if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
 			wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-			peers, err = mesh.WaitForNodes(ctx, expectedCount, api.RaftContext{
+			peers, err = mesh.WaitForNodes(ctx, expectedCount, cluster.RaftContext{
 				ID:      id,
 				Address: rpcAddress,
 			}, rpcDialer)
@@ -194,7 +195,7 @@ func run(config *viper.Viper) {
 						for _, peer := range peers {
 							ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 							err := mesh.Call(peer.ID, func(c *grpc.ClientConn) error {
-								_, err = api.NewRaftClient(c).JoinCluster(ctx, &api.RaftContext{
+								_, err = cluster.NewRaftClient(c).JoinCluster(ctx, &cluster.RaftContext{
 									ID:      id,
 									Address: rpcAddress,
 								})

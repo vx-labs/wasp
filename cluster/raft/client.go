@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/stats"
+	api "github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster/stats"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"

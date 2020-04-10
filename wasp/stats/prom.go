@@ -41,11 +41,6 @@ var (
 		}),
 	}
 	histograms map[string]prometheus.Histogram = map[string]prometheus.Histogram{
-		"raftLoopProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
-			Name:    "wasp_raft_loop_processing_time_milliseconds",
-			Help:    "The time elapsed processing Raft events.",
-			Buckets: []float64{0.5, 1, 5, 50, 100},
-		}),
 		"publishLocalProcessingTime": prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
 			Name:    "wasp_publish_packets_local_processing_time_milliseconds",
 			Help:    "The time elapsed resolving recipients and distributing MQTT publish messages.",
@@ -63,11 +58,6 @@ var (
 			Help:    "The time elapsed handling session MQTT packets.",
 			Buckets: []float64{0.001, 0.01, 0.1, 1, 50, 5000},
 		}, []string{"packet_type"}),
-		"raftRPCHandling": prometheusMetricsFactory.NewHistogramVec(prometheus.HistogramOpts{
-			Name:    "wasp_raft_rpc_time_miliseconds",
-			Help:    "The time elasped calling raft RPCs.",
-			Buckets: []float64{0.1, 5, 50},
-		}, []string{"message_type", "result"}),
 	}
 )
 

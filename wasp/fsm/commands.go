@@ -6,7 +6,7 @@ import (
 
 	"github.com/gogo/protobuf/proto"
 	packet "github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/raft"
+	"github.com/vx-labs/wasp/cluster/raft"
 )
 
 type State interface {

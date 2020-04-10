@@ -12,8 +12,9 @@ import (
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/prometheus/client_golang/prometheus"
+	api "github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster/stats"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/fileutil"
 	"go.etcd.io/etcd/raft"
@@ -23,6 +24,12 @@ import (
 
 	"go.uber.org/zap"
 )
+
+type StatsProvider interface {
+	Histogram(name string) *prometheus.Histogram
+}
+
+type StatsProviderGetter func() StatsProvider
 
 type Command struct {
 	Ctx     context.Context

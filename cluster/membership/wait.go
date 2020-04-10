@@ -5,8 +5,8 @@ import (
 	"errors"
 	"time"
 
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/raft"
+	api "github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/wasp/rpc"
 )
 
