@@ -58,7 +58,7 @@ func (mesh *Gossip) WaitForNodes(ctx context.Context, clusterName string, expect
 					if err != nil {
 						return nil, err
 					}
-					if md.ClusterName != "wasp" {
+					if md.ClusterName != clusterName {
 						continue
 					}
 					peers[idx] = raft.Peer{Address: md.RPCAddress, ID: md.ID}
