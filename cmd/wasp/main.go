@@ -97,6 +97,7 @@ func run(config *viper.Viper) {
 	}
 	mesh := membership.New(
 		id,
+		"wasp",
 		config.GetInt("serf-port"),
 		config.GetString("serf-advertized-address"),
 		config.GetInt("serf-advertized-port"),
@@ -106,6 +107,7 @@ func run(config *viper.Viper) {
 	)
 	rpcAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
 	mesh.UpdateMetadata(membership.EncodeMD(id,
+		"wasp",
 		rpcAddress,
 	))
 	joinList := config.GetStringSlice("join-node")
@@ -159,7 +161,7 @@ func run(config *viper.Viper) {
 		peers := raft.Peers{}
 		if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
 			wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-			peers, err = mesh.WaitForNodes(ctx, expectedCount, cluster.RaftContext{
+			peers, err = mesh.WaitForNodes(ctx, "wasp", expectedCount, cluster.RaftContext{
 				ID:      id,
 				Address: rpcAddress,
 			}, rpcDialer)

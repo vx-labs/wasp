@@ -12,11 +12,11 @@ func DecodeMD(buf []byte) (MemberMetadata, error) {
 	md := MemberMetadata{}
 	return md, json.Unmarshal(buf, &md)
 }
-func EncodeMD(id uint64, rpcAddress string) []byte {
+func EncodeMD(id uint64, clusterName string, rpcAddress string) []byte {
 	md := MemberMetadata{
 		ID:          id,
 		RPCAddress:  rpcAddress,
-		ClusterName: "wasp",
+		ClusterName: clusterName,
 	}
 	p, _ := json.Marshal(md)
 	return p

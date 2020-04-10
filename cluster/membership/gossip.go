@@ -92,14 +92,14 @@ func (self *Gossip) MemberCount() int {
 	return self.mlist.NumMembers()
 }
 
-func New(id uint64, port int, advertiseAddr string, advertisePort, rpcPort int, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), logger *zap.Logger) *Gossip {
+func New(id uint64, clusterName string, port int, advertiseAddr string, advertisePort, rpcPort int, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), logger *zap.Logger) *Gossip {
 	idBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(idBuf, id)
 	idstr := string(idBuf)
 	self := &Gossip{
 		id:                id,
 		peers:             make(map[uint64]*Peer),
-		meta:              EncodeMD(id, fmt.Sprintf("%s:%d", advertiseAddr, rpcPort)),
+		meta:              EncodeMD(id, clusterName, fmt.Sprintf("%s:%d", advertiseAddr, rpcPort)),
 		rpcDialer:         dialer,
 		logger:            logger,
 		healthcheckerDone: make(chan struct{}),
