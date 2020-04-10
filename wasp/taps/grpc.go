@@ -4,17 +4,15 @@ import (
 	"context"
 	"time"
 
-	"github.com/vx-labs/wasp/wasp/taps/api"
-
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"google.golang.org/grpc"
 )
 
 func GRPC(remote *grpc.ClientConn) (Tap, error) {
-	client := api.NewTapClient(remote)
+	client := NewTapClient(remote)
 	return func(ctx context.Context, p *packet.Publish) error {
-		_, err := client.PutRecords(ctx, &api.PutRecordsRequest{
-			Records: []*api.Record{
+		_, err := client.PutWaspRecords(ctx, &PutWaspRecordRequest{
+			WaspRecords: []*WaspRecord{
 				{
 					Timestamp: time.Now().UnixNano(),
 					Topic:     p.Topic,

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package taps;
+
+message WaspRecord {
+  int64 Timestamp = 1;
+  bytes Topic = 2;
+  bytes Payload = 3;
+}
+
+message PutWaspRecordRequest { repeated WaspRecord WaspRecords = 1; }
+message PutWaspRecordsResponse {}
+
+service Tap {
+  rpc PutWaspRecords(PutWaspRecordRequest) returns (PutWaspRecordsResponse) {}
+}
