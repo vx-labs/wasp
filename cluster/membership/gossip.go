@@ -11,7 +11,6 @@ import (
 
 	"github.com/hashicorp/memberlist"
 	api "github.com/vx-labs/wasp/cluster"
-	"github.com/vx-labs/wasp/wasp/rpc"
 	"google.golang.org/grpc"
 
 	"go.uber.org/zap"
@@ -28,7 +27,7 @@ type Gossip struct {
 	healthcheckerCtx    context.Context
 	healthcheckerCancel context.CancelFunc
 	healthcheckerDone   chan struct{}
-	rpcDialer           rpc.Dialer
+	rpcDialer           func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
 	peers               map[uint64]*Peer
 	mlist               *memberlist.Memberlist
 	logger              *zap.Logger
@@ -93,7 +92,7 @@ func (self *Gossip) MemberCount() int {
 	return self.mlist.NumMembers()
 }
 
-func New(id uint64, port int, advertiseAddr string, advertisePort, rpcPort int, dialer rpc.Dialer, logger *zap.Logger) *Gossip {
+func New(id uint64, port int, advertiseAddr string, advertisePort, rpcPort int, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), logger *zap.Logger) *Gossip {
 	idBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(idBuf, id)
 	idstr := string(idBuf)

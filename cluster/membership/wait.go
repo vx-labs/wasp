@@ -7,7 +7,7 @@ import (
 
 	api "github.com/vx-labs/wasp/cluster"
 	"github.com/vx-labs/wasp/cluster/raft"
-	"github.com/vx-labs/wasp/wasp/rpc"
+	"google.golang.org/grpc"
 )
 
 var (
@@ -18,7 +18,7 @@ type MemberlistMemberProvider interface {
 	Members() []api.RaftContext
 }
 
-func (mesh *Gossip) WaitForNodes(ctx context.Context, expectedNumber int, localContext api.RaftContext, rpcDialer rpc.Dialer) ([]raft.Peer, error) {
+func (mesh *Gossip) WaitForNodes(ctx context.Context, expectedNumber int, localContext api.RaftContext, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)
