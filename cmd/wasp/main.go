@@ -307,7 +307,7 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Warn("failed to dial nest tap", zap.Error(err))
 				return
 			}
-			tap, err := taps.Nest(remote)
+			tap, err := taps.GRPC(remote)
 			if err != nil {
 				wasp.L(ctx).Warn("failed to start nest tap", zap.Error(err))
 				return

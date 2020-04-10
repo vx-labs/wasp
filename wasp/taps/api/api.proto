@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package api;
+
+message Record {
+  int64 Timestamp = 1;
+  bytes Topic = 2;
+  bytes Payload = 3;
+}
+
+message PutRecordsRequest { repeated Record Records = 1; }
+message PutRecordsResponse {}
+
+service Tap {
+  rpc PutRecords(PutRecordsRequest) returns (PutRecordsResponse) {}
+}
