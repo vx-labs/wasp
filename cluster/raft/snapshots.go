@@ -31,7 +31,10 @@ func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.S
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
 	rc.appliedIndex = snapshotToSave.Metadata.Index
 	select {
-	case rc.commitC <- nil:
+	case rc.commitC <- Commit{
+		Index:   snapshotToSave.Metadata.Index,
+		Payload: nil,
+	}:
 	case <-ctx.Done():
 		return
 	}

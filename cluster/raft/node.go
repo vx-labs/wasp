@@ -62,14 +62,13 @@ type Membership interface {
 	Members() []*api.Member
 }
 
-// A key-value stream backed by raft
 type RaftNode struct {
 	id                  uint64 // client ID for raft session
 	address             string
 	currentLeader       uint64
 	hasLeader           bool
 	hasBeenBootstrapped bool
-	commitC             chan []byte // entries committed to log (k,v)
+	commitC             chan Commit
 	msgSnapC            chan raftpb.Message
 	logger              *zap.Logger
 	waldir              string // path to WAL directory
@@ -100,6 +99,11 @@ type Config struct {
 	GetSnapshot func() ([]byte, error)
 }
 
+type Commit struct {
+	Index   uint64
+	Payload []byte
+}
+
 // NewNode initiates a raft instance and returns a committed log entry
 // channel and error channel. Proposals for log updates are sent over the
 // provided the proposal channel. All log entries are replayed over the
@@ -110,7 +114,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	id := config.NodeID
 	datadir := config.DataDir
 	getSnapshot := config.GetSnapshot
-	commitC := make(chan []byte)
+	commitC := make(chan Commit)
 
 	rc := &RaftNode{
 		id:               id,
@@ -157,7 +161,7 @@ func (rc *RaftNode) IsRemovedFromCluster() bool {
 func (rc *RaftNode) Ready() <-chan struct{} {
 	return rc.ready
 }
-func (rc *RaftNode) Commits() <-chan []byte {
+func (rc *RaftNode) Commits() <-chan Commit {
 	return rc.commitC
 }
 func (rc *RaftNode) Snapshotter() <-chan *snap.Snapshotter {
@@ -208,9 +212,11 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			if len(ents[i].Data) == 0 {
 				break
 			}
-			s := ents[i].Data
 			select {
-			case rc.commitC <- s:
+			case rc.commitC <- Commit{
+				Index:   ents[i].Index,
+				Payload: ents[i].Data,
+			}:
 			case <-ctx.Done():
 				return ctx.Err()
 			}
