@@ -185,20 +185,6 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 	return rc.wal.ReleaseLockTo(snap.Metadata.Index)
 }
 
-func (rc *RaftNode) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
-	if len(ents) == 0 {
-		return ents
-	}
-	firstIdx := ents[0].Index
-	if firstIdx > rc.appliedIndex+1 {
-		log.Fatalf("first index of committed entry[%d] should <= progress.appliedIndex[%d]+1", firstIdx, rc.appliedIndex)
-	}
-	if rc.appliedIndex-firstIdx+1 < uint64(len(ents)) {
-		nents = ents[rc.appliedIndex-firstIdx+1:]
-	}
-	return nents
-}
-
 func (rc *RaftNode) IsLeader() bool {
 	return rc.currentLeader == rc.id
 }
@@ -351,7 +337,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.raftStorage.Append(rd.Entries)
 			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Messages))
-			if err := rc.publishEntries(ctx, rc.entriesToApply(rd.CommittedEntries)); err != nil {
+			if err := rc.publishEntries(ctx, rd.CommittedEntries); err != nil {
 				if err != context.Canceled {
 					rc.logger.Error("failed to publish raft entries", zap.Error(err))
 				}
