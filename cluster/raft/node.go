@@ -244,10 +244,10 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 	return nil
 }
 
-func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool) {
-	rc.start(ctx, peers, join)
+func (rc *RaftNode) Run(ctx context.Context, applied uint64, peers []Peer, join bool) {
+	rc.start(ctx, applied, peers, join)
 }
-func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
+func (rc *RaftNode) start(ctx context.Context, applied uint64, peers []Peer, join bool) {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL(rc.logger)
 
@@ -269,6 +269,7 @@ func (rc *RaftNode) start(ctx context.Context, peers []Peer, join bool) {
 		MaxSizePerMsg:             1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
+		Applied:                   applied,
 	}
 	rc.logger.Debug("starting raft state machine")
 	if oldwal || join {

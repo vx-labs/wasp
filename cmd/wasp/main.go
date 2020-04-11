@@ -222,7 +222,7 @@ func run(config *viper.Viper) {
 				return
 			}
 		}()
-		raftNode.Run(ctx, peers, join)
+		raftNode.Run(ctx, 0, peers, join)
 	})
 	snapshotter := <-raftNode.Snapshotter()
 
