@@ -61,8 +61,6 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 	rc.raftStorage.Append(ents)
 	if len(ents) > 0 {
 		rc.lastIndex = ents[len(ents)-1].Index
-	} else {
-		close(rc.ready)
 	}
 	return w
 }

@@ -270,6 +270,9 @@ func (rc *RaftNode) start(ctx context.Context, applied uint64, peers []Peer, joi
 		rc.removed = false
 		rc.node = raft.StartNode(c, rpeers)
 	}
+	if rc.lastIndex == 0 {
+		close(rc.ready)
+	}
 	rc.logger.Info("raft state machine started", zap.Uint64("index", rc.appliedIndex))
 	rc.hasBeenBootstrapped = true
 	rc.serveChannels(ctx) //blocking loop
