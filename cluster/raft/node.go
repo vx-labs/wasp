@@ -24,6 +24,10 @@ import (
 	"go.uber.org/zap"
 )
 
+// LeaderFunc is a function that will be run on the Leader node.
+// LeaderFunc must stop as soon as the given context is cancelled.
+type LeaderFunc func(context.Context) error
+
 type StatsProvider interface {
 	Histogram(name string) *prometheus.Histogram
 }
@@ -69,6 +73,8 @@ type RaftNode struct {
 	snapCount uint64
 	left      chan struct{}
 	ready     chan struct{}
+
+	leaderState *leaderState
 }
 
 type Config struct {
@@ -218,11 +224,13 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 type NodeConfig struct {
 	AppliedIndex              uint64
 	DisableProposalForwarding bool
+	LeaderFunc                LeaderFunc
 }
 
 func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config NodeConfig) {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL(rc.logger)
+	rc.leaderState = newLeaderState(config.LeaderFunc)
 
 	rpeers := make([]raft.Peer, len(peers)+1)
 	for i := range peers {
@@ -299,12 +307,23 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 					if !rc.hasLeader {
 						rc.hasLeader = true
 					}
-					rc.currentLeader = rd.SoftState.Lead
-					if rc.currentLeader == rc.id {
+					if rd.SoftState.Lead == rc.id {
 						rc.logger.Info("raft leadership acquired")
+						rc.leaderState.Start(ctx)
 					} else {
-						rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+						if rc.currentLeader == rc.id {
+							ctx, cancel := context.WithTimeout(ctx, time.Second*1)
+							err := rc.leaderState.Cancel(ctx)
+							cancel()
+							if err != nil {
+								rc.logger.Error("failed to stop leader func", zap.Error(err))
+							}
+							rc.logger.Info("raft leadership lost", zap.String("hex_new_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+						} else {
+							rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+						}
 					}
+					rc.currentLeader = rd.SoftState.Lead
 				}
 				if rd.SoftState.Lead == raft.None {
 					if rc.hasLeader {
