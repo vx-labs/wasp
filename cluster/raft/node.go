@@ -9,7 +9,6 @@ import (
 	"path"
 	"time"
 
-	"go.uber.org/zap/zapcore"
 	"google.golang.org/grpc"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -35,26 +34,6 @@ type Command struct {
 	Ctx     context.Context
 	Payload []byte
 	ErrCh   chan error
-}
-
-type Peer struct {
-	ID      uint64
-	Address string
-}
-
-func (p Peer) MarshalLogObject(e zapcore.ObjectEncoder) error {
-	e.AddString("hex_peer_id", fmt.Sprintf("%x", p.ID))
-	e.AddString("peer_address", p.Address)
-	return nil
-}
-
-type Peers []Peer
-
-func (p Peers) MarshalLogArray(e zapcore.ArrayEncoder) error {
-	for idx := range p {
-		e.AppendObject(p[idx])
-	}
-	return nil
 }
 
 type Membership interface {
