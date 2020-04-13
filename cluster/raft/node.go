@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/prometheus/client_golang/prometheus"
-	api "github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster"
 	"github.com/vx-labs/wasp/cluster/stats"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/fileutil"
@@ -38,7 +38,7 @@ type Command struct {
 
 type Membership interface {
 	Call(id uint64, f func(*grpc.ClientConn) error) error
-	Members() []*api.Member
+	Members() []*cluster.Member
 }
 
 type RaftNode struct {
@@ -215,10 +215,12 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 	return nil
 }
 
-func (rc *RaftNode) Run(ctx context.Context, applied uint64, peers []Peer, join bool) {
-	rc.start(ctx, applied, peers, join)
+type NodeConfig struct {
+	AppliedIndex              uint64
+	DisableProposalForwarding bool
 }
-func (rc *RaftNode) start(ctx context.Context, applied uint64, peers []Peer, join bool) {
+
+func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config NodeConfig) {
 	oldwal := wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL(rc.logger)
 
@@ -240,7 +242,8 @@ func (rc *RaftNode) start(ctx context.Context, applied uint64, peers []Peer, joi
 		MaxSizePerMsg:             1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
-		Applied:                   applied,
+		Applied:                   config.AppliedIndex,
+		DisableProposalForwarding: config.DisableProposalForwarding,
 	}
 	rc.logger.Debug("starting raft state machine")
 	if oldwal || join {
