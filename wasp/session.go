@@ -96,7 +96,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		}
 		err = dec.Err()
 		if err != nil {
-			L(ctx).Info("session lost", zap.String("loss_reason", err.Error()))
+			L(ctx).Debug("session lost", zap.String("loss_reason", err.Error()))
 			if session.Lwt != nil {
 				ch <- session.Lwt
 			}
