@@ -68,6 +68,9 @@ func (s *Session) Close() error {
 }
 
 func (s *Session) Send(publish *packet.Publish) error {
+	if len(s.MountPoint) > len(publish.Topic) {
+		return nil
+	}
 	publish.MessageId = 1
 	publish.Topic = TrimMountPoint(s.MountPoint, publish.Topic)
 	return s.Encoder.Publish(publish)
