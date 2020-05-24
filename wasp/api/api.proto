@@ -15,6 +15,7 @@ message SessionMetadatas {
   int64 ConnectedAt = 3;
   uint64 Peer = 4;
   packet.Publish LWT = 5;
+  string MountPoint = 6;
 }
 
 message ListSessionMetadatasRequest {}

@@ -27,12 +27,13 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 				l.Fatal("failed to list connected sessions", zap.Error(err))
 			}
 			cancel()
-			table := getTable([]string{"ID", "Client ID", "Peer", "Connected Since"}, cmd.OutOrStdout())
+			table := getTable([]string{"ID", "Client ID", "Peer", "Mount Point", "Connected Since"}, cmd.OutOrStdout())
 			for _, member := range out.GetSessionMetadatasList() {
 				table.Append([]string{
 					member.GetSessionID(),
 					member.GetClientID(),
 					fmt.Sprintf("%x", member.GetPeer()),
+					member.GetMountPoint(),
 					time.Since(time.Unix(member.GetConnectedAt(), 0)).String(),
 				})
 			}

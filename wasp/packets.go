@@ -14,7 +14,7 @@ type FSM interface {
 	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
 	Unsubscribe(ctx context.Context, id string, pattern []byte) error
 	DeleteSessionMetadata(ctx context.Context, id string) error
-	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish) error
+	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 
 func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishes chan *packet.Publish, session *sessions.Session, pkt interface{}) error {
@@ -24,6 +24,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 	case *packet.Connect:
 		return session.Close()
 	case *packet.Publish:
+		p.Topic = sessions.PrefixMountPoint(session.MountPoint, p.Topic)
 		select {
 		case publishes <- p:
 		case <-ctx.Done():
@@ -37,6 +38,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		}
 	case *packet.Subscribe:
 		for idx := range p.Topic {
+			p.Topic[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
 			err := fsm.Subscribe(ctx, session.ID, p.Topic[idx], p.Qos[idx])
 			if err != nil {
 				return err
@@ -65,6 +67,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		}
 	case *packet.Unsubscribe:
 		for idx := range p.Topic {
+			p.Topic[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
 			err := fsm.Unsubscribe(ctx, session.ID, p.Topic[idx])
 			if err != nil {
 				return err
