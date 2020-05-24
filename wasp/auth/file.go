@@ -9,7 +9,7 @@ import (
 )
 
 type fileRecord struct {
-	Username     string
+	UsernameHash string
 	PasswordHash string
 	MountPoint   string
 }
@@ -19,17 +19,19 @@ type fileHandler struct {
 }
 
 func (h *fileHandler) Authenticate(ctx context.Context, mqtt ApplicationContext, transport TransportContext) (string, error) {
-	str := string(mqtt.Username)
-	idx := sort.Search(len(h.db), func(i int) bool { return h.db[i].Username == str })
-	if idx < len(h.db) && h.db[idx].Username == str {
-		return h.db[idx].MountPoint, nil
+	usernameHash := fingerprintBytes(mqtt.Username)
+	idx := sort.Search(len(h.db), func(i int) bool { return h.db[i].UsernameHash == usernameHash })
+	if idx < len(h.db) && h.db[idx].UsernameHash == usernameHash {
+		if h.db[idx].PasswordHash == fingerprintBytes(mqtt.Password) {
+			return h.db[idx].MountPoint, nil
+		}
 	}
 	return "", ErrAuthenticationFailed
 }
 
 func searchHelper(out []fileRecord) func(i, j int) bool {
 	return func(i, j int) bool {
-		return strings.Compare(out[i].Username, out[j].Username) == -1
+		return strings.Compare(out[i].UsernameHash, out[j].UsernameHash) == -1
 	}
 }
 
@@ -53,13 +55,13 @@ func FileHandler(path string) (AuthenticationHandler, error) {
 		switch len(records[idx]) {
 		case 2:
 			out = append(out, fileRecord{
-				Username:     records[idx][0],
+				UsernameHash: fingerprintString(records[idx][0]),
 				PasswordHash: records[idx][1],
 				MountPoint:   DefaultMountPoint,
 			})
 		case 3:
 			out = append(out, fileRecord{
-				Username:     records[idx][0],
+				UsernameHash: fingerprintString(records[idx][0]),
 				PasswordHash: records[idx][1],
 				MountPoint:   records[idx][3],
 			})
