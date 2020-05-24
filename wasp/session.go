@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/decoder"
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
@@ -25,15 +25,19 @@ var (
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
 )
 
-func doAuth(ctx context.Context, connectPkt *packet.Connect) error {
-	if string(connectPkt.Username) != "vx:psk" || string(connectPkt.Password) != os.Getenv("PSK_PASSWORD") {
-		L(ctx).Info("authentication failed")
-		return errors.New("authentication failed")
-	}
-	return nil
+type AuthenticationHandler func(ctx context.Context, mqtt auth.ApplicationContext) (mountpoint string, err error)
+
+func doAuth(ctx context.Context, connectPkt *packet.Connect, handler AuthenticationHandler) error {
+	_, err := handler(ctx,
+		auth.ApplicationContext{
+			ClientID: connectPkt.ClientId,
+			Username: connectPkt.Username,
+			Password: connectPkt.Password,
+		})
+	return err
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish, authHandler AuthenticationHandler) error {
 	defer c.Close()
 	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
 		"protocol": "mqtt",
@@ -65,7 +69,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		zap.Time("connected_at", time.Now()),
 		zap.String("session_username", string(connectPkt.Username)),
 	)
-	if doAuth(ctx, connectPkt) != nil {
+	if doAuth(ctx, connectPkt, authHandler) != nil {
 		L(ctx).Info("authentication failed")
 		return enc.ConnAck(&packet.ConnAck{
 			Header:     connectPkt.Header,

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
 
 	"github.com/spf13/viper"
@@ -69,6 +70,10 @@ func run(config *viper.Viper) {
 	publishes := make(chan *packet.Publish, 20)
 	commandsCh := make(chan raft.Command)
 	state := wasp.NewState()
+	authHandler, err := auth.FileHandler("./credentials.csv")
+	if err != nil {
+		wasp.L(ctx).Fatal("authentication handler failed to start", zap.Error(err))
+	}
 
 	if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
 		wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")
@@ -381,7 +386,14 @@ func run(config *viper.Viper) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-			wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes)
+			wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes,
+				func(ctx context.Context, mqtt auth.ApplicationContext) (mountpoint string, err error) {
+					return authHandler.Authenticate(ctx, mqtt, auth.TransportContext{
+						Encrypted:       m.Encrypted,
+						RemoteAddress:   m.RemoteAddress,
+						X509Certificate: nil,
+					})
+				})
 		}()
 		return nil
 	}
