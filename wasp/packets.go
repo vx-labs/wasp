@@ -59,7 +59,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 				return err
 			}
 			for _, message := range messages {
-				err = session.Encoder.Publish(message)
+				err = session.Send(message)
 				if err != nil {
 					return err
 				}
