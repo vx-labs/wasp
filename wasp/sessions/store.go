@@ -14,6 +14,7 @@ import (
 type Session struct {
 	ID           string
 	ClientID     string
+	MountPoint   string
 	Lwt          *packet.Publish
 	conn         io.WriteCloser
 	Encoder      *encoder.Encoder

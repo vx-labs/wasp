@@ -27,14 +27,13 @@ var (
 
 type AuthenticationHandler func(ctx context.Context, mqtt auth.ApplicationContext) (mountpoint string, err error)
 
-func doAuth(ctx context.Context, connectPkt *packet.Connect, handler AuthenticationHandler) error {
-	_, err := handler(ctx,
+func doAuth(ctx context.Context, connectPkt *packet.Connect, handler AuthenticationHandler) (string, error) {
+	return handler(ctx,
 		auth.ApplicationContext{
 			ClientID: connectPkt.ClientId,
 			Username: connectPkt.Username,
 			Password: connectPkt.Password,
 		})
-	return err
 }
 
 func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish, authHandler AuthenticationHandler) error {
@@ -69,13 +68,19 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		zap.Time("connected_at", time.Now()),
 		zap.String("session_username", string(connectPkt.Username)),
 	)
-	if doAuth(ctx, connectPkt, authHandler) != nil {
+	mountPoint, err := doAuth(ctx, connectPkt, authHandler)
+	if err != nil {
 		L(ctx).Info("authentication failed")
 		return enc.ConnAck(&packet.ConnAck{
 			Header:     connectPkt.Header,
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
+	session.MountPoint = mountPoint
+	ctx = AddFields(ctx,
+		zap.String("session_mountpoint", session.MountPoint),
+	)
+
 	//L(ctx).Info("session connected")
 	if metadata := state.GetSessionMetadatasByClientID(session.ClientID); metadata != nil {
 		err := fsm.DeleteSessionMetadata(ctx, metadata.SessionID)
