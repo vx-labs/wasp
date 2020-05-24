@@ -25,6 +25,14 @@ var (
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
 )
 
+func doAuth(ctx context.Context, connectPkt *packet.Connect) error {
+	if string(connectPkt.Username) != "vx:psk" || string(connectPkt.Password) != os.Getenv("PSK_PASSWORD") {
+		L(ctx).Info("authentication failed")
+		return errors.New("authentication failed")
+	}
+	return nil
+}
+
 func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish) error {
 	defer c.Close()
 	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
@@ -57,7 +65,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		zap.Time("connected_at", time.Now()),
 		zap.String("session_username", string(connectPkt.Username)),
 	)
-	if string(connectPkt.Username) != "vx:psk" || string(connectPkt.Password) != os.Getenv("PSK_PASSWORD") {
+	if doAuth(ctx, connectPkt) != nil {
 		L(ctx).Info("authentication failed")
 		return enc.ConnAck(&packet.ConnAck{
 			Header:     connectPkt.Header,
