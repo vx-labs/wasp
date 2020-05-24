@@ -19,7 +19,7 @@ message WaspAuthenticationRequest {
   TransportContext Transport = 2;
 }
 
-message WaspAuthenticationResponse { bytes MountPoint = 1; }
+message WaspAuthenticationResponse { string MountPoint = 1; }
 
 service Authentication {
   rpc AuthenticateMQTTClient(WaspAuthenticationRequest)
