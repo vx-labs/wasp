@@ -35,7 +35,16 @@ func (s *Session) ProcessConnect(connect *packet.Connect) error {
 	}
 	return nil
 }
-
+func PrefixMountPoint(mountPoint string, t []byte) []byte {
+	out := make([]byte, len(t)+len(mountPoint)+1)
+	copy(out[:len(mountPoint)], []byte(mountPoint))
+	out[len(mountPoint)] = '/'
+	copy(out[len(mountPoint)+1:], t)
+	return out
+}
+func TrimMountPoint(mountPoint string, t []byte) []byte {
+	return t[len(mountPoint)+1:] // Trim mountpoint + /
+}
 func (s *Session) AddTopic(t []byte) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
@@ -60,6 +69,7 @@ func (s *Session) Close() error {
 
 func (s *Session) Send(publish *packet.Publish) error {
 	publish.MessageId = 1
+	publish.Topic = TrimMountPoint(s.MountPoint, publish.Topic)
 	return s.Encoder.Publish(publish)
 }
 

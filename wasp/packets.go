@@ -24,6 +24,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 	case *packet.Connect:
 		return session.Close()
 	case *packet.Publish:
+		p.Topic = sessions.PrefixMountPoint(session.MountPoint, p.Topic)
 		select {
 		case publishes <- p:
 		case <-ctx.Done():
@@ -37,6 +38,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		}
 	case *packet.Subscribe:
 		for idx := range p.Topic {
+			p.Topic[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
 			err := fsm.Subscribe(ctx, session.ID, p.Topic[idx], p.Qos[idx])
 			if err != nil {
 				return err
@@ -65,6 +67,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		}
 	case *packet.Unsubscribe:
 		for idx := range p.Topic {
+			p.Topic[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
 			err := fsm.Unsubscribe(ctx, session.ID, p.Topic[idx])
 			if err != nil {
 				return err
