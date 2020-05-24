@@ -34,7 +34,7 @@ type State interface {
 	DeleteRetainedMessage(topic []byte) error
 	Load([]byte) error
 	MarshalBinary() ([]byte, error)
-	CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish) error
+	CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error
 	DeleteSessionMetadata(id string, peer uint64) error
 	DeleteSessionMetadatasByPeer(peer uint64)
 }
@@ -218,13 +218,14 @@ func (s *state) GetSessionMetadatasByClientID(id string) *api.SessionMetadatas {
 func (s *state) ListSessionMetadatas() []*api.SessionMetadatas {
 	return s.sessionsMetadatas.All()
 }
-func (s *state) CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish) error {
+func (s *state) CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error {
 	s.sessionsMetadatas.Save(&api.SessionMetadatas{
 		SessionID:   id,
 		ClientID:    clientID,
 		ConnectedAt: connectedAt,
 		LWT:         lwt,
 		Peer:        peer,
+		MountPoint:  mountpoint,
 	})
 	return nil
 }

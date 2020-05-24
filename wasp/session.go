@@ -88,7 +88,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			return err
 		}
 	}
-	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.Lwt)
+	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.Lwt, session.MountPoint)
 	if err != nil {
 		return err
 	}
