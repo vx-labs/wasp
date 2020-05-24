@@ -70,9 +70,9 @@ func run(config *viper.Viper) {
 	publishes := make(chan *packet.Publish, 20)
 	commandsCh := make(chan raft.Command)
 	state := wasp.NewState()
-	authHandler, err := auth.FileHandler("./credentials.csv")
+	authHandler, err := getAuthHandler(ctx, config)
 	if err != nil {
-		wasp.L(ctx).Fatal("authentication handler failed to start", zap.Error(err))
+		wasp.L(ctx).Fatal("failed to create authentication handler", zap.Error(err))
 	}
 
 	if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
