@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package auth;
+
+message TransportContext {
+  bool Encrypted = 1;
+  string RemoteAddress = 2;
+  bytes X509Certificate = 3;
+}
+
+message ApplicationContext {
+  bytes Username = 1;
+  bytes Password = 2;
+  bytes ClientID = 3;
+}
+
+message WaspAuthenticationRequest {
+  ApplicationContext MQTT = 1;
+  TransportContext Transport = 2;
+}
+
+message WaspAuthenticationResponse { bytes MountPoint = 1; }
+
+service Authentication {
+  rpc AuthenticateMQTTClient(WaspAuthenticationRequest)
+      returns (WaspAuthenticationResponse) {}
+}
