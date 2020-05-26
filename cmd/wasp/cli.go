@@ -138,6 +138,8 @@ func main() {
 	cmd.Flags().String("authentication-provider-file-path", "credentials.csv", "Read allowed client credentials from this file, when using \"file\" authentication provider.")
 	cmd.Flags().String("authentication-provider-static-username", "", "Client username, when using \"static\" authentication provider.")
 	cmd.Flags().String("authentication-provider-static-password", "", "Client password, when using \"static\" authentication provider.")
+	cmd.Flags().String("authentication-provider-grpc-address", "", "GRPC Authentication server address, when using \"grpc\" authentication provider.")
+
 	cmd.AddCommand(TLSHelper(config))
 	cmd.Execute()
 }

@@ -37,13 +37,16 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			})
 		}
 	case *packet.Subscribe:
+		topics := make([][]byte, len(p.Topic))
 		for idx := range p.Topic {
-			p.Topic[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
-			err := fsm.Subscribe(ctx, session.ID, p.Topic[idx], p.Qos[idx])
+			topics[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
+		}
+		for idx := range topics {
+			err := fsm.Subscribe(ctx, session.ID, topics[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
-			session.AddTopic(p.Topic[idx])
+			session.AddTopic(topics[idx])
 		}
 		err := session.Encoder.SubAck(&packet.SubAck{
 			Header:    p.Header,
@@ -53,8 +56,8 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		if err != nil {
 			return err
 		}
-		for idx := range p.Topic {
-			messages, err := state.RetainedMessages(p.Topic[idx])
+		for idx := range topics {
+			messages, err := state.RetainedMessages(topics[idx])
 			if err != nil {
 				return err
 			}
@@ -66,13 +69,16 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			}
 		}
 	case *packet.Unsubscribe:
+		topics := make([][]byte, len(p.Topic))
 		for idx := range p.Topic {
-			p.Topic[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
-			err := fsm.Unsubscribe(ctx, session.ID, p.Topic[idx])
+			topics[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
+		}
+		for idx := range topics {
+			err := fsm.Unsubscribe(ctx, session.ID, topics[idx])
 			if err != nil {
 				return err
 			}
-			session.RemoveTopic(p.Topic[idx])
+			session.RemoveTopic(topics[idx])
 		}
 		return session.Encoder.UnsubAck(&packet.UnsubAck{
 			Header:    p.Header,

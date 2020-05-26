@@ -6,9 +6,10 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/wasp/wasp/auth"
+	"github.com/vx-labs/wasp/wasp/rpc"
 )
 
-func getAuthHandler(ctx context.Context, config *viper.Viper) (auth.AuthenticationHandler, error) {
+func getAuthHandler(ctx context.Context, rpcDialer rpc.Dialer, config *viper.Viper) (auth.AuthenticationHandler, error) {
 	provider := config.GetString("authentication-provider")
 	switch provider {
 	case "none":
@@ -21,6 +22,15 @@ func getAuthHandler(ctx context.Context, config *viper.Viper) (auth.Authenticati
 	case "file":
 		return auth.FileHandler(
 			config.GetString("authentication-provider-file-path"),
+		)
+	case "grpc":
+		host := config.GetString("authentication-provider-grpc-address")
+		conn, err := rpcDialer(host)
+		if err != nil {
+			return nil, err
+		}
+		return auth.GRPC(
+			conn,
 		)
 	default:
 		return nil, errors.New("unknown authentication provided")

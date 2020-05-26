@@ -71,9 +71,14 @@ func (s *Session) Send(publish *packet.Publish) error {
 	if len(s.MountPoint) > len(publish.Topic) {
 		return nil
 	}
-	publish.MessageId = 1
-	publish.Topic = TrimMountPoint(s.MountPoint, publish.Topic)
-	return s.Encoder.Publish(publish)
+
+	outgoing := &packet.Publish{
+		Header:    publish.Header,
+		Topic:     TrimMountPoint(s.MountPoint, publish.Topic),
+		MessageId: 1,
+		Payload:   publish.Payload,
+	}
+	return s.Encoder.Publish(outgoing)
 }
 
 func NewSession(c io.WriteCloser, stats encoder.StatRecorder) *Session {

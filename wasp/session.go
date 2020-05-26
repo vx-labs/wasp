@@ -70,7 +70,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	)
 	mountPoint, err := doAuth(ctx, connectPkt, authHandler)
 	if err != nil {
-		L(ctx).Info("authentication failed")
+		L(ctx).Info("authentication failed", zap.Error(err))
 		return enc.ConnAck(&packet.ConnAck{
 			Header:     connectPkt.Header,
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
@@ -81,7 +81,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		zap.String("session_mountpoint", session.MountPoint),
 	)
 
-	//L(ctx).Info("session connected")
+	L(ctx).Debug("session connected")
 	if metadata := state.GetSessionMetadatasByClientID(session.ClientID); metadata != nil {
 		err := fsm.DeleteSessionMetadata(ctx, metadata.SessionID)
 		if err != nil {
@@ -134,7 +134,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		}).Observe(stats.MilisecondsElapsed(start))
 
 		if err == ErrSessionDisconnected {
-			//	L(ctx).Info("session closed")
+			L(ctx).Debug("session closed")
 			session.Disconnected = true
 			return session.Close()
 		}

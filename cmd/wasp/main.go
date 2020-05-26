@@ -70,10 +70,6 @@ func run(config *viper.Viper) {
 	publishes := make(chan *packet.Publish, 20)
 	commandsCh := make(chan raft.Command)
 	state := wasp.NewState()
-	authHandler, err := getAuthHandler(ctx, config)
-	if err != nil {
-		wasp.L(ctx).Fatal("failed to create authentication handler", zap.Error(err))
-	}
 
 	if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
 		wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")
@@ -92,6 +88,12 @@ func run(config *viper.Viper) {
 		TLSPrivateKeyPath:           config.GetString("rpc-tls-private-key-file"),
 		TLSCertificateAuthorityPath: config.GetString("rpc-tls-certificate-authority-file"),
 	})
+
+	authHandler, err := getAuthHandler(ctx, rpcDialer, config)
+	if err != nil {
+		wasp.L(ctx).Fatal("failed to create authentication handler", zap.Error(err))
+	}
+
 	remotePublishCh := make(chan *packet.Publish, 20)
 	stateMachine := fsm.NewFSM(id, state, commandsCh)
 	mqttServer := rpc.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
