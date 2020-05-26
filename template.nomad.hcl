@@ -48,9 +48,8 @@ job "wasp" {
         data = <<EOH
 {{with secret "secret/data/vx/mqtt"}}
 LE_EMAIL="{{.Data.acme_email}}"
-WASP_AUTHENTICATION_PROVIDER="static"
-WASP_AUTHENTICATION_PROVIDER_STATIC_USERNAME="vx:psk"
-WASP_AUTHENTICATION_PROVIDER_STATIC_PASSWORD="{{ .Data.static_tokens }}"
+WASP_AUTHENTICATION_PROVIDER="grpc"
+WASP_AUTHENTICATION_PROVIDER_GRPC_ADDRESS="auth.iot.cloud.vx-labs.net:443"
 JWT_SIGN_KEY="{{ .Data.jwt_sign_key }}"
 WASP_RPC_TLS_CERTIFICATE_FILE="{{ env "NOMAD_TASK_DIR" }}/cert.pem"
 WASP_RPC_TLS_PRIVATE_KEY_FILE="{{ env "NOMAD_TASK_DIR" }}/key.pem"
