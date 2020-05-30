@@ -14,7 +14,7 @@ type FSM interface {
 	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
 	SubscribeFrom(ctx context.Context, id string, peer uint64, pattern []byte, qos int32) error
 	Unsubscribe(ctx context.Context, id string, pattern []byte) error
-	DeleteSessionMetadata(ctx context.Context, id string) error
+	DeleteSessionMetadata(ctx context.Context, id, mountpoint string) error
 	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 type State interface {

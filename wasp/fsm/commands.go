@@ -1,12 +1,14 @@
 package fsm
 
 import (
+	"bytes"
 	"context"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
 	packet "github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/cluster/raft"
+	"github.com/vx-labs/wasp/wasp/audit"
 )
 
 type State interface {
@@ -37,16 +39,79 @@ func encode(events ...*StateTransition) ([]byte, error) {
 }
 
 func NewFSM(id uint64, state State, commandsCh chan raft.Command) *FSM {
-	return &FSM{id: id, state: state, commandsCh: commandsCh}
+	return &FSM{id: id, state: state, commandsCh: commandsCh, recorder: audit.StdoutRecorder()}
 }
 
 type FSM struct {
 	id         uint64
 	state      State
 	commandsCh chan raft.Command
+	recorder   audit.Recorder
 }
 
-func (f *FSM) commit(ctx context.Context, payload []byte) error {
+func splitTenant(topic []byte) (string, []byte) {
+	idx := bytes.IndexRune(topic, '/')
+	return string(topic[:idx]), topic[idx+1:]
+}
+
+func (f *FSM) record(ctx context.Context, events ...*StateTransition) error {
+	var err error
+	for _, event := range events {
+		switch event := event.GetEvent().(type) {
+		case *StateTransition_RetainedMessageDeleted:
+			input := event.RetainedMessageDeleted
+			tenant, topic := splitTenant(input.Topic)
+			err = f.recorder.RecordEvent(tenant, audit.RetainMessageDeleted, map[string]interface{}{
+				"topic": topic,
+			})
+
+		case *StateTransition_RetainedMessageStored:
+			input := event.RetainedMessageStored
+			tenant, topic := splitTenant(input.Publish.Topic)
+			err = f.recorder.RecordEvent(tenant, audit.RetainMessageStored, map[string]interface{}{
+				"topic":   topic,
+				"payload": input.Publish.Payload,
+				"qos":     input.Publish.Header.Qos,
+			})
+		case *StateTransition_SessionSubscribed:
+			input := event.SessionSubscribed
+			tenant, topic := splitTenant(input.Pattern)
+			err = f.recorder.RecordEvent(tenant, audit.SessionSubscribed, map[string]interface{}{
+				"pattern":    topic,
+				"qos":        input.Qos,
+				"session_id": input.SessionID,
+			})
+		case *StateTransition_SessionUnsubscribed:
+			input := event.SessionUnsubscribed
+			tenant, topic := splitTenant(input.Pattern)
+			err = f.recorder.RecordEvent(tenant, audit.SessionUnsubscribed, map[string]interface{}{
+				"pattern":    topic,
+				"session_id": input.SessionID,
+			})
+		case *StateTransition_PeerLost:
+		case *StateTransition_SessionCreated:
+			input := event.SessionCreated
+			err = f.recorder.RecordEvent(input.MountPoint, audit.SessionConnected, map[string]interface{}{
+				"session_id": input.SessionID,
+				"client_id":  input.ClientID,
+			})
+		case *StateTransition_SessionDeleted:
+			input := event.SessionDeleted
+			err = f.recorder.RecordEvent(input.MountPoint, audit.SessionDisonnected, map[string]interface{}{
+				"session_id": input.SessionID,
+			})
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (f *FSM) commit(ctx context.Context, events ...*StateTransition) error {
+	payload, err := encode(events...)
+	if err != nil {
+		return err
+	}
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 	out := make(chan error)
@@ -58,49 +123,40 @@ func (f *FSM) commit(ctx context.Context, payload []byte) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case err := <-out:
+			if err == nil {
+				f.record(ctx, events...)
+			}
 			return err
 		}
 	}
 }
 func (f *FSM) Shutdown(ctx context.Context) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_PeerLost{
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_PeerLost{
 		PeerLost: &PeerLost{
 			Peer: f.id,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
 func (f *FSM) RetainedMessage(ctx context.Context, publish *packet.Publish) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_RetainedMessageStored{
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_RetainedMessageStored{
 		RetainedMessageStored: &RetainedMessageStored{
 			Publish: publish,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
 func (f *FSM) DeleteRetainedMessage(ctx context.Context, topic []byte) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_RetainedMessageDeleted{
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_RetainedMessageDeleted{
 		RetainedMessageDeleted: &RetainedMessageDeleted{
 			Topic: topic,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
 
 func (f *FSM) Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error {
 	return f.SubscribeFrom(ctx, id, f.id, pattern, qos)
 }
 func (f *FSM) SubscribeFrom(ctx context.Context, id string, peer uint64, pattern []byte, qos int32) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_SessionSubscribed{
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_SessionSubscribed{
 		SessionSubscribed: &SubscriptionCreated{
 			SessionID: id,
 			Pattern:   pattern,
@@ -108,13 +164,9 @@ func (f *FSM) SubscribeFrom(ctx context.Context, id string, peer uint64, pattern
 			Peer:      peer,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
 func (f *FSM) CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_SessionCreated{
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_SessionCreated{
 		SessionCreated: &SessionCreated{
 			SessionID:   id,
 			ClientID:    clientID,
@@ -124,34 +176,23 @@ func (f *FSM) CreateSessionMetadata(ctx context.Context, id, clientID string, lw
 			MountPoint:  mountpoint,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
-func (f *FSM) DeleteSessionMetadata(ctx context.Context, id string) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_SessionDeleted{
+func (f *FSM) DeleteSessionMetadata(ctx context.Context, id, mountpoint string) error {
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_SessionDeleted{
 		SessionDeleted: &SessionDeleted{
-			SessionID: id,
-			Peer:      f.id,
+			SessionID:  id,
+			Peer:       f.id,
+			MountPoint: mountpoint,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
 func (f *FSM) Unsubscribe(ctx context.Context, id string, pattern []byte) error {
-	payload, err := encode(&StateTransition{Event: &StateTransition_SessionUnsubscribed{
+	return f.commit(ctx, &StateTransition{Event: &StateTransition_SessionUnsubscribed{
 		SessionUnsubscribed: &SubscriptionDeleted{
 			SessionID: id,
 			Pattern:   pattern,
 		},
 	}})
-	if err != nil {
-		return err
-	}
-	return f.commit(ctx, payload)
 }
 
 func (f *FSM) Apply(b []byte) error {

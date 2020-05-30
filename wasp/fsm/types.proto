@@ -15,6 +15,7 @@ message SessionCreated {
 message SessionDeleted {
   string SessionID = 1;
   uint64 Peer = 2;
+  string MountPoint = 3;
 }
 message SubscriptionCreated {
   string SessionID = 1;
