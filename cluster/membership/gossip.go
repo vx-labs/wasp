@@ -72,16 +72,16 @@ func (self *Gossip) Shutdown() error {
 		conn.Conn.Close()
 		delete(self.peers, id)
 	}
-	self.logger.Info("stopped peers RPC connexions")
+	self.logger.Debug("stopped peers RPC connexions")
 	<-self.healthcheckerDone
-	self.logger.Info("stopped membership healthchecker")
+	self.logger.Debug("stopped membership healthchecker")
 	self.logger.Debug("leaving mesh")
 	err := self.mlist.Leave(1 * time.Second)
 	if err != nil {
 		self.logger.Error("failed to leave mesh", zap.Error(err))
 		return err
 	}
-	self.logger.Info("left mesh")
+	self.logger.Debug("left mesh")
 	return self.mlist.Shutdown()
 }
 

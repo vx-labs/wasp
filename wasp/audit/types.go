@@ -5,8 +5,8 @@ type event string
 const (
 	SessionConnected     event = "session_connected"
 	SessionDisonnected   event = "session_disconnected"
-	SessionSubscribed    event = "session_subscribed"
-	SessionUnsubscribed  event = "session_unsubscribed"
+	SubscriptionCreated  event = "subscription_created"
+	SubscriptionDeleted  event = "subscription_deleted"
 	RetainMessageStored  event = "retained_message_stored"
 	RetainMessageDeleted event = "retained_message_deleted"
 	PeerLost             event = "peer_lost"

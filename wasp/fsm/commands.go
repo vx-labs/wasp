@@ -76,7 +76,7 @@ func (f *FSM) record(ctx context.Context, events ...*StateTransition) error {
 		case *StateTransition_SessionSubscribed:
 			input := event.SessionSubscribed
 			tenant, topic := splitTenant(input.Pattern)
-			err = f.recorder.RecordEvent(tenant, audit.SessionSubscribed, map[string]interface{}{
+			err = f.recorder.RecordEvent(tenant, audit.SubscriptionCreated, map[string]interface{}{
 				"pattern":    topic,
 				"qos":        input.Qos,
 				"session_id": input.SessionID,
@@ -84,7 +84,7 @@ func (f *FSM) record(ctx context.Context, events ...*StateTransition) error {
 		case *StateTransition_SessionUnsubscribed:
 			input := event.SessionUnsubscribed
 			tenant, topic := splitTenant(input.Pattern)
-			err = f.recorder.RecordEvent(tenant, audit.SessionUnsubscribed, map[string]interface{}{
+			err = f.recorder.RecordEvent(tenant, audit.SubscriptionDeleted, map[string]interface{}{
 				"pattern":    topic,
 				"session_id": input.SessionID,
 			})

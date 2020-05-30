@@ -31,7 +31,7 @@ func (rc *RaftNode) openWAL(snapshot *raftpb.Snapshot, logger *zap.Logger) *wal.
 	if err != nil {
 		logger.Fatal("failed to load WAL", zap.Error(err))
 	}
-	logger.Info("loaded WAL", zap.Uint64("wal_term", walsnap.Term), zap.Uint64("wal_index", walsnap.Index))
+	logger.Debug("loaded WAL", zap.Uint64("wal_term", walsnap.Term), zap.Uint64("wal_index", walsnap.Index))
 
 	return w
 }

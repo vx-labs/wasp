@@ -70,9 +70,10 @@ func run(config *viper.Viper) {
 	publishes := make(chan *packet.Publish, 20)
 	commandsCh := make(chan raft.Command)
 	state := wasp.NewState()
-
-	if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
-		wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")
+	if config.GetInt("raft-bootstrap-expect") > 1 {
+		if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
+			wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")
+		}
 	}
 	server := rpc.Server(rpc.ServerConfig{
 		VerifyClientCert:            config.GetBool("mtls"),
@@ -126,7 +127,7 @@ func run(config *viper.Viper) {
 		if err != nil {
 			wasp.L(ctx).Fatal("failed to find other peers on Consul", zap.Error(err))
 		}
-		wasp.L(ctx).Info("discovered nodes using Consul",
+		wasp.L(ctx).Debug("discovered nodes using Consul",
 			zap.Duration("consul_discovery_duration", time.Since(discoveryStarted)), zap.Int("node_count", len(consulJoinList)))
 		joinList = append(joinList, consulJoinList...)
 	}
@@ -155,7 +156,7 @@ func run(config *viper.Viper) {
 	raftNode.Serve(server)
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("cluster listener stopped")
+		defer wasp.L(ctx).Debug("cluster listener stopped")
 
 		err := server.Serve(clusterListener)
 		if err != nil {
@@ -163,7 +164,7 @@ func run(config *viper.Viper) {
 		}
 	})
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("raft node stopped")
+		defer wasp.L(ctx).Debug("raft node stopped")
 		join := false
 		peers := raft.Peers{}
 		if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
@@ -174,7 +175,7 @@ func run(config *viper.Viper) {
 			}, rpcDialer)
 			if err != nil {
 				if err == membership.ErrExistingClusterFound {
-					wasp.L(ctx).Info("discovered existing raft cluster")
+					wasp.L(ctx).Debug("discovered existing raft cluster")
 					join = true
 				} else {
 					wasp.L(ctx).Fatal("failed to discover nodes on gossip mesh", zap.Error(err))
@@ -182,12 +183,12 @@ func run(config *viper.Viper) {
 			}
 			wasp.L(ctx).Info("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(peers)))
 		} else {
-			wasp.L(ctx).Info("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
+			wasp.L(ctx).Debug("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
 		}
 		if join {
-			wasp.L(ctx).Info("joining raft cluster", zap.Array("raft_peers", peers))
+			wasp.L(ctx).Debug("joining raft cluster", zap.Array("raft_peers", peers))
 		} else {
-			wasp.L(ctx).Info("bootstraping raft cluster", zap.Array("raft_peers", peers))
+			wasp.L(ctx).Debug("bootstraping raft cluster", zap.Array("raft_peers", peers))
 		}
 		go func() {
 			defer close(stateLoaded)
@@ -235,7 +236,7 @@ func run(config *viper.Viper) {
 
 	snapshot, err := snapshotter.Load()
 	if err != nil {
-		wasp.L(ctx).Warn("failed to get state snapshot", zap.Error(err))
+		wasp.L(ctx).Debug("failed to get state snapshot", zap.Error(err))
 	} else {
 		err := state.Load(snapshot.Data)
 		if err != nil {
@@ -243,7 +244,7 @@ func run(config *viper.Viper) {
 		}
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("command publisher stopped")
+		defer wasp.L(ctx).Debug("command publisher stopped")
 		for {
 			select {
 			case <-ctx.Done():
@@ -260,7 +261,7 @@ func run(config *viper.Viper) {
 		}
 	})
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("command processor stopped")
+		defer wasp.L(ctx).Debug("command processor stopped")
 		for {
 			select {
 			case <-ctx.Done():
@@ -275,7 +276,7 @@ func run(config *viper.Viper) {
 					if err != nil {
 						wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
 					}
-					wasp.L(ctx).Info("loaded snapshot into state")
+					wasp.L(ctx).Debug("loaded snapshot into state")
 				} else {
 					stateMachine.Apply(event.Payload)
 				}
@@ -301,7 +302,7 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Warn("failed to start syslog tap", zap.Error(err))
 				return
 			}
-			defer wasp.L(ctx).Info("syslog tap stopped")
+			defer wasp.L(ctx).Debug("syslog tap stopped")
 			wasp.L(ctx).Debug("syslog tap started")
 			err = taps.Run(ctx, messageLog, tap)
 			if err != nil {
@@ -321,7 +322,7 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Warn("failed to start nest tap", zap.Error(err))
 				return
 			}
-			defer wasp.L(ctx).Info("nest tap stopped")
+			defer wasp.L(ctx).Debug("nest tap stopped")
 			wasp.L(ctx).Debug("nest tap started")
 			err = taps.Run(ctx, messageLog, tap)
 			if err != nil {
@@ -330,7 +331,7 @@ func run(config *viper.Viper) {
 		})
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("publish processor stopped")
+		defer wasp.L(ctx).Debug("publish processor stopped")
 		messageLog.Consume(ctx, 0, func(p *packet.Publish) error {
 			err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, true, p)
 			if err != nil {
@@ -340,7 +341,7 @@ func run(config *viper.Viper) {
 		})
 	})
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("remote publish processor stopped")
+		defer wasp.L(ctx).Debug("remote publish processor stopped")
 		for {
 			select {
 			case <-ctx.Done():
@@ -355,7 +356,7 @@ func run(config *viper.Viper) {
 	})
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Info("publish storer stopped")
+		defer wasp.L(ctx).Debug("publish storer stopped")
 		buf := make([]*packet.Publish, 0, 100)
 		ticker := time.NewTicker(20 * time.Millisecond)
 		defer ticker.Stop()
@@ -458,7 +459,7 @@ func run(config *viper.Viper) {
 	case <-sigc:
 	case <-cancelCh:
 	}
-	wasp.L(ctx).Info("wasp shutdown initiated")
+	wasp.L(ctx).Debug("wasp shutdown initiated")
 	for _, listener := range listeners {
 		listener.listener.Close()
 	}
