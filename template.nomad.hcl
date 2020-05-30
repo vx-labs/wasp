@@ -116,6 +116,8 @@ EOH
           "--data-dir", "$${NOMAD_TASK_DIR}",
           "--mtls",
           "--use-vault",
+          "--headless",
+          "--log-level", "info",
           "--raft-bootstrap-expect", "3",
           "--consul-join",
           "--consul-service-name", "wasp",

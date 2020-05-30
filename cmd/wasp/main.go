@@ -455,7 +455,29 @@ func run(config *viper.Viper) {
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
-	fmt.Printf("🐝 Wasp is ready and serving !🐝\n")
+	if !config.GetBool("headless") {
+		defaultIP := localPrivateHost()
+		fmt.Printf("🐝 Wasp is ready and serving !🐝\n")
+		if len(listeners) > 0 {
+			fmt.Printf("You can connect to Wasp using:\n")
+			for _, listener := range listeners {
+				switch listener.name {
+				case "tcp":
+					fmt.Printf("  • MQTT on address %s%d\n", defaultIP, listener.port)
+				case "tls":
+					fmt.Printf("  • MQTT-over-TLS on address %s%d\n", defaultIP, listener.port)
+				case "ws":
+					fmt.Printf("  • WebSocket on address %s%d\n", defaultIP, listener.port)
+				case "wss":
+					fmt.Printf("  • WebSocket-over-TLS on address %s%d\n", defaultIP, listener.port)
+				}
+			}
+		} else {
+			fmt.Printf("No listener were enabled, so you won't be able to connect to this node using MQTT.\n")
+		}
+		fmt.Println("")
+		fmt.Println("You can stop the service by pressing Ctrl+C.")
+	}
 	select {
 	case <-sigc:
 	case <-cancelCh:
