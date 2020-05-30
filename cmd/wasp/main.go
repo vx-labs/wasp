@@ -455,6 +455,7 @@ func run(config *viper.Viper) {
 		syscall.SIGINT,
 		syscall.SIGTERM,
 		syscall.SIGQUIT)
+	fmt.Printf("🐝 Wasp is ready and serving !🐝\n")
 	select {
 	case <-sigc:
 	case <-cancelCh:
