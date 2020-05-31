@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"context"
+	"log"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -102,6 +103,7 @@ func (f *FSM) record(ctx context.Context, events ...*StateTransition) error {
 			})
 		}
 		if err != nil {
+			log.Println(err)
 			return err
 		}
 	}
