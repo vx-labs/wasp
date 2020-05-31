@@ -33,8 +33,8 @@ func localPrivateHost() string {
 				continue
 			} else {
 				addresses, _ := v.Addrs()
-				if len(addresses) > 0 {
-					ip := addresses[0]
+				for idx := range addresses {
+					ip := addresses[idx]
 					if ipnet, ok := ip.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
 						if ipnet.IP.To4() != nil {
 							return ipnet.IP.String()
