@@ -1,0 +1,49 @@
+---
+name: build and release binaries
+on:
+  push:
+    tags:
+      - 'v*'
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v2
+      with:
+        go-version: '^1.14.1'
+    - name: Build binaries
+      run: |
+        go get github.com/mitchellh/gox
+        go mod vendor
+        gox -output "artifacts/{{.Dir}}_{{.OS}}-{{.Arch}}" -ldflags="-s -w -X github.com/vx-labs/wasp/cmd/wasp/version.BuiltVersion=${GITHUB_SHA}" -osarch="linux/amd64" -osarch="darwin/amd64" ./cmd/wasp/
+        ls artifacts/
+    - name: Create Release
+      id: create_release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref }}
+        release_name: Release ${{ github.ref }}
+        draft: false
+        prerelease: false
+    - name: Upload Release Linux Asset
+      id: upload-release-asset-linux
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/wasp_linux-amd64
+        asset_name: wasp_linux-amd64
+        asset_content_type: application/octet-stream
+    - name: Upload Release MacOS Asset
+      id: upload-release-asset-darwin
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./artifacts/wasp_darwin-amd64
+        asset_name: wasp_darwin-amd64
+        asset_content_type: application/octet-stream
