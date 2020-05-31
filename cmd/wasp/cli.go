@@ -142,6 +142,8 @@ func main() {
 	cmd.Flags().String("authentication-provider-static-password", "", "Client password, when using \"static\" authentication provider.")
 	cmd.Flags().String("authentication-provider-grpc-address", "", "GRPC Authentication server address, when using \"grpc\" authentication provider.")
 
+	cmd.Flags().String("audit-recorder", "stdout", "Audit recorder used to record state updates. Set to \"none\" to disable audit.")
+
 	cmd.AddCommand(TLSHelper(config))
 	cmd.Execute()
 }

@@ -95,8 +95,12 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Fatal("failed to create authentication handler", zap.Error(err))
 	}
 
+	auditRecorder, err := getAuditRecorder(ctx, rpcDialer, config)
+	if err != nil {
+		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
+	}
 	remotePublishCh := make(chan *packet.Publish, 20)
-	stateMachine := fsm.NewFSM(id, state, commandsCh)
+	stateMachine := fsm.NewFSM(id, state, commandsCh, auditRecorder)
 	mqttServer := rpc.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))

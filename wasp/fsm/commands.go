@@ -39,8 +39,8 @@ func encode(events ...*StateTransition) ([]byte, error) {
 	return proto.Marshal(&format)
 }
 
-func NewFSM(id uint64, state State, commandsCh chan raft.Command) *FSM {
-	return &FSM{id: id, state: state, commandsCh: commandsCh, recorder: audit.StdoutRecorder()}
+func NewFSM(id uint64, state State, commandsCh chan raft.Command, recorder audit.Recorder) *FSM {
+	return &FSM{id: id, state: state, commandsCh: commandsCh, recorder: recorder}
 }
 
 type FSM struct {
