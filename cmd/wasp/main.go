@@ -292,7 +292,6 @@ func run(config *viper.Viper) {
 		BoltOptions: &bolt.Options{
 			Timeout:         0,
 			InitialMmapSize: 5 * 1000 * 1000,
-			MmapFlags:       syscall.MAP_POPULATE,
 			ReadOnly:        false,
 		},
 	})
