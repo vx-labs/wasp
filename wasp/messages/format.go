@@ -6,6 +6,9 @@ import (
 
 // Converts bytes to an integer
 func bytesToUint64(b []byte) uint64 {
+	if b == nil {
+		return 0
+	}
 	return binary.BigEndian.Uint64(b)
 }
 

@@ -308,7 +308,7 @@ func run(config *viper.Viper) {
 			}
 			defer wasp.L(ctx).Debug("syslog tap stopped")
 			wasp.L(ctx).Debug("syslog tap started")
-			err = taps.Run(ctx, messageLog, tap)
+			err = taps.Run(ctx, "tap_syslog", messageLog, tap)
 			if err != nil {
 				wasp.L(ctx).Info("syslog tap failed", zap.Error(err))
 			}
@@ -328,7 +328,7 @@ func run(config *viper.Viper) {
 			}
 			defer wasp.L(ctx).Debug("nest tap stopped")
 			wasp.L(ctx).Debug("nest tap started")
-			err = taps.Run(ctx, messageLog, tap)
+			err = taps.Run(ctx, "tap_grpc", messageLog, tap)
 			if err != nil {
 				wasp.L(ctx).Info("nest tap failed", zap.Error(err))
 			}
@@ -336,7 +336,7 @@ func run(config *viper.Viper) {
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("publish processor stopped")
-		messageLog.Consume(ctx, 0, func(p *packet.Publish) error {
+		messageLog.Consume(ctx, "publish_processor", func(p *packet.Publish) error {
 			err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, true, p)
 			if err != nil {
 				wasp.L(ctx).Info("publish processing failed", zap.Error(err))

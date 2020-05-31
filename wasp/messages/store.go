@@ -24,9 +24,10 @@ var (
 	// ErrBucketNotFound is an error indicating a given key does not exist
 	ErrBucketNotFound = errors.New("bucket not found")
 	// ErrIndexOutdated is an error indicating that the supplied index is outdated
-	ErrIndexOutdated        = errors.New("index outdated")
-	bucketName              = []byte("messages")
-	maxMessageCount  uint64 = 5000
+	ErrIndexOutdated         = errors.New("index outdated")
+	messageBucketName        = []byte("messages")
+	configBucketName         = []byte("config")
+	maxMessageCount   uint64 = 5000
 )
 
 type Log interface {
@@ -92,11 +93,15 @@ func New(options Options) (*messageLog, error) {
 		notifications: make(map[string]chan struct{}),
 	}
 	handle.Update(func(tx *bolt.Tx) error {
-		bucket, err := tx.CreateBucketIfNotExists(bucketName)
+		messages, err := tx.CreateBucketIfNotExists(messageBucketName)
 		if err != nil {
 			return err
 		}
-		store.trim(bucket)
+		_, err = tx.CreateBucketIfNotExists(configBucketName)
+		if err != nil {
+			return err
+		}
+		store.trim(messages)
 		return nil
 	})
 	return store, nil
@@ -141,7 +146,7 @@ func (b *messageLog) Append(payload []*packet.Publish) error {
 	}
 	defer tx.Rollback()
 
-	bucket := tx.Bucket(bucketName)
+	bucket := tx.Bucket(messageBucketName)
 	if bucket == nil {
 		return ErrBucketNotFound
 	}
@@ -176,6 +181,12 @@ func (b *messageLog) trim(bucket *bolt.Bucket) {
 		}
 	}
 }
+func (b *messageLog) advanceOffset(consumer []byte, offset uint64) error {
+	return b.conn.Update(func(tx *bolt.Tx) error {
+		config := tx.Bucket(configBucketName)
+		return config.Put(consumer, uint64ToBytes(offset))
+	})
+}
 func (b *messageLog) Get(offset uint64, buff []*packet.Publish) (int, uint64, error) {
 	tx, err := b.conn.Begin(false)
 	if err != nil {
@@ -183,7 +194,7 @@ func (b *messageLog) Get(offset uint64, buff []*packet.Publish) (int, uint64, er
 	}
 	defer tx.Rollback()
 
-	bucket := tx.Bucket(bucketName)
+	bucket := tx.Bucket(messageBucketName)
 	if bucket == nil {
 		return 0, 0, ErrBucketNotFound
 	}
@@ -200,17 +211,30 @@ func (b *messageLog) Get(offset uint64, buff []*packet.Publish) (int, uint64, er
 	}
 	return idx, offset + 1, nil
 }
-func (b *messageLog) Consume(ctx context.Context, fromOffset uint64, f func(*packet.Publish) error) error {
+
+func (b *messageLog) consumerOffset(consumer []byte) uint64 {
+	var offset uint64
+	err := b.conn.View(func(tx *bolt.Tx) error {
+		config := tx.Bucket(configBucketName)
+		offset = bytesToUint64(config.Get(consumer))
+		return nil
+	})
+	if err != nil {
+		return 0
+	}
+	return offset
+}
+func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error {
 	id := uuid.New().String()
 	buf := make([]*packet.Publish, 10)
 	notifications := make(chan struct{}, 1)
-
+	consumer := []byte(consumerName)
 	notifications <- struct{}{}
 	go func() {
 		<-ctx.Done()
 		b.unsubscribe(id)
 	}()
-	var lastSeen uint64 = fromOffset
+	var lastSeen uint64 = b.consumerOffset(consumer)
 	var err error
 	b.subscribe(id, notifications)
 	for range notifications {
@@ -233,6 +257,7 @@ func (b *messageLog) Consume(ctx context.Context, fromOffset uint64, f func(*pac
 				lastSeen++
 			}
 			lastSeen = next
+			b.advanceOffset(consumer, lastSeen)
 			if count < len(buf) {
 				break
 			}

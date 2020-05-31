@@ -16,7 +16,6 @@ import (
 type MessageLog interface {
 	io.Closer
 	Append(b []*packet.Publish) error
-	Consume(ctx context.Context, from uint64, f func(*packet.Publish) error) error
 }
 
 func getLowerQos(a, b int32) int32 {
