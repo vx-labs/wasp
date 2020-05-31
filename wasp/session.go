@@ -83,7 +83,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 
 	L(ctx).Debug("session connected")
 	if metadata := state.GetSessionMetadatasByClientID(session.ClientID); metadata != nil {
-		err := fsm.DeleteSessionMetadata(ctx, metadata.SessionID)
+		err := fsm.DeleteSessionMetadata(ctx, metadata.SessionID, metadata.MountPoint)
 		if err != nil {
 			return err
 		}
@@ -106,7 +106,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	}()
 	defer func() {
 		metadata := state.GetSessionMetadatasByClientID(session.ClientID)
-		fsm.DeleteSessionMetadata(ctx, session.ID)
+		fsm.DeleteSessionMetadata(ctx, session.ID, session.MountPoint)
 		if metadata == nil || metadata.SessionID != session.ID || session.Disconnected {
 			// Session has reconnected on another peer.
 			return

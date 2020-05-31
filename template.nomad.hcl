@@ -116,6 +116,8 @@ EOH
           "--data-dir", "$${NOMAD_TASK_DIR}",
           "--mtls",
           "--use-vault",
+          "--headless",
+          "--log-level", "info",
           "--raft-bootstrap-expect", "3",
           "--consul-join",
           "--consul-service-name", "wasp",
@@ -125,7 +127,8 @@ EOH
           "--tls-cn", "broker.iot.cloud.vx-labs.net",
           "--raft-advertized-address", "$${NOMAD_IP_rpc}", "--raft-advertized-port", "$${NOMAD_HOST_PORT_rpc}",
           "--serf-advertized-address", "$${NOMAD_IP_gossip}", "--serf-advertized-port", "$${NOMAD_HOST_PORT_gossip}",
-          "--nest-tap-address", "messages.iot.cloud.vx-labs.net:443"
+          "--nest-tap-address", "messages.iot.cloud.vx-labs.net:443",
+          "--audit-recorder", "none",
         ]
         force_pull = true
 

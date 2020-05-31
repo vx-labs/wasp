@@ -13,6 +13,20 @@ import (
 func getLogger(config *viper.Viper) *zap.Logger {
 	var logger *zap.Logger
 	var err error
+
+	var level zapcore.Level = zap.InfoLevel
+	switch config.GetString("log-level") {
+	case "debug":
+		level = zap.DebugLevel
+	case "error":
+		level = zap.ErrorLevel
+	case "err":
+		level = zap.ErrorLevel
+	case "warning":
+		level = zap.WarnLevel
+	case "warn":
+		level = zap.WarnLevel
+	}
 	fields := []zap.Field{
 		zap.String("version", BuiltVersion),
 		zap.Time("started_at", time.Now()),
@@ -27,17 +41,19 @@ func getLogger(config *viper.Viper) *zap.Logger {
 	opts := []zap.Option{
 		zap.Fields(fields...),
 	}
-	if config.GetBool("debug") {
+	if config.GetBool("fancy-logs") {
 		config := zap.NewDevelopmentEncoderConfig()
 		config.EncodeLevel = zapcore.CapitalColorLevelEncoder
 		logger = zap.New(zapcore.NewCore(
 			zapcore.NewConsoleEncoder(config),
 			zapcore.AddSync(colorable.NewColorableStdout()),
-			zapcore.DebugLevel,
+			level,
 		))
 		logger.Debug("started debug logger")
 	} else {
-		logger, err = zap.NewProduction(opts...)
+		config := zap.NewProductionConfig()
+		config.Level = zap.NewAtomicLevelAt(level)
+		logger, err = config.Build(opts...)
 	}
 	if err != nil {
 		panic(err)

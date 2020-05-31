@@ -102,7 +102,9 @@ func main() {
 	cmd.Flags().Bool("pprof", false, "Start pprof endpoint.")
 	cmd.Flags().Int("pprof-port", 8080, "Profiling (pprof) port.")
 	cmd.Flags().String("pprof-address", "127.0.0.1", "Profiling (pprof) port.")
-	cmd.Flags().Bool("debug", false, "Use a fancy logger and increase logging level.")
+	cmd.Flags().Bool("headless", false, "Do not print human-oriented messages on stdout.")
+	cmd.Flags().Bool("fancy-logs", false, "Use a fancy logger.")
+	cmd.Flags().String("log-level", "error", "Select the loggers- log level")
 	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
 	cmd.Flags().Bool("mtls", false, "Enforce GRPC service-side TLS certificates validation for client connections.")
 	cmd.Flags().Bool("insecure", false, "Disable GRPC client-side TLS validation.")
@@ -111,7 +113,7 @@ func main() {
 	cmd.Flags().String("consul-service-tag", "gossip", "Consul auto-join service tag.")
 
 	cmd.Flags().Int("metrics-port", 0, "Start Prometheus HTTP metrics server on this port.")
-	cmd.Flags().IntP("tcp-port", "t", 0, "Start TCP listener on this port.")
+	cmd.Flags().IntP("tcp-port", "t", 1883, "Start TCP listener on this port.")
 	cmd.Flags().IntP("tls-port", "s", 0, "Start TLS listener on this port.")
 	cmd.Flags().IntP("wss-port", "w", 0, "Start Secure WS listener on this port.")
 	cmd.Flags().Int("ws-port", 0, "Start WS listener on this port.")
@@ -139,6 +141,8 @@ func main() {
 	cmd.Flags().String("authentication-provider-static-username", "", "Client username, when using \"static\" authentication provider.")
 	cmd.Flags().String("authentication-provider-static-password", "", "Client password, when using \"static\" authentication provider.")
 	cmd.Flags().String("authentication-provider-grpc-address", "", "GRPC Authentication server address, when using \"grpc\" authentication provider.")
+
+	cmd.Flags().String("audit-recorder", "stdout", "Audit recorder used to record state updates. Set to \"none\" to disable audit.")
 
 	cmd.AddCommand(TLSHelper(config))
 	cmd.Execute()

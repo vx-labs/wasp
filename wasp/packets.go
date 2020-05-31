@@ -13,7 +13,7 @@ type FSM interface {
 	DeleteRetainedMessage(ctx context.Context, topic []byte) error
 	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
 	Unsubscribe(ctx context.Context, id string, pattern []byte) error
-	DeleteSessionMetadata(ctx context.Context, id string) error
+	DeleteSessionMetadata(ctx context.Context, id, mountpoint string) error
 	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 

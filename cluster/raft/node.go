@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -245,6 +246,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		ID:                        rc.id,
 		PreVote:                   true,
 		ElectionTick:              10,
+		Logger:                    &raft.DefaultLogger{Logger: log.New(ioutil.Discard, "", 0)},
 		HeartbeatTick:             1,
 		Storage:                   rc.raftStorage,
 		MaxSizePerMsg:             1024 * 1024,
@@ -263,7 +265,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 	if rc.lastIndex == 0 {
 		close(rc.ready)
 	}
-	rc.logger.Info("raft state machine started", zap.Uint64("index", rc.appliedIndex))
+	rc.logger.Debug("raft state machine started", zap.Uint64("index", rc.appliedIndex))
 	rc.hasBeenBootstrapped = true
 	rc.serveChannels(ctx) //blocking loop
 	rc.node.Stop()
@@ -308,7 +310,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 						rc.hasLeader = true
 					}
 					if rd.SoftState.Lead == rc.id {
-						rc.logger.Info("raft leadership acquired")
+						rc.logger.Info("cluster leadership acquired")
 						rc.leaderState.Start(ctx)
 					} else {
 						if rc.currentLeader == rc.id {
