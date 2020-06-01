@@ -38,3 +38,6 @@ service Raft {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
 }
 
+
+service Node {
+}

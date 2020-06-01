@@ -23,7 +23,6 @@ import (
 	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
-	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/async"
 	"github.com/vx-labs/wasp/wasp/fsm"
 	"github.com/vx-labs/wasp/wasp/rpc"
@@ -79,7 +78,6 @@ func run(config *viper.Viper) {
 		TLSPrivateKeyPath:           config.GetString("rpc-tls-private-key-file"),
 	})
 	healthpb.RegisterHealthServer(server, healthServer)
-	api.RegisterNodeServer(server, rpc.NewNodeRPCServer(cancelCh))
 	rpcDialer := rpc.GRPCDialer(rpc.ClientConfig{
 		InsecureSkipVerify:          config.GetBool("insecure"),
 		TLSCertificatePath:          config.GetString("rpc-tls-certificate-file"),

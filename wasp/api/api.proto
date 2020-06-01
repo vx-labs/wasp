@@ -51,10 +51,3 @@ service MQTT {
   rpc ListSessionMetadatas(ListSessionMetadatasRequest)
       returns (ListSessionMetadatasResponse) {}
 }
-
-message ShutdownRequest {}
-message ShutdownResponse {}
-
-service Node {
-  rpc Shutdown(ShutdownRequest) returns (ShutdownResponse) {}
-}

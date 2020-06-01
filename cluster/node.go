@@ -94,6 +94,8 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	raftNode := raft.NewNode(raftConfig, gossip, logger)
 	raftNode.Serve(server)
 
+	clusterpb.RegisterNodeServer(server, newNodeRPCServer())
+
 	return &node{
 		config: config,
 		raft:   raftNode,

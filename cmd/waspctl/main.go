@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/vx-labs/wasp/cluster/clusterpb"
-	"github.com/vx-labs/wasp/wasp/api"
 	"go.uber.org/zap"
 )
 
@@ -70,18 +69,6 @@ func main() {
 			table.Render()
 		},
 	})
-	node.AddCommand(&cobra.Command{
-		Use: "shutdown",
-		Run: func(cmd *cobra.Command, args []string) {
-			conn, l := mustDial(ctx, cmd, config)
-			_, err := api.NewNodeClient(conn).Shutdown(ctx, &api.ShutdownRequest{})
-			if err != nil {
-				l.Fatal("failed to shutdown node", zap.Error(err))
-			}
-			fmt.Println("Shutdown started")
-		},
-	})
-
 	hostname, _ := os.Hostname()
 
 	rootCmd.AddCommand(raft)
