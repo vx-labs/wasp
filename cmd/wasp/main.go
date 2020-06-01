@@ -20,11 +20,11 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/async"
 	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/rpc"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
-	"github.com/vx-labs/wasp/wasp/async"
 	"github.com/vx-labs/wasp/wasp/fsm"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/taps"
