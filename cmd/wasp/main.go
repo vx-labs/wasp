@@ -21,11 +21,11 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/cluster/raft"
+	"github.com/vx-labs/wasp/rpc"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
 	"github.com/vx-labs/wasp/wasp/async"
 	"github.com/vx-labs/wasp/wasp/fsm"
-	"github.com/vx-labs/wasp/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/taps"
 	"github.com/vx-labs/wasp/wasp/transport"
@@ -96,7 +96,7 @@ func run(config *viper.Viper) {
 	}
 	remotePublishCh := make(chan *packet.Publish, 20)
 	stateMachine := fsm.NewFSM(id, state, commandsCh, auditRecorder)
-	mqttServer := rpc.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
+	mqttServer := wasp.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {

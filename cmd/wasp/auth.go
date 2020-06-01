@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/spf13/viper"
+	"github.com/vx-labs/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/auth"
-	"github.com/vx-labs/wasp/wasp/rpc"
 )
 
 func getAuthHandler(ctx context.Context, rpcDialer rpc.Dialer, config *viper.Viper) (auth.AuthenticationHandler, error) {

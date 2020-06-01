@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/spf13/viper"
+	"github.com/vx-labs/wasp/rpc"
 	"github.com/vx-labs/wasp/wasp/audit"
-	"github.com/vx-labs/wasp/wasp/rpc"
 )
 
 func getAuditRecorder(ctx context.Context, rpcDialer rpc.Dialer, config *viper.Viper) (audit.Recorder, error) {
