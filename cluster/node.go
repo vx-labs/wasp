@@ -172,5 +172,9 @@ func (n *node) Run(ctx context.Context) {
 			return
 		}
 	}()
-	n.raft.Run(ctx, peers, join, raft.NodeConfig{})
+	n.raft.Run(ctx, peers, join, raft.NodeConfig{
+		AppliedIndex:              n.config.RaftConfig.AppliedIndex,
+		DisableProposalForwarding: n.config.RaftConfig.DisableProposalForwarding,
+		LeaderFunc:                n.config.RaftConfig.LeaderFunc,
+	})
 }

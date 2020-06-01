@@ -29,8 +29,11 @@ type NodeConfig struct {
 }
 
 type RaftConfig struct {
-	ExpectedNodeCount int
-	Network           NetworkConfig
+	ExpectedNodeCount         int
+	AppliedIndex              uint64
+	DisableProposalForwarding bool
+	LeaderFunc                func(context.Context) error
+	Network                   NetworkConfig
 }
 type NetworkConfig struct {
 	AdvertizedHost string
