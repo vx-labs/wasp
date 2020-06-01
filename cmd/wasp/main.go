@@ -19,7 +19,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/membership"
 	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/vaultacme"
@@ -173,7 +173,7 @@ func run(config *viper.Viper) {
 		peers := raft.Peers{}
 		if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
 			wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-			peers, err = mesh.WaitForNodes(ctx, "wasp", expectedCount, cluster.RaftContext{
+			peers, err = mesh.WaitForNodes(ctx, "wasp", expectedCount, clusterpb.RaftContext{
 				ID:      id,
 				Address: rpcAddress,
 			}, rpcDialer)
@@ -209,7 +209,7 @@ func run(config *viper.Viper) {
 						for _, peer := range peers {
 							ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 							err := mesh.Call(peer.ID, func(c *grpc.ClientConn) error {
-								_, err = cluster.NewRaftClient(c).JoinCluster(ctx, &cluster.RaftContext{
+								_, err = clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
 									ID:      id,
 									Address: rpcAddress,
 								})
