@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/memberlist"
-	api "github.com/vx-labs/wasp/cluster"
+	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"google.golang.org/grpc"
 
 	"go.uber.org/zap"

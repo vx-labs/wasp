@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	api "github.com/vx-labs/wasp/cluster"
+	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/raft"
 	"google.golang.org/grpc"
 )

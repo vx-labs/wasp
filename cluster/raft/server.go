@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	api "github.com/vx-labs/wasp/cluster"
+	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"

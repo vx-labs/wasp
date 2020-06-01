@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/stats"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.etcd.io/etcd/pkg/fileutil"
@@ -43,7 +43,7 @@ type Command struct {
 
 type Membership interface {
 	Call(id uint64, f func(*grpc.ClientConn) error) error
-	Members() []*cluster.Member
+	Members() []*clusterpb.Member
 }
 
 type RaftNode struct {
@@ -430,7 +430,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 
 func (rc *RaftNode) Leave(ctx context.Context) error {
 	for {
-		reqCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
 			cancel()
 			return nil

@@ -14,13 +14,12 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
+	"github.com/vx-labs/wasp/cluster"
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/cluster"
-	"github.com/vx-labs/wasp/cluster/membership"
 	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
@@ -32,7 +31,6 @@ import (
 	"github.com/vx-labs/wasp/wasp/taps"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
@@ -65,7 +63,6 @@ func run(config *viper.Viper) {
 	healthServer := health.NewServer()
 	healthServer.Resume()
 	wg := sync.WaitGroup{}
-	stateLoaded := make(chan struct{})
 	cancelCh := make(chan struct{})
 	publishes := make(chan *packet.Publish, 20)
 	commandsCh := make(chan raft.Command)
@@ -107,21 +104,6 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
 	}
-	mesh := membership.New(
-		id,
-		"wasp",
-		config.GetInt("serf-port"),
-		config.GetString("serf-advertized-address"),
-		config.GetInt("serf-advertized-port"),
-		config.GetInt("raft-advertized-port"),
-		rpcDialer,
-		wasp.L(ctx),
-	)
-	rpcAddress := fmt.Sprintf("%s:%d", config.GetString("raft-advertized-address"), config.GetInt("raft-advertized-port"))
-	mesh.UpdateMetadata(membership.EncodeMD(id,
-		"wasp",
-		rpcAddress,
-	))
 	joinList := config.GetStringSlice("join-node")
 	if config.GetBool("consul-join") {
 		discoveryStarted := time.Now()
@@ -135,29 +117,29 @@ func run(config *viper.Viper) {
 			zap.Duration("consul_discovery_duration", time.Since(discoveryStarted)), zap.Int("node_count", len(consulJoinList)))
 		joinList = append(joinList, consulJoinList...)
 	}
-	if len(joinList) > 0 {
-		joinStarted := time.Now()
-		retryTicker := time.NewTicker(3 * time.Second)
-		for {
-			err = mesh.Join(joinList)
-			if err != nil {
-				wasp.L(ctx).Warn("failed to join gossip mesh", zap.Error(err))
-			} else {
-				break
-			}
-			<-retryTicker.C
-		}
-		retryTicker.Stop()
-		wasp.L(ctx).Info("joined gossip mesh",
-			zap.Duration("gossip_join_duration", time.Since(joinStarted)), zap.Strings("gossip_node_list", joinList))
-	}
-	raftConfig := raft.Config{
-		NodeID:      id,
-		DataDir:     config.GetString("data-dir"),
-		GetSnapshot: state.MarshalBinary,
-	}
-	raftNode := raft.NewNode(raftConfig, mesh, wasp.L(ctx))
-	raftNode.Serve(server)
+
+	clusterNode := cluster.NewNode(cluster.NodeConfig{
+		ID:            id,
+		ServiceName:   "wasp",
+		DataDirectory: config.GetString("data-dir"),
+		GossipConfig: cluster.GossipConfig{
+			JoinList: joinList,
+			Network: cluster.NetworkConfig{
+				AdvertizedHost: config.GetString("serf-advertized-address"),
+				AdvertizedPort: config.GetInt("serf-advertized-port"),
+				ListeningPort:  config.GetInt("serf-port"),
+			},
+		},
+		RaftConfig: cluster.RaftConfig{
+			ExpectedNodeCount: config.GetInt("raft-bootstrap-expect"),
+			Network: cluster.NetworkConfig{
+				AdvertizedHost: config.GetString("raft-advertized-address"),
+				AdvertizedPort: config.GetInt("raft-advertized-port"),
+				ListeningPort:  config.GetInt("raft-port"),
+			},
+		},
+		GetStateSnapshot: state.MarshalBinary,
+	}, rpcDialer, server, wasp.L(ctx))
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("cluster listener stopped")
@@ -167,77 +149,7 @@ func run(config *viper.Viper) {
 			wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
 		}
 	})
-	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("raft node stopped")
-		join := false
-		peers := raft.Peers{}
-		if expectedCount := config.GetInt("raft-bootstrap-expect"); expectedCount > 1 {
-			wasp.L(ctx).Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-			peers, err = mesh.WaitForNodes(ctx, "wasp", expectedCount, cluster.RaftContext{
-				ID:      id,
-				Address: rpcAddress,
-			}, rpcDialer)
-			if err != nil {
-				if err == membership.ErrExistingClusterFound {
-					wasp.L(ctx).Debug("discovered existing raft cluster")
-					join = true
-				} else {
-					wasp.L(ctx).Fatal("failed to discover nodes on gossip mesh", zap.Error(err))
-				}
-			}
-			wasp.L(ctx).Info("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(peers)))
-		} else {
-			wasp.L(ctx).Debug("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
-		}
-		if join {
-			wasp.L(ctx).Debug("joining raft cluster", zap.Array("raft_peers", peers))
-		} else {
-			wasp.L(ctx).Debug("bootstraping raft cluster", zap.Array("raft_peers", peers))
-		}
-		go func() {
-			defer close(stateLoaded)
-			select {
-			case <-raftNode.Ready():
-				if join && raftNode.IsRemovedFromCluster() {
-					wasp.L(ctx).Debug("local node is not a cluster member, will attempt join")
-					ticker := time.NewTicker(1 * time.Second)
-					defer ticker.Stop()
-					for {
-						if raftNode.IsLeader() {
-							return
-						}
-						for _, peer := range peers {
-							ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-							err := mesh.Call(peer.ID, func(c *grpc.ClientConn) error {
-								_, err = cluster.NewRaftClient(c).JoinCluster(ctx, &cluster.RaftContext{
-									ID:      id,
-									Address: rpcAddress,
-								})
-								return err
-							})
-							cancel()
-							if err != nil {
-								wasp.L(ctx).Debug("failed to join raft cluster, retrying", zap.Error(err))
-							} else {
-								wasp.L(ctx).Info("joined cluster")
-								return
-							}
-						}
-						select {
-						case <-ticker.C:
-						case <-ctx.Done():
-							return
-						}
-					}
-				}
-			case <-ctx.Done():
-				return
-			}
-		}()
-		raftNode.Run(ctx, peers, join, raft.NodeConfig{})
-	})
-	snapshotter := <-raftNode.Snapshotter()
-
+	snapshotter := <-clusterNode.Snapshotter()
 	snapshot, err := snapshotter.Load()
 	if err != nil {
 		wasp.L(ctx).Debug("failed to get state snapshot", zap.Error(err))
@@ -248,13 +160,18 @@ func run(config *viper.Viper) {
 		}
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
+		defer wasp.L(ctx).Debug("cluster node stopped")
+		clusterNode.Run(ctx)
+	})
+
+	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("command publisher stopped")
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case event := <-commandsCh:
-				err := raftNode.Apply(event.Ctx, event.Payload)
+				err := clusterNode.Apply(event.Ctx, event.Payload)
 				select {
 				case <-ctx.Done():
 				case <-event.Ctx.Done():
@@ -270,7 +187,7 @@ func run(config *viper.Viper) {
 			select {
 			case <-ctx.Done():
 				return
-			case event := <-raftNode.Commits():
+			case event := <-clusterNode.Commits():
 				if event.Payload == nil {
 					snapshot, err := snapshotter.Load()
 					if err != nil {
@@ -336,7 +253,7 @@ func run(config *viper.Viper) {
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("publish processor stopped")
 		messageLog.Consume(ctx, "publish_processor", func(p *packet.Publish) error {
-			err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, true, p)
+			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, true, p)
 			if err != nil {
 				wasp.L(ctx).Info("publish processing failed", zap.Error(err))
 			}
@@ -350,7 +267,7 @@ func run(config *viper.Viper) {
 			case <-ctx.Done():
 				return
 			case p := <-remotePublishCh:
-				err := wasp.ProcessPublish(ctx, id, mesh, stateMachine, state, false, p)
+				err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, p)
 				if err != nil {
 					wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
 				}
@@ -403,7 +320,7 @@ func run(config *viper.Viper) {
 		}()
 		return nil
 	}
-	<-stateLoaded
+	<-clusterNode.Ready()
 	listeners := []listenerConfig{}
 	if port := config.GetInt("tcp-port"); port > 0 {
 		ln, err := transport.NewTCPTransport(port, handler)
@@ -453,6 +370,7 @@ func run(config *viper.Viper) {
 	healthServer.SetServingStatus("mqtt", healthpb.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus("node", healthpb.HealthCheckResponse_SERVING)
 	healthServer.SetServingStatus("rpc", healthpb.HealthCheckResponse_SERVING)
+
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
 		syscall.SIGINT,
@@ -461,29 +379,34 @@ func run(config *viper.Viper) {
 	if !config.GetBool("headless") {
 		defaultIP := localPrivateHost()
 		fmt.Printf("🐝 Wasp is ready and serving !🐝\n")
+		fmt.Println()
 		if len(listeners) > 0 {
-			fmt.Printf("You can connect to Wasp using:\n")
+			fmt.Printf("🔌 You can connect to Wasp using:\n")
 			for _, listener := range listeners {
 				switch listener.name {
 				case "tcp":
-					fmt.Printf("  • MQTT on address %s%d\n", defaultIP, listener.port)
+					fmt.Printf("  • MQTT on address %s:%d\n", defaultIP, listener.port)
 				case "tls":
-					fmt.Printf("  • MQTT-over-TLS on address %s%d\n", defaultIP, listener.port)
+					fmt.Printf("  • MQTT-over-TLS on address %s:%d\n", defaultIP, listener.port)
 				case "ws":
-					fmt.Printf("  • WebSocket on address %s%d\n", defaultIP, listener.port)
+					fmt.Printf("  • WebSocket on address %s:%d\n", defaultIP, listener.port)
 				case "wss":
-					fmt.Printf("  • WebSocket-over-TLS on address %s%d\n", defaultIP, listener.port)
+					fmt.Printf("  • WebSocket-over-TLS on address %s:%d\n", defaultIP, listener.port)
 				}
 			}
 		} else {
 			fmt.Printf("No listener were enabled, so you won't be able to connect to this node using MQTT.\n")
 		}
 		fmt.Println("")
-		fmt.Println("You can stop the service by pressing Ctrl+C.")
+		fmt.Println("⚡️ You can stop the service by pressing Ctrl+C.")
 	}
 	select {
 	case <-sigc:
 	case <-cancelCh:
+	}
+	if !config.GetBool("headless") {
+		fmt.Println()
+		fmt.Printf("⌛Shutting down Wasp..\n")
 	}
 	wasp.L(ctx).Debug("wasp shutdown initiated")
 	for _, listener := range listeners {
@@ -496,11 +419,11 @@ func run(config *viper.Viper) {
 	} else {
 		wasp.L(ctx).Debug("state machine stopped")
 	}
-	err = raftNode.Leave(ctx)
+	err = clusterNode.Shutdown()
 	if err != nil {
-		wasp.L(ctx).Error("failed to leave raft cluster", zap.Error(err))
+		wasp.L(ctx).Error("failed to leave cluster", zap.Error(err))
 	} else {
-		wasp.L(ctx).Debug("raft cluster left")
+		wasp.L(ctx).Debug("cluster left")
 	}
 	healthServer.Shutdown()
 	wasp.L(ctx).Debug("health server stopped")
@@ -508,11 +431,11 @@ func run(config *viper.Viper) {
 	wasp.L(ctx).Debug("rpc server stopped")
 	clusterListener.Close()
 	wasp.L(ctx).Debug("rpc listener stopped")
+
 	cancel()
 	wg.Wait()
 	wasp.L(ctx).Debug("asynchronous operations stopped")
-	mesh.Shutdown()
-	wasp.L(ctx).Debug("mesh stopped")
+
 	err = messageLog.Close()
 	if err != nil {
 		wasp.L(ctx).Error("failed to close message log", zap.Error(err))
@@ -520,4 +443,7 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Debug("message log closed")
 	}
 	wasp.L(ctx).Info("wasp successfully stopped")
+	if !config.GetBool("headless") {
+		fmt.Printf("👋 Shutdown complete.\n")
+	}
 }
