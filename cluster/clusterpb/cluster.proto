@@ -1,6 +1,7 @@
 syntax = "proto3";
 
-package clusterpb;
+package cluster;
+option go_package = "clusterpb";
 
 import "go.etcd.io/etcd/raft/raftpb/raft.proto";
 
