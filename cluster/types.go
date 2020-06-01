@@ -5,15 +5,18 @@ import (
 	"fmt"
 
 	"github.com/vx-labs/wasp/cluster/raft"
+	"go.etcd.io/etcd/etcdserver/api/snap"
 	"google.golang.org/grpc"
 )
 
-type Dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
-
 type Node interface {
+	Run(context.Context)
 	Shutdown() error
 	Apply(context.Context, []byte) error
 	Commits() <-chan raft.Commit
+	Snapshotter() <-chan *snap.Snapshotter
+	Ready() <-chan struct{}
+	Call(id uint64, f func(*grpc.ClientConn) error) error
 }
 
 type NodeConfig struct {
@@ -27,7 +30,7 @@ type NodeConfig struct {
 
 type RaftConfig struct {
 	ExpectedNodeCount int
-	Network            NetworkConfig
+	Network           NetworkConfig
 }
 type NetworkConfig struct {
 	AdvertizedHost string

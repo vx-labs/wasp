@@ -17,10 +17,13 @@ type node struct {
 	gossip *membership.Gossip
 	logger *zap.Logger
 	config NodeConfig
-	dialer Dialer
+	dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
 	ready  chan struct{}
 }
 
+func (n *node) Call(id uint64, f func(*grpc.ClientConn) error) error {
+	return n.gossip.Call(id, f)
+}
 func (n *node) Apply(ctx context.Context, event []byte) error {
 	return n.raft.Apply(ctx, event)
 }
@@ -31,7 +34,7 @@ func (n *node) Ready() <-chan struct{} {
 	return n.ready
 }
 func (n *node) Shutdown() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 9*time.Second)
 	defer cancel()
 	select {
 	case <-n.ready:
@@ -49,7 +52,7 @@ func (n *node) Snapshotter() <-chan *snap.Snapshotter {
 	return n.raft.Snapshotter()
 }
 
-func NewNode(config NodeConfig, dialer Dialer, server *grpc.Server, logger *zap.Logger) Node {
+func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), server *grpc.Server, logger *zap.Logger) Node {
 
 	gossipNetworkConfig := config.GossipConfig.Network
 	joinList := config.GossipConfig.JoinList
@@ -102,13 +105,13 @@ func NewNode(config NodeConfig, dialer Dialer, server *grpc.Server, logger *zap.
 }
 
 func (n *node) Run(ctx context.Context) {
-
 	defer n.logger.Debug("raft node stopped")
 	join := false
 	peers := raft.Peers{}
+	var err error
 	if expectedCount := n.config.RaftConfig.ExpectedNodeCount; expectedCount > 1 {
 		n.logger.Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-		peers, err := n.gossip.WaitForNodes(ctx, n.config.ServiceName, expectedCount, clusterpb.RaftContext{
+		peers, err = n.gossip.WaitForNodes(ctx, n.config.ServiceName, expectedCount, clusterpb.RaftContext{
 			ID:      n.config.ID,
 			Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 		}, n.dialer)
