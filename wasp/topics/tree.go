@@ -44,7 +44,11 @@ func (t *tree) Count() int {
 func (t *tree) Insert(msg *packet.Publish) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-	return t.root.insert(format.Topic(msg.Topic), msg)
+	payload, err := proto.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	return t.root.insert(format.Topic(msg.Topic), payload)
 }
 func (t *tree) Remove(topic []byte) error {
 	t.mtx.Lock()
@@ -55,5 +59,18 @@ func (t *tree) Remove(topic []byte) error {
 func (t *tree) Match(topic []byte, msg *[]*packet.Publish) error {
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
-	return t.root.match(format.Topic(topic), msg)
+	out := make([][]byte, 0)
+	err := t.root.match(format.Topic(topic), &out)
+	if err != nil {
+		return err
+	}
+	for idx := range out {
+		publish := &packet.Publish{}
+		err := proto.Unmarshal(out[idx], publish)
+		if err != nil {
+			continue
+		}
+		*msg = append(*msg, publish)
+	}
+	return nil
 }

@@ -5,7 +5,6 @@ package topics
 import (
 	"errors"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/format"
 )
@@ -37,20 +36,10 @@ func newNode() *Node {
 	}
 }
 
-func (n *Node) insert(topic format.Topic, msg *packet.Publish) error {
+func (n *Node) insert(topic format.Topic, msg []byte) error {
 	topic, token := topic.Next()
-	var err error
 	if token == "" {
-		n.Buf, err = proto.Marshal(msg)
-		if err != nil {
-			return err
-		}
-		if n.Msg == nil {
-			n.Msg = &packet.Publish{}
-		}
-		if err := proto.Unmarshal(n.Buf, n.Msg); err != nil {
-			return err
-		}
+		n.Buf = msg
 		return nil
 	}
 
@@ -71,7 +60,6 @@ func (n *Node) remove(topic format.Topic) error {
 	topic, token := topic.Next()
 	if token == "" {
 		n.Buf = nil
-		n.Msg = nil
 		return nil
 	}
 	if n.Children == nil {
@@ -91,7 +79,7 @@ func (n *Node) remove(topic format.Topic) error {
 }
 
 func (n *Node) count(counter int) int {
-	if n.Msg != nil && len(n.Msg.Payload) > 0 {
+	if n.Buf != nil && len(n.Buf) > 0 {
 		counter++
 	}
 	for key := range n.Children {
@@ -99,11 +87,11 @@ func (n *Node) count(counter int) int {
 	}
 	return counter
 }
-func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
+func (n *Node) match(topic format.Topic, msgs *[][]byte) error {
 	topic, token := topic.Next()
 	if token == "" {
-		if n.Msg != nil {
-			*msgs = append(*msgs, n.Msg)
+		if n.Buf != nil {
+			*msgs = append(*msgs, n.Buf)
 		}
 		return nil
 	}
@@ -129,9 +117,9 @@ func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
 	return nil
 }
 
-func (n *Node) allRetained(msgs *[]*packet.Publish) {
-	if n.Msg != nil {
-		*msgs = append(*msgs, n.Msg)
+func (n *Node) allRetained(msgs *[][]byte) {
+	if n.Buf != nil {
+		*msgs = append(*msgs, n.Buf)
 	}
 
 	for _, child := range n.Children {
