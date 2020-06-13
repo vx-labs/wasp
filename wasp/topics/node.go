@@ -5,7 +5,6 @@ package topics
 import (
 	"errors"
 
-	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/format"
 )
 
@@ -20,15 +19,6 @@ const (
 var (
 	ErrTopicNotFound = errors.New("Topic not found")
 )
-
-type Store interface {
-	Insert(msg *packet.Publish) error
-	Remove(topic []byte) error
-	Match(topic []byte, msg *[]*packet.Publish) error
-	Dump() ([]byte, error)
-	Load([]byte) error
-	Count() int
-}
 
 func newNode() *Node {
 	return &Node{

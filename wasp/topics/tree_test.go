@@ -6,61 +6,47 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"github.com/vx-labs/mqtt-protocol/packet"
 )
 
-func sortPublishes(out []*packet.Publish) {
+func sortResults(out [][]byte) {
 	sort.Slice(out, func(i, j int) bool {
-		return bytes.Compare(out[i].Topic, out[j].Topic) == -1
+		return bytes.Compare(out[i], out[j]) == -1
 	})
 }
 
 func TestTree(t *testing.T) {
 	tree := NewTree()
 	t.Run("insert", func(t *testing.T) {
-		require.NoError(t, tree.Insert(&packet.Publish{
-			Header:  &packet.Header{},
-			Topic:   []byte("devices/cars/a"),
-			Payload: []byte("test"),
-		}))
-		require.NoError(t, tree.Insert(&packet.Publish{
-			Header:  &packet.Header{},
-			Topic:   []byte("devices/cars/b"),
-			Payload: []byte("test"),
-		}))
-		require.NoError(t, tree.Insert(&packet.Publish{
-			Header:  &packet.Header{},
-			Topic:   []byte("devices/bicycle/c"),
-			Payload: []byte("test"),
-		}))
+		require.NoError(t, tree.Insert([]byte("devices/cars/a"), []byte("a")))
+		require.NoError(t, tree.Insert([]byte("devices/cars/b"), []byte("b")))
+		require.NoError(t, tree.Insert([]byte("devices/bicycle/c"), []byte("c")))
 	})
 	t.Run("match", func(t *testing.T) {
-		out := make([]*packet.Publish, 0)
+		out := make([][]byte, 0)
 		require.NoError(t, tree.Match([]byte("devices/cars/a"), &out))
-		sortPublishes(out)
+		sortResults(out)
 		require.Equal(t, 1, len(out))
-		require.Equal(t, []byte("test"), out[0].Payload)
-		require.Equal(t, []byte("devices/cars/a"), out[0].Topic)
+		require.Equal(t, []byte("a"), out[0])
 
-		out = make([]*packet.Publish, 0)
+		out = make([][]byte, 0)
 		require.NoError(t, tree.Match([]byte("devices/cars/+"), &out))
-		sortPublishes(out)
+		sortResults(out)
 		require.Equal(t, 2, len(out))
-		require.Equal(t, []byte("devices/cars/a"), out[0].Topic)
-		require.Equal(t, []byte("devices/cars/b"), out[1].Topic)
+		require.Equal(t, []byte("a"), out[0])
+		require.Equal(t, []byte("b"), out[1])
 
-		out = make([]*packet.Publish, 0)
+		out = make([][]byte, 0)
 		require.NoError(t, tree.Match([]byte("devices/#"), &out))
-		sortPublishes(out)
+		sortResults(out)
 		require.Equal(t, 3, len(out))
-		require.Equal(t, []byte("devices/bicycle/c"), out[0].Topic)
-		require.Equal(t, []byte("devices/cars/a"), out[1].Topic)
-		require.Equal(t, []byte("devices/cars/b"), out[2].Topic)
+		require.Equal(t, []byte("a"), out[0])
+		require.Equal(t, []byte("b"), out[1])
+		require.Equal(t, []byte("c"), out[2])
 	})
 	t.Run("remove", func(t *testing.T) {
 		require.NoError(t, tree.Remove([]byte("devices/cars/a")))
 
-		out := make([]*packet.Publish, 0)
+		out := make([][]byte, 0)
 		require.NoError(t, tree.Match([]byte("devices/cars/a"), &out))
 		require.Equal(t, 0, len(out))
 	})

@@ -4,9 +4,17 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/format"
 )
+
+type Store interface {
+	Insert(topic []byte, payload []byte) error
+	Remove(topic []byte) error
+	Match(topic []byte, msg *[][]byte) error
+	Dump() ([]byte, error)
+	Load([]byte) error
+	Count() int
+}
 
 func NewTree() Store {
 	return &tree{
@@ -41,14 +49,10 @@ func (t *tree) Count() int {
 	defer t.mtx.RUnlock()
 	return t.root.count(0)
 }
-func (t *tree) Insert(msg *packet.Publish) error {
+func (t *tree) Insert(topic []byte, payload []byte) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-	payload, err := proto.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	return t.root.insert(format.Topic(msg.Topic), payload)
+	return t.root.insert(format.Topic(topic), payload)
 }
 func (t *tree) Remove(topic []byte) error {
 	t.mtx.Lock()
@@ -56,21 +60,8 @@ func (t *tree) Remove(topic []byte) error {
 	return t.root.remove(format.Topic(topic))
 }
 
-func (t *tree) Match(topic []byte, msg *[]*packet.Publish) error {
+func (t *tree) Match(topic []byte, msg *[][]byte) error {
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
-	out := make([][]byte, 0)
-	err := t.root.match(format.Topic(topic), &out)
-	if err != nil {
-		return err
-	}
-	for idx := range out {
-		publish := &packet.Publish{}
-		err := proto.Unmarshal(out[idx], publish)
-		if err != nil {
-			continue
-		}
-		*msg = append(*msg, publish)
-	}
-	return nil
+	return t.root.match(format.Topic(topic), msg)
 }
