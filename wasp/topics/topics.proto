@@ -1,9 +1,7 @@
 syntax = "proto3";
 package topics;
-import "github.com/vx-labs/mqtt-protocol/packet/pb.proto";
 
 message Node {
-  packet.Publish Msg = 1;
   bytes Buf = 2;
   map<string,Node> Children = 3;
 }

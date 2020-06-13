@@ -4,9 +4,7 @@ package topics
 
 import (
 	"errors"
-	"sync"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/format"
 )
@@ -32,76 +30,16 @@ type Store interface {
 	Count() int
 }
 
-func NewTree() Store {
-	return &tree{
-		root: newNode(),
-	}
-}
-
-type tree struct {
-	mtx  sync.RWMutex
-	root *Node
-}
-
-func (t *tree) Dump() ([]byte, error) {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	return proto.Marshal(t.root)
-}
-
-func (t *tree) Load(buf []byte) error {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	root := &Node{}
-	err := proto.Unmarshal(buf, root)
-	if err != nil {
-		return err
-	}
-	t.root = root
-	return nil
-}
-func (t *tree) Count() int {
-	t.mtx.RLock()
-	defer t.mtx.RUnlock()
-	return t.root.count(0)
-}
-func (t *tree) Insert(msg *packet.Publish) error {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	return t.root.insert(format.Topic(msg.Topic), msg)
-}
-func (t *tree) Remove(topic []byte) error {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	return t.root.remove(format.Topic(topic))
-}
-
-func (t *tree) Match(topic []byte, msg *[]*packet.Publish) error {
-	t.mtx.RLock()
-	defer t.mtx.RUnlock()
-	return t.root.match(format.Topic(topic), msg)
-}
-
 func newNode() *Node {
 	return &Node{
 		Children: make(map[string]*Node),
 	}
 }
 
-func (n *Node) insert(topic format.Topic, msg *packet.Publish) error {
+func (n *Node) insert(topic format.Topic, msg []byte) error {
 	topic, token := topic.Next()
-	var err error
 	if token == "" {
-		n.Buf, err = proto.Marshal(msg)
-		if err != nil {
-			return err
-		}
-		if n.Msg == nil {
-			n.Msg = &packet.Publish{}
-		}
-		if err := proto.Unmarshal(n.Buf, n.Msg); err != nil {
-			return err
-		}
+		n.Buf = msg
 		return nil
 	}
 
@@ -122,7 +60,6 @@ func (n *Node) remove(topic format.Topic) error {
 	topic, token := topic.Next()
 	if token == "" {
 		n.Buf = nil
-		n.Msg = nil
 		return nil
 	}
 	if n.Children == nil {
@@ -142,7 +79,7 @@ func (n *Node) remove(topic format.Topic) error {
 }
 
 func (n *Node) count(counter int) int {
-	if n.Msg != nil && len(n.Msg.Payload) > 0 {
+	if n.Buf != nil && len(n.Buf) > 0 {
 		counter++
 	}
 	for key := range n.Children {
@@ -150,11 +87,11 @@ func (n *Node) count(counter int) int {
 	}
 	return counter
 }
-func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
+func (n *Node) match(topic format.Topic, msgs *[][]byte) error {
 	topic, token := topic.Next()
 	if token == "" {
-		if n.Msg != nil {
-			*msgs = append(*msgs, n.Msg)
+		if n.Buf != nil {
+			*msgs = append(*msgs, n.Buf)
 		}
 		return nil
 	}
@@ -180,9 +117,9 @@ func (n *Node) match(topic format.Topic, msgs *[]*packet.Publish) error {
 	return nil
 }
 
-func (n *Node) allRetained(msgs *[]*packet.Publish) {
-	if n.Msg != nil {
-		*msgs = append(*msgs, n.Msg)
+func (n *Node) allRetained(msgs *[][]byte) {
+	if n.Buf != nil {
+		*msgs = append(*msgs, n.Buf)
 	}
 
 	for _, child := range n.Children {
