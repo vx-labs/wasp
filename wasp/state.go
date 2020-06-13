@@ -7,11 +7,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/topics"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
-	"github.com/vx-labs/wasp/wasp/topics"
 )
 
 type ReadState interface {
