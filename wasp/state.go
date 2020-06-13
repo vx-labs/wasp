@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -258,7 +259,11 @@ func (s *state) CloseSession(id string) {
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
 	if len(msg.Payload) > 0 {
-		err := s.topics.Insert(msg)
+		payload, err := proto.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		err = s.topics.Insert(msg.Topic, payload)
 		if err == nil {
 			stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
 		}
@@ -278,6 +283,19 @@ func (s *state) DeleteRetainedMessage(topic []byte) error {
 	return err
 }
 func (s *state) RetainedMessages(topic []byte) ([]*packet.Publish, error) {
-	out := []*packet.Publish{}
-	return out, s.topics.Match(topic, &out)
+	payloads := [][]byte{}
+	err := s.topics.Match(topic, &payloads)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*packet.Publish, len(payloads))
+	for idx := range payloads {
+		pkt := &packet.Publish{}
+		err := proto.Unmarshal(payloads[idx], pkt)
+		if err != nil {
+			continue
+		}
+		out[idx] = pkt
+	}
+	return out, nil
 }
