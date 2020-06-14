@@ -51,6 +51,7 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
 		}
 		rc.appliedIndex = snapshot.Metadata.Index
+		rc.lastIndex = snapshot.Metadata.Index
 		rc.snapshotIndex = snapshot.Metadata.Index
 		rc.confState = snapshot.Metadata.ConfState
 		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", rc.appliedIndex))
