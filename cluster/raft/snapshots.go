@@ -61,10 +61,7 @@ func (rc *RaftNode) forceTriggerSnapshot() {
 		panic(err)
 	}
 
-	compactIndex := uint64(1)
-	if rc.appliedIndex > rc.snapCount {
-		compactIndex = rc.appliedIndex - rc.snapCount
-	}
+	compactIndex := rc.appliedIndex
 	if err := rc.raftStorage.Compact(compactIndex); err != nil {
 		panic(err)
 	}
