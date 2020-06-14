@@ -265,7 +265,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		rc.removed = false
 		rc.node = raft.StartNode(c, rpeers)
 	}
-	if rc.lastIndex == 0 {
+	if rc.lastIndex == config.AppliedIndex {
 		close(rc.ready)
 	}
 	rc.logger.Debug("raft state machine started", zap.Uint64("index", rc.appliedIndex))
