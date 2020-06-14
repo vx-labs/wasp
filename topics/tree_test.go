@@ -2,6 +2,7 @@ package topics
 
 import (
 	"bytes"
+	fmt "fmt"
 	"sort"
 	"testing"
 
@@ -51,4 +52,43 @@ func TestTree(t *testing.T) {
 		require.Equal(t, 0, len(out))
 	})
 
+}
+
+func BenchmarkTree(b *testing.B) {
+	b.Run("insert", func(b *testing.B) {
+		tree := NewTree()
+		for i := 0; i < b.N; i++ {
+			tree.Insert([]byte("test/1"), []byte("test"))
+		}
+	})
+	b.Run("get", func(b *testing.B) {
+		benchmarkOnSize(50,
+			func(tree Store) { tree.Match([]byte("test/40"), &[][]byte{}) })(b)
+		benchmarkOnSize(500,
+			func(tree Store) { tree.Match([]byte("test/40"), &[][]byte{}) })(b)
+		benchmarkOnSize(5000,
+			func(tree Store) { tree.Match([]byte("test/40"), &[][]byte{}) })(b)
+	})
+	b.Run("wildcard", func(b *testing.B) {
+		benchmarkOnSize(50,
+			func(tree Store) { tree.Match([]byte("test/+"), &[][]byte{}) })(b)
+		benchmarkOnSize(500,
+			func(tree Store) { tree.Match([]byte("test/+"), &[][]byte{}) })(b)
+		benchmarkOnSize(5000,
+			func(tree Store) { tree.Match([]byte("test/+"), &[][]byte{}) })(b)
+	})
+}
+
+func benchmarkOnSize(size int, f func(Store)) func(b *testing.B) {
+	return func(b *testing.B) {
+		tree := NewTree()
+		for i := 0; i < size; i++ {
+			tree.Insert([]byte(fmt.Sprintf("test/%d", i)), []byte("test"))
+		}
+		b.Run(fmt.Sprintf("%d", size), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				f(tree)
+			}
+		})
+	}
 }
