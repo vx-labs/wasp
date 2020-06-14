@@ -258,17 +258,18 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 	if os.Getenv("ENABLE_RAFT_DEBUG_LOG") == "true" {
 		c.Logger = &raft.DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
 	}
-	rc.logger.Debug("starting raft state machine")
 	if oldwal || join {
+		rc.logger.Debug("restarting raft state machine")
 		rc.node = raft.RestartNode(c)
 	} else {
+		rc.logger.Debug("starting raft state machine")
 		rc.removed = false
 		rc.node = raft.StartNode(c, rpeers)
 	}
 	if rc.lastIndex == config.AppliedIndex {
 		close(rc.ready)
 	}
-	rc.logger.Debug("raft state machine started", zap.Uint64("index", rc.appliedIndex))
+	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.lastIndex))
 	rc.hasBeenBootstrapped = true
 	rc.serveChannels(ctx) //blocking loop
 	rc.node.Stop()
