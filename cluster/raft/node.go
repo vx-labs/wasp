@@ -255,6 +255,9 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		Applied:                   config.AppliedIndex,
 		DisableProposalForwarding: config.DisableProposalForwarding,
 	}
+	if os.Getenv("ENABLE_RAFT_DEBUG_LOG") == "true" {
+		c.Logger = &raft.DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
+	}
 	rc.logger.Debug("starting raft state machine")
 	if oldwal || join {
 		rc.node = raft.RestartNode(c)
