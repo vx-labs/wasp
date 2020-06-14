@@ -77,6 +77,9 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		})
 	}
 	session.MountPoint = mountPoint
+	if session.Lwt != nil {
+		session.Lwt.Topic = sessions.PrefixMountPoint(session.MountPoint, session.Lwt.Topic)
+	}
 	ctx = AddFields(ctx,
 		zap.String("session_mountpoint", session.MountPoint),
 	)
