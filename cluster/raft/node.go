@@ -434,6 +434,7 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 
 func (rc *RaftNode) Leave(ctx context.Context) error {
 	for {
+		rc.forceTriggerSnapshot()
 		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
 			cancel()

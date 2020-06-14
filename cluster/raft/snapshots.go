@@ -45,7 +45,9 @@ func (rc *RaftNode) maybeTriggerSnapshot() {
 	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
 		return
 	}
-
+	rc.forceTriggerSnapshot()
+}
+func (rc *RaftNode) forceTriggerSnapshot() {
 	rc.logger.Debug("start snapshot", zap.Uint64("applied_index", rc.appliedIndex), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
 	data, err := rc.getSnapshot()
 	if err != nil {
