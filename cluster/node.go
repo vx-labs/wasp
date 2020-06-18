@@ -13,12 +13,13 @@ import (
 )
 
 type node struct {
-	raft   *raft.RaftNode
-	gossip *membership.Gossip
-	logger *zap.Logger
-	config NodeConfig
-	dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
-	ready  chan struct{}
+	cluster string
+	raft    *raft.RaftNode
+	gossip  *membership.Gossip
+	logger  *zap.Logger
+	config  NodeConfig
+	dialer  func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+	ready   chan struct{}
 }
 
 func (n *node) Call(id uint64, f func(*grpc.ClientConn) error) error {
@@ -113,10 +114,7 @@ func (n *node) Run(ctx context.Context) {
 	var err error
 	if expectedCount := n.config.RaftConfig.ExpectedNodeCount; expectedCount > 1 {
 		n.logger.Debug("waiting for nodes to be discovered", zap.Int("expected_node_count", expectedCount))
-		peers, err = n.gossip.WaitForNodes(ctx, n.config.ServiceName, expectedCount, clusterpb.RaftContext{
-			ID:      n.config.ID,
-			Address: n.config.RaftConfig.Network.AdvertizedAddress(),
-		}, n.dialer)
+		peers, err = n.gossip.WaitForNodes(ctx, n.config.ServiceName, n.cluster, expectedCount, n.dialer)
 		if err != nil {
 			if err == membership.ErrExistingClusterFound {
 				n.logger.Debug("discovered existing raft cluster")
@@ -148,13 +146,27 @@ func (n *node) Run(ctx context.Context) {
 					}
 					for _, peer := range peers {
 						ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-						err := n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
-							_, err := clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
-								ID:      n.config.ID,
-								Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+						var err error
+						if n.cluster != "" {
+							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
+								_, err := clusterpb.NewMultiRaftClient(c).JoinCluster(ctx, &clusterpb.JoinClusterRequest{
+									ClusterID: n.cluster,
+									Context: &clusterpb.RaftContext{
+										ID:      n.config.ID,
+										Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+									},
+								})
+								return err
 							})
-							return err
-						})
+						} else {
+							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
+								_, err := clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
+									ID:      n.config.ID,
+									Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+								})
+								return err
+							})
+						}
 						cancel()
 						if err != nil {
 							n.logger.Debug("failed to join raft cluster, retrying", zap.Error(err))

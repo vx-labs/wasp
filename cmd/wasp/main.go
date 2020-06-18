@@ -138,7 +138,6 @@ func run(config *viper.Viper) {
 		},
 		GetStateSnapshot: state.MarshalBinary,
 	}, rpcDialer, server, wasp.L(ctx))
-
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("cluster listener stopped")
 

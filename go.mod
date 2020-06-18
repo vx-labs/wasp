@@ -8,7 +8,7 @@ require (
 	github.com/boltdb/bolt v1.3.1
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dustin/go-humanize v1.0.0
-	github.com/gogo/protobuf v1.3.1
+	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.3.5
 	github.com/google/uuid v1.1.1
 	github.com/gorilla/websocket v1.4.1
@@ -20,6 +20,7 @@ require (
 	github.com/hashicorp/memberlist v0.2.0
 	github.com/hashicorp/serf v0.8.5 // indirect
 	github.com/hashicorp/vault/api v1.0.4
+	github.com/kisielk/errcheck v1.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.6
 	github.com/oklog/ulid v1.3.1
 	github.com/olekukonko/tablewriter v0.0.4

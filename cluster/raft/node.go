@@ -48,6 +48,7 @@ type Membership interface {
 
 type RaftNode struct {
 	id                  uint64 // client ID for raft session
+	clusterID           string
 	address             string
 	currentLeader       uint64
 	hasLeader           bool
@@ -81,6 +82,7 @@ type RaftNode struct {
 type Config struct {
 	NodeID      uint64
 	NodeAddress string
+	ClusterID   string
 	DataDir     string
 	GetSnapshot func() ([]byte, error)
 }
@@ -104,6 +106,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 
 	rc := &RaftNode{
 		id:               id,
+		clusterID:        config.ClusterID,
 		address:          config.NodeAddress,
 		membership:       mesh,
 		currentLeader:    0,

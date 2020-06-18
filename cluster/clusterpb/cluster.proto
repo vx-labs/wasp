@@ -10,13 +10,14 @@ message Payload { bytes Data = 1; }
 message RaftContext {
   uint64 ID = 1;
   string Address = 2;
+  repeated string Clusters = 3;
 }
 
 message JoinClusterResponse {}
 
 message PeerResponse { bool status = 1; }
 
-message GetMembersRequest {}
+message GetMembersRequest { string ClusterID = 1; }
 message Member {
   uint64 ID = 1;
   string Address = 2;
@@ -24,7 +25,7 @@ message Member {
   bool IsAlive = 4;
 }
 message GetMembersResponse { repeated Member Members = 1; }
-message GetStatusRequest {};
+message GetStatusRequest { string ClusterID = 1; };
 message GetStatusResponse {
   bool IsLeader = 1;
   bool HasBeenBootstrapped = 2;
@@ -38,6 +39,21 @@ service Raft {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
 }
 
-
-service Node {
+message ProcessMessageRequest {
+  string ClusterID = 1;
+  raftpb.Message Message = 2;
 }
+
+message JoinClusterRequest {
+  string ClusterID = 1;
+  RaftContext Context = 2;
+}
+
+service MultiRaft {
+  rpc ProcessMessage(ProcessMessageRequest) returns (Payload) {}
+  rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse) {}
+  rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
+  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+}
+
+service Node {}

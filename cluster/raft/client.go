@@ -22,8 +22,16 @@ func (rc *RaftNode) Send(ctx context.Context, messages []raftpb.Message) {
 			continue
 		}
 		err := rc.membership.Call(message.To, func(c *grpc.ClientConn) error {
-			_, err := api.NewRaftClient(c).ProcessMessage(ctx, &message)
-			return err
+			if rc.clusterID != "" {
+				_, err := api.NewMultiRaftClient(c).ProcessMessage(ctx, &api.ProcessMessageRequest{
+					ClusterID: rc.clusterID,
+					Message:   &message,
+				})
+				return err
+			} else {
+				_, err := api.NewRaftClient(c).ProcessMessage(ctx, &message)
+				return err
+			}
 		})
 		if err != nil {
 			stats.HistogramVec("raftRPCHandling").With(prometheus.Labels{"result": "failure", "message_type": message.Type.String()}).Observe(stats.MilisecondsElapsed(start))

@@ -18,7 +18,7 @@ type MemberlistMemberProvider interface {
 	Members() []api.RaftContext
 }
 
-func (mesh *Gossip) WaitForNodes(ctx context.Context, clusterName string, expectedNumber int, localContext api.RaftContext, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
+func (mesh *Gossip) WaitForNodes(ctx context.Context, clusterName, nodeName string, expectedNumber int, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)
@@ -41,13 +41,26 @@ func (mesh *Gossip) WaitForNodes(ctx context.Context, clusterName string, expect
 					continue
 				}
 				ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
-				out, err := api.NewRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{})
-				cancel()
-				if err != nil {
-					continue
-				}
-				if md.ID != mesh.id && out.HasBeenBootstrapped {
-					clusterFound = true
+				if nodeName == "" {
+					out, err := api.NewRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{})
+					cancel()
+					if err != nil {
+						continue
+					}
+					if md.ID != mesh.id && out.HasBeenBootstrapped {
+						clusterFound = true
+					}
+				} else {
+					out, err := api.NewMultiRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{
+						ClusterID: nodeName,
+					})
+					cancel()
+					if err != nil {
+						continue
+					}
+					if md.ID != mesh.id && out.HasBeenBootstrapped {
+						clusterFound = true
+					}
 				}
 				clusterChecked++
 			}
