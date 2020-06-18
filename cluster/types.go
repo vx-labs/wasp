@@ -19,7 +19,7 @@ type Node interface {
 	Call(id uint64, f func(*grpc.ClientConn) error) error
 }
 type MultiNode interface {
-	Node(cluster string) Node
+	Node(name string, getStateSnapshot func() ([]byte, error)) Node
 }
 
 type NodeConfig struct {

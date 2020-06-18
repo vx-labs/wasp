@@ -83,7 +83,7 @@ func NewMultiNode(config NodeConfig, dialer func(address string, opts ...grpc.Di
 	clusterpb.RegisterMultiRaftServer(server, m)
 	return m
 }
-func (n *multinode) Node(cluster string) Node {
+func (n *multinode) Node(cluster string, getStateSnapshot func() ([]byte, error)) Node {
 	n.mtx.Lock()
 	defer n.mtx.Unlock()
 
@@ -91,7 +91,7 @@ func (n *multinode) Node(cluster string) Node {
 		NodeID:      n.config.ID,
 		ClusterID:   cluster,
 		DataDir:     path.Join(n.config.DataDirectory, "nodes", cluster),
-		GetSnapshot: n.config.GetStateSnapshot, //TODO
+		GetSnapshot: getStateSnapshot,
 	}
 	raftNode := raft.NewNode(raftConfig, n.gossip, n.logger)
 	n.rafts[cluster] = raftNode
