@@ -10,6 +10,7 @@ message Payload { bytes Data = 1; }
 message RaftContext {
   uint64 ID = 1;
   string Address = 2;
+  repeated string Clusters = 3;
 }
 
 message JoinClusterResponse {}
@@ -43,7 +44,10 @@ message ProcessMessageRequest {
   raftpb.Message Message = 2;
 }
 
-message JoinClusterRequest { string ClusterID = 1; }
+message JoinClusterRequest {
+  string ClusterID = 1;
+  RaftContext Context = 2;
+}
 
 service MultiRaft {
   rpc ProcessMessage(ProcessMessageRequest) returns (Payload) {}
