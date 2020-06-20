@@ -20,6 +20,7 @@ type Node interface {
 }
 type MultiNode interface {
 	Node(cluster string, config RaftConfig) Node
+	Shutdown() error
 }
 
 type NodeConfig struct {
