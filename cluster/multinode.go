@@ -25,14 +25,6 @@ type multinode struct {
 }
 
 func (n *multinode) Shutdown() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	for _, instance := range n.rafts {
-		err := instance.Leave(ctx)
-		if err != nil {
-			return err
-		}
-	}
 	return n.gossip.Shutdown()
 }
 
