@@ -83,17 +83,17 @@ func NewMultiNode(config NodeConfig, dialer func(address string, opts ...grpc.Di
 	clusterpb.RegisterMultiRaftServer(server, m)
 	return m
 }
-func (n *multinode) Node(cluster string, getStateSnapshot func() ([]byte, error)) Node {
+func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 	n.mtx.Lock()
 	defer n.mtx.Unlock()
 
-	raftConfig := raft.Config{
+	raftNode := raft.NewNode(raft.Config{
 		NodeID:      n.config.ID,
 		ClusterID:   cluster,
 		DataDir:     path.Join(n.config.DataDirectory, "nodes", cluster),
-		GetSnapshot: getStateSnapshot,
-	}
-	raftNode := raft.NewNode(raftConfig, n.gossip, n.logger)
+		GetSnapshot: raftConfig.GetStateSnapshot,
+	}, n.gossip, n.logger)
+
 	n.rafts[cluster] = raftNode
 	clusterList := make([]string, len(n.rafts))
 	idx := 0
@@ -106,10 +106,13 @@ func (n *multinode) Node(cluster string, getStateSnapshot func() ([]byte, error)
 		n.config.RaftConfig.Network.AdvertizedAddress(),
 	))
 
+	config := n.config
+	config.RaftConfig = raftConfig
+
 	return &node{
 		raft:    n.rafts[cluster],
 		cluster: cluster,
-		config:  n.config,
+		config:  config,
 		dialer:  n.dialer,
 		gossip:  n.gossip,
 		logger:  n.logger,

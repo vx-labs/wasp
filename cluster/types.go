@@ -19,16 +19,15 @@ type Node interface {
 	Call(id uint64, f func(*grpc.ClientConn) error) error
 }
 type MultiNode interface {
-	Node(name string, getStateSnapshot func() ([]byte, error)) Node
+	Node(cluster string, config RaftConfig) Node
 }
 
 type NodeConfig struct {
-	ID               uint64
-	ServiceName      string
-	DataDirectory    string
-	GossipConfig     GossipConfig
-	RaftConfig       RaftConfig
-	GetStateSnapshot func() ([]byte, error)
+	ID            uint64
+	ServiceName   string
+	DataDirectory string
+	GossipConfig  GossipConfig
+	RaftConfig    RaftConfig
 }
 
 type RaftConfig struct {
@@ -37,6 +36,7 @@ type RaftConfig struct {
 	DisableProposalForwarding bool
 	LeaderFunc                func(context.Context) error
 	Network                   NetworkConfig
+	GetStateSnapshot          func() ([]byte, error)
 }
 type NetworkConfig struct {
 	AdvertizedHost string

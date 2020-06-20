@@ -129,6 +129,7 @@ func run(config *viper.Viper) {
 			},
 		},
 		RaftConfig: cluster.RaftConfig{
+			GetStateSnapshot:  state.MarshalBinary,
 			ExpectedNodeCount: config.GetInt("raft-bootstrap-expect"),
 			Network: cluster.NetworkConfig{
 				AdvertizedHost: config.GetString("raft-advertized-address"),
@@ -136,7 +137,6 @@ func run(config *viper.Viper) {
 				ListeningPort:  config.GetInt("raft-port"),
 			},
 		},
-		GetStateSnapshot: state.MarshalBinary,
 	}, rpcDialer, server, wasp.L(ctx))
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("cluster listener stopped")
