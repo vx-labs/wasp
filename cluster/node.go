@@ -46,6 +46,9 @@ func (n *node) Shutdown() error {
 	if err != nil {
 		return err
 	}
+	if n.cluster != "" {
+		return nil
+	}
 	return n.gossip.Shutdown()
 }
 
