@@ -12,3 +12,6 @@ test::
 	go test -v ./...
 watch::
 	while true; do inotifywait -qq -r -e create,close_write,modify,move,delete ./ && clear; date; echo; go test ./...; done
+cistatus::
+	@curl -s https://api.github.com/repos/vx-labs/wasp/actions/runs | jq -r '.workflow_runs[] | ("[" + .created_at + "] " + .head_commit.message +": "+.status+" ("+.conclusion+")")'  | head -n 5
+
