@@ -9,11 +9,11 @@ type staticHandler struct {
 	passwordHash string
 }
 
-func (h *staticHandler) Authenticate(ctx context.Context, mqtt ApplicationContext, transport TransportContext) (string, error) {
+func (h *staticHandler) Authenticate(ctx context.Context, mqtt ApplicationContext, transport TransportContext) (Principal, error) {
 	if fingerprintBytes(mqtt.Username) != h.usernameHash || fingerprintBytes(mqtt.Password) != h.passwordHash {
-		return "", ErrAuthenticationFailed
+		return Principal{ID: randomID(), MountPoint: AuthenticationFailedMountPoint}, ErrAuthenticationFailed
 	}
-	return DefaultMountPoint, nil
+	return Principal{ID: randomID(), MountPoint: DefaultMountPoint}, nil
 }
 
 // StaticHandler returns a static authentication handler.

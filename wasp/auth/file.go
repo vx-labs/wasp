@@ -18,15 +18,18 @@ type fileHandler struct {
 	db []fileRecord
 }
 
-func (h *fileHandler) Authenticate(ctx context.Context, mqtt ApplicationContext, transport TransportContext) (string, error) {
+func (h *fileHandler) Authenticate(ctx context.Context, mqtt ApplicationContext, transport TransportContext) (Principal, error) {
 	usernameHash := fingerprintBytes(mqtt.Username)
 	idx := sort.Search(len(h.db), func(i int) bool { return h.db[i].UsernameHash == usernameHash })
 	if idx < len(h.db) && h.db[idx].UsernameHash == usernameHash {
 		if h.db[idx].PasswordHash == fingerprintBytes(mqtt.Password) {
-			return h.db[idx].MountPoint, nil
+			return Principal{
+				ID:         randomID(),
+				MountPoint: h.db[idx].MountPoint,
+			}, nil
 		}
 	}
-	return "", ErrAuthenticationFailed
+	return Principal{}, ErrAuthenticationFailed
 }
 
 func searchHelper(out []fileRecord) func(i, j int) bool {

@@ -307,12 +307,13 @@ func run(config *viper.Viper) {
 			defer cancel()
 			ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
 			wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes,
-				func(ctx context.Context, mqtt auth.ApplicationContext) (mountpoint string, err error) {
-					return authHandler.Authenticate(ctx, mqtt, auth.TransportContext{
+				func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error) {
+					principal, err := authHandler.Authenticate(ctx, mqtt, auth.TransportContext{
 						Encrypted:       m.Encrypted,
 						RemoteAddress:   m.RemoteAddress,
 						X509Certificate: nil,
 					})
+					return principal.ID, principal.MountPoint, err
 				})
 		}()
 		return nil

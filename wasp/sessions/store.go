@@ -5,8 +5,6 @@ import (
 	"io"
 	"sync"
 
-	"github.com/google/uuid"
-
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 )
@@ -24,7 +22,6 @@ type Session struct {
 }
 
 func (s *Session) ProcessConnect(connect *packet.Connect) error {
-	s.ID = uuid.New().String()
 	s.ClientID = string(connect.ClientId)
 	if len(connect.WillTopic) > 0 {
 		s.Lwt = &packet.Publish{

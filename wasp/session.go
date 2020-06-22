@@ -25,9 +25,9 @@ var (
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
 )
 
-type AuthenticationHandler func(ctx context.Context, mqtt auth.ApplicationContext) (mountpoint string, err error)
+type AuthenticationHandler func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error)
 
-func doAuth(ctx context.Context, connectPkt *packet.Connect, handler AuthenticationHandler) (string, error) {
+func doAuth(ctx context.Context, connectPkt *packet.Connect, handler AuthenticationHandler) (string, string, error) {
 	return handler(ctx,
 		auth.ApplicationContext{
 			ClientID: connectPkt.ClientId,
@@ -63,12 +63,14 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	if err != nil {
 		return err
 	}
+	id, mountPoint, err := doAuth(ctx, connectPkt, authHandler)
+	session.ID = id
+	session.MountPoint = mountPoint
 	ctx = AddFields(ctx,
 		zap.String("session_id", session.ID),
 		zap.Time("connected_at", time.Now()),
 		zap.String("session_username", string(connectPkt.Username)),
 	)
-	mountPoint, err := doAuth(ctx, connectPkt, authHandler)
 	if err != nil {
 		L(ctx).Info("authentication failed", zap.Error(err))
 		return enc.ConnAck(&packet.ConnAck{
@@ -76,7 +78,6 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session.MountPoint = mountPoint
 	if session.Lwt != nil {
 		session.Lwt.Topic = sessions.PrefixMountPoint(session.MountPoint, session.Lwt.Topic)
 	}
