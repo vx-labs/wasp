@@ -37,14 +37,14 @@ func parseTemplate(body string) *template.Template {
 var templates = map[event]*template.Template{
 	SessionConnected:     parseTemplate("session {{ .session_id | shorten }} connected"),
 	SessionDisonnected:   parseTemplate("session {{ .session_id | shorten }} disconnected"),
-	SubscriptionCreated:  parseTemplate("session {{ .session_id | shorten }} subscribed to topic \"{{ .pattern | bytesToString }}\""),
-	SubscriptionDeleted:  parseTemplate("session {{ .session_id | shorten }} unsubscribed to topic \"{{ .pattern | bytesToString }}\""),
+	SubscriptionCreated:  parseTemplate("session {{ .session_id | shorten }} subscribed to topic \"{{ .pattern }}\""),
+	SubscriptionDeleted:  parseTemplate("session {{ .session_id | shorten }} unsubscribed to topic \"{{ .pattern }}\""),
 	PeerLost:             parseTemplate("wasp peer {{ .peer | shorten }} left the cluster"),
-	RetainMessageStored:  parseTemplate("message retained for topic {{ .topic | bytesToString }}"),
-	RetainMessageDeleted: parseTemplate("retained message deleted for topic {{ .topic | bytesToString }}"),
+	RetainMessageStored:  parseTemplate("message retained for topic {{ .topic }}"),
+	RetainMessageDeleted: parseTemplate("retained message deleted for topic {{ .topic }}"),
 }
 
-func (s *stdoutRecorder) RecordEvent(tenant string, eventKind event, payload map[string]interface{}) error {
+func (s *stdoutRecorder) RecordEvent(tenant string, eventKind event, payload map[string]string) error {
 	tpl, ok := templates[eventKind]
 	if ok {
 		return tpl.Execute(os.Stdout, payload)

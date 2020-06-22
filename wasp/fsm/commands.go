@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"context"
+	fmt "fmt"
 	"log"
 	"time"
 
@@ -62,49 +63,49 @@ func (f *FSM) record(ctx context.Context, events ...*StateTransition) error {
 		case *StateTransition_RetainedMessageDeleted:
 			input := event.RetainedMessageDeleted
 			tenant, topic := splitTenant(input.Topic)
-			err = f.recorder.RecordEvent(tenant, audit.RetainMessageDeleted, map[string]interface{}{
-				"topic": topic,
+			err = f.recorder.RecordEvent(tenant, audit.RetainMessageDeleted, map[string]string{
+				"topic": string(topic),
 			})
 
 		case *StateTransition_RetainedMessageStored:
 			input := event.RetainedMessageStored
 			tenant, topic := splitTenant(input.Publish.Topic)
-			err = f.recorder.RecordEvent(tenant, audit.RetainMessageStored, map[string]interface{}{
-				"topic":   topic,
-				"payload": input.Publish.Payload,
-				"qos":     input.Publish.Header.Qos,
+			err = f.recorder.RecordEvent(tenant, audit.RetainMessageStored, map[string]string{
+				"topic": string(topic),
+				"qos":   fmt.Sprintf("%d", input.Publish.Header.Qos),
 			})
 		case *StateTransition_SessionSubscribed:
 			input := event.SessionSubscribed
 			tenant, topic := splitTenant(input.Pattern)
-			err = f.recorder.RecordEvent(tenant, audit.SubscriptionCreated, map[string]interface{}{
-				"pattern":    topic,
-				"qos":        input.Qos,
+			err = f.recorder.RecordEvent(tenant, audit.SubscriptionCreated, map[string]string{
+				"pattern":    string(topic),
+				"qos":        fmt.Sprintf("%d", input.Qos),
 				"session_id": input.SessionID,
 			})
 		case *StateTransition_SessionUnsubscribed:
 			input := event.SessionUnsubscribed
 			tenant, topic := splitTenant(input.Pattern)
-			err = f.recorder.RecordEvent(tenant, audit.SubscriptionDeleted, map[string]interface{}{
-				"pattern":    topic,
+			err = f.recorder.RecordEvent(tenant, audit.SubscriptionDeleted, map[string]string{
+				"pattern":    string(topic),
 				"session_id": input.SessionID,
 			})
 		case *StateTransition_PeerLost:
 		case *StateTransition_SessionCreated:
 			input := event.SessionCreated
-			err = f.recorder.RecordEvent(input.MountPoint, audit.SessionConnected, map[string]interface{}{
+			err = f.recorder.RecordEvent(input.MountPoint, audit.SessionConnected, map[string]string{
 				"session_id": input.SessionID,
 				"client_id":  input.ClientID,
 			})
 		case *StateTransition_SessionDeleted:
 			input := event.SessionDeleted
-			err = f.recorder.RecordEvent(input.MountPoint, audit.SessionDisonnected, map[string]interface{}{
+			err = f.recorder.RecordEvent(input.MountPoint, audit.SessionDisonnected, map[string]string{
 				"session_id": input.SessionID,
 			})
 		}
 		if err != nil {
 			log.Println(err)
-			return err
+			// Do not fail if audit recording fails
+			return nil
 		}
 	}
 	return nil

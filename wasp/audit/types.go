@@ -1,5 +1,7 @@
 package audit
 
+//go:generate protoc -I ${GOPATH}/src/github.com/vx-labs/wasp/vendor -I ${GOPATH}/src/github.com/vx-labs/wasp/wasp/audit/ audit.proto --go_out=plugins=grpc:.
+
 type event string
 
 const (
@@ -13,5 +15,5 @@ const (
 )
 
 type Recorder interface {
-	RecordEvent(tenant string, eventKind event, payload map[string]interface{}) error
+	RecordEvent(tenant string, eventKind event, payload map[string]string) error
 }

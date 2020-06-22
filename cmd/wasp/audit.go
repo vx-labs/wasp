@@ -14,6 +14,12 @@ func getAuditRecorder(ctx context.Context, rpcDialer rpc.Dialer, config *viper.V
 	switch provider {
 	case "none":
 		return audit.NoneRecorder(), nil
+	case "grpc":
+		remote, err := rpcDialer(config.GetString("audit-recorder-grpc-address"))
+		if err != nil {
+			return nil, err
+		}
+		return audit.GRPCRecorder(remote), nil
 	case "stdout":
 		return audit.StdoutRecorder(), nil
 	default:

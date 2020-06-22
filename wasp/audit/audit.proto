@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package audit;
+
+
+message WaspEventAttribute {
+  string Key = 1;
+  string Value = 2;
+}
+
+message WaspEvent {
+  int64 Timestamp = 1;
+  string Tenant = 2;
+  string Kind = 3;
+  repeated WaspEventAttribute Attributes = 4;
+}
+
+
+message PutWaspEventRequest { repeated WaspEvent Events = 1; }
+message PutWaspWaspEventsResponse {}
+
+service WaspAuditRecorder {
+  rpc PutWaspEvents(PutWaspEventRequest) returns (PutWaspWaspEventsResponse) {}
+}
