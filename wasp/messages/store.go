@@ -33,7 +33,7 @@ var (
 type Log interface {
 	io.Closer
 	Append(b []*packet.Publish) error
-	Consume(ctx context.Context, from uint64, f func(*packet.Publish) error) error
+	Consume(ctx context.Context, from uint64, f func(string, *packet.Publish) error) error
 }
 
 type messageLog struct {
@@ -63,15 +63,15 @@ type Options struct {
 	NoSync bool
 }
 
-func mustEncode(p *packet.Publish) []byte {
+func mustEncode(p *StoredMessage) []byte {
 	buf, err := proto.Marshal(p)
 	if err != nil {
 		panic(err)
 	}
 	return buf
 }
-func mustDecode(b []byte) *packet.Publish {
-	p := &packet.Publish{}
+func mustDecode(b []byte) *StoredMessage {
+	p := &StoredMessage{}
 	err := proto.Unmarshal(b, p)
 	if err != nil {
 		panic(err)
@@ -139,7 +139,7 @@ func (b *messageLog) unsubscribe(id string) {
 	}
 }
 
-func (b *messageLog) Append(payload []*packet.Publish) error {
+func (b *messageLog) Append(payload []*StoredMessage) error {
 	tx, err := b.conn.Begin(true)
 	if err != nil {
 		return err
@@ -187,7 +187,7 @@ func (b *messageLog) advanceOffset(consumer []byte, offset uint64) error {
 		return config.Put(consumer, uint64ToBytes(offset))
 	})
 }
-func (b *messageLog) Get(offset uint64, buff []*packet.Publish) (int, uint64, error) {
+func (b *messageLog) Get(offset uint64, buff []*StoredMessage) (int, uint64, error) {
 	tx, err := b.conn.Begin(false)
 	if err != nil {
 		return 0, 0, err
@@ -224,9 +224,9 @@ func (b *messageLog) consumerOffset(consumer []byte) uint64 {
 	}
 	return offset
 }
-func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error {
+func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(string, *packet.Publish) error) error {
 	id := uuid.New().String()
-	buf := make([]*packet.Publish, 10)
+	buf := make([]*StoredMessage, 10)
 	notifications := make(chan struct{}, 1)
 	consumer := []byte(consumerName)
 	notifications <- struct{}{}
@@ -244,7 +244,7 @@ func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(*p
 				return err
 			}
 			for _, p := range buf[0:count] {
-				err = f(p)
+				err = f(p.Sender, p.Publish)
 				if err != nil {
 					log.Print(err)
 					select {

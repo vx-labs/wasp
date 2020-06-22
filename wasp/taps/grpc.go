@@ -10,13 +10,15 @@ import (
 
 func GRPC(remote *grpc.ClientConn) (Tap, error) {
 	client := NewTapClient(remote)
-	return func(ctx context.Context, p *packet.Publish) error {
+	return func(ctx context.Context, sender string, p *packet.Publish) error {
 		_, err := client.PutWaspRecords(ctx, &PutWaspRecordRequest{
 			WaspRecords: []*WaspRecord{
 				{
 					Timestamp: time.Now().UnixNano(),
 					Topic:     p.Topic,
 					Payload:   p.Payload,
+					Retained:  p.Header.Retain,
+					Sender:    sender,
 				},
 			},
 		})

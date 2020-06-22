@@ -8,6 +8,7 @@ import (
 
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/messages"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -15,7 +16,7 @@ import (
 
 type MessageLog interface {
 	io.Closer
-	Append(b []*packet.Publish) error
+	Append(b []*messages.StoredMessage) error
 }
 
 func getLowerQos(a, b int32) int32 {
@@ -89,7 +90,7 @@ func ProcessPublish(ctx context.Context, id uint64, transport Membership, fsm FS
 	}
 	return nil
 }
-func StorePublish(messageLog MessageLog, p []*packet.Publish) error {
+func StorePublish(messageLog MessageLog, p []*messages.StoredMessage) error {
 	err := messageLog.Append(p)
 	if err != nil {
 		return err

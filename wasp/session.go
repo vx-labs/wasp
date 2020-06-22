@@ -10,6 +10,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/auth"
+	"github.com/vx-labs/wasp/wasp/messages"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
@@ -36,7 +37,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 		})
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *packet.Publish, authHandler AuthenticationHandler) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *messages.StoredMessage, authHandler AuthenticationHandler) error {
 	defer c.Close()
 	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
 		"protocol": "mqtt",
@@ -119,7 +120,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		if err != nil {
 			L(ctx).Debug("session lost", zap.String("loss_reason", err.Error()))
 			if session.Lwt != nil {
-				ch <- session.Lwt
+				ch <- &messages.StoredMessage{Publish: session.Lwt, Sender: session.ID}
 			}
 		}
 	}()

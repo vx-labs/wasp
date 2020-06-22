@@ -11,14 +11,14 @@ import (
 )
 
 type MessageLog interface {
-	Consume(context.Context, string, func(*packet.Publish) error) error
+	Consume(context.Context, string, func(string, *packet.Publish) error) error
 }
 
-type Tap func(context.Context, *packet.Publish) error
+type Tap func(context.Context, string, *packet.Publish) error
 
 func Run(ctx context.Context, name string, log MessageLog, tap Tap) error {
-	return log.Consume(ctx, name, func(p *packet.Publish) error {
-		err := tap(ctx, p)
+	return log.Consume(ctx, name, func(sender string, p *packet.Publish) error {
+		err := tap(ctx, sender, p)
 		if err != nil {
 			wasp.L(ctx).Error("failed to send message to Nest", zap.Error(err))
 		}

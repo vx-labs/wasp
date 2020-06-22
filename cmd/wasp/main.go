@@ -63,7 +63,7 @@ func run(config *viper.Viper) {
 	healthServer.Resume()
 	wg := sync.WaitGroup{}
 	cancelCh := make(chan struct{})
-	publishes := make(chan *packet.Publish, 20)
+	publishes := make(chan *messages.StoredMessage, 20)
 	commandsCh := make(chan raft.Command)
 	state := wasp.NewState()
 	if config.GetInt("raft-bootstrap-expect") > 1 {
@@ -94,7 +94,7 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}
-	remotePublishCh := make(chan *packet.Publish, 20)
+	remotePublishCh := make(chan *messages.StoredMessage, 20)
 	stateMachine := fsm.NewFSM(id, state, commandsCh, auditRecorder)
 	mqttServer := wasp.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
 	mqttServer.Serve(server)
@@ -249,7 +249,7 @@ func run(config *viper.Viper) {
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("publish processor stopped")
-		messageLog.Consume(ctx, "publish_processor", func(p *packet.Publish) error {
+		messageLog.Consume(ctx, "publish_processor", func(sender string, p *packet.Publish) error {
 			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, true, p)
 			if err != nil {
 				wasp.L(ctx).Info("publish processing failed", zap.Error(err))
@@ -264,7 +264,7 @@ func run(config *viper.Viper) {
 			case <-ctx.Done():
 				return
 			case p := <-remotePublishCh:
-				err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, p)
+				err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, p.Publish)
 				if err != nil {
 					wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
 				}
@@ -274,7 +274,7 @@ func run(config *viper.Viper) {
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
 		defer wasp.L(ctx).Debug("publish storer stopped")
-		buf := make([]*packet.Publish, 0, 100)
+		buf := make([]*messages.StoredMessage, 0, 100)
 		ticker := time.NewTicker(20 * time.Millisecond)
 		defer ticker.Stop()
 		for {

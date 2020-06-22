@@ -3,19 +3,19 @@ package wasp
 import (
 	"context"
 
-	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/messages"
 	"google.golang.org/grpc"
 )
 
 type MqttServer struct {
-	localPublishCh  chan *packet.Publish
-	remotePublishCh chan *packet.Publish
+	localPublishCh  chan *messages.StoredMessage
+	remotePublishCh chan *messages.StoredMessage
 	state           State
 	fsm             FSM
 }
 
-func NewMQTTServer(state State, fsm FSM, localPublishCh, remotePublishCh chan *packet.Publish) *MqttServer {
+func NewMQTTServer(state State, fsm FSM, localPublishCh, remotePublishCh chan *messages.StoredMessage) *MqttServer {
 	return &MqttServer{state: state, fsm: fsm, localPublishCh: localPublishCh, remotePublishCh: remotePublishCh}
 }
 
@@ -47,14 +47,14 @@ func (s *MqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscript
 func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
 	if r.ResolveRemoteRecipients {
 		select {
-		case s.localPublishCh <- r.Message:
+		case s.localPublishCh <- &messages.StoredMessage{Sender: "_rpc", Publish: r.Message}:
 			return &api.DistributeMessageResponse{}, nil
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
 	} else {
 		select {
-		case s.remotePublishCh <- r.Message:
+		case s.remotePublishCh <- &messages.StoredMessage{Sender: "_rpc", Publish: r.Message}:
 			return &api.DistributeMessageResponse{}, nil
 		case <-ctx.Done():
 			return nil, ctx.Err()
