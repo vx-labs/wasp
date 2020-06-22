@@ -35,13 +35,11 @@ func parseTemplate(body string) *template.Template {
 }
 
 var templates = map[event]*template.Template{
-	SessionConnected:     parseTemplate("session {{ .session_id | shorten }} connected"),
-	SessionDisonnected:   parseTemplate("session {{ .session_id | shorten }} disconnected"),
-	SubscriptionCreated:  parseTemplate("session {{ .session_id | shorten }} subscribed to topic \"{{ .pattern }}\""),
-	SubscriptionDeleted:  parseTemplate("session {{ .session_id | shorten }} unsubscribed to topic \"{{ .pattern }}\""),
-	PeerLost:             parseTemplate("wasp peer {{ .peer | shorten }} left the cluster"),
-	RetainMessageStored:  parseTemplate("message retained for topic {{ .topic }}"),
-	RetainMessageDeleted: parseTemplate("retained message deleted for topic {{ .topic }}"),
+	SessionConnected:    parseTemplate("session {{ .session_id | shorten }} connected"),
+	SessionDisonnected:  parseTemplate("session {{ .session_id | shorten }} disconnected"),
+	SubscriptionCreated: parseTemplate("session {{ .session_id | shorten }} subscribed to topic \"{{ .pattern }}\""),
+	SubscriptionDeleted: parseTemplate("session {{ .session_id | shorten }} unsubscribed to topic \"{{ .pattern }}\""),
+	PeerLost:            parseTemplate("wasp peer {{ .peer | shorten }} left the cluster"),
 }
 
 func (s *stdoutRecorder) RecordEvent(tenant string, eventKind event, payload map[string]string) error {

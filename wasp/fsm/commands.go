@@ -60,20 +60,6 @@ func (f *FSM) record(ctx context.Context, events ...*StateTransition) error {
 	var err error
 	for _, event := range events {
 		switch event := event.GetEvent().(type) {
-		case *StateTransition_RetainedMessageDeleted:
-			input := event.RetainedMessageDeleted
-			tenant, topic := splitTenant(input.Topic)
-			err = f.recorder.RecordEvent(tenant, audit.RetainMessageDeleted, map[string]string{
-				"topic": string(topic),
-			})
-
-		case *StateTransition_RetainedMessageStored:
-			input := event.RetainedMessageStored
-			tenant, topic := splitTenant(input.Publish.Topic)
-			err = f.recorder.RecordEvent(tenant, audit.RetainMessageStored, map[string]string{
-				"topic": string(topic),
-				"qos":   fmt.Sprintf("%d", input.Publish.Header.Qos),
-			})
 		case *StateTransition_SessionSubscribed:
 			input := event.SessionSubscribed
 			tenant, topic := splitTenant(input.Pattern)
