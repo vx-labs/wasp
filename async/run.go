@@ -27,3 +27,32 @@ func LogTermination(name string, logger *zap.Logger) {
 		logger.Debug("async operation stopped", zap.String("name", name))
 	}
 }
+
+type Operations interface {
+	Run(name string, f Runner)
+	Wait()
+}
+
+type operations struct {
+	wg     sync.WaitGroup
+	ctx    context.Context
+	logger *zap.Logger
+}
+
+func (c *operations) Run(name string, f Runner) {
+	Run(c.ctx, &c.wg, func(ctx context.Context) {
+		defer LogTermination(name, c.logger)
+		f(c.ctx)
+	})
+}
+func (c *operations) Wait() {
+	c.wg.Wait()
+}
+
+func NewOperations(ctx context.Context, logger *zap.Logger) Operations {
+	return &operations{
+		wg:     sync.WaitGroup{},
+		ctx:    ctx,
+		logger: logger,
+	}
+}
