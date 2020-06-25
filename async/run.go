@@ -3,6 +3,8 @@ package async
 import (
 	"context"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 // Runner is a function callable by async.Run()
@@ -16,4 +18,12 @@ func Run(ctx context.Context, wg *sync.WaitGroup, f Runner) {
 		defer wg.Done()
 		f(ctx)
 	}()
+}
+
+func LogTermination(name string, logger *zap.Logger) {
+	if r := recover(); r != nil {
+		logger.Fatal("async operation crashed", zap.String("name", name), zap.Any("panic", r))
+	} else {
+		logger.Debug("async operation stopped", zap.String("name", name))
+	}
 }

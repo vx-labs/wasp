@@ -139,8 +139,7 @@ func run(config *viper.Viper) {
 		},
 	}, rpcDialer, server, wasp.L(ctx))
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("cluster listener stopped")
-
+		defer async.LogTermination("cluster listener", wasp.L(ctx))
 		err := server.Serve(clusterListener)
 		if err != nil {
 			wasp.L(ctx).Fatal("cluster listener crashed", zap.Error(err))
@@ -157,12 +156,12 @@ func run(config *viper.Viper) {
 		}
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("cluster node stopped")
+		defer async.LogTermination("cluster node", wasp.L(ctx))
 		clusterNode.Run(ctx)
 	})
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("command publisher stopped")
+		defer async.LogTermination("command publisher", wasp.L(ctx))
 		for {
 			select {
 			case <-ctx.Done():
@@ -179,7 +178,7 @@ func run(config *viper.Viper) {
 		}
 	})
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("command processor stopped")
+		defer async.LogTermination("command processor", wasp.L(ctx))
 		for {
 			select {
 			case <-ctx.Done():
@@ -219,7 +218,7 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Warn("failed to start syslog tap", zap.Error(err))
 				return
 			}
-			defer wasp.L(ctx).Debug("syslog tap stopped")
+			defer async.LogTermination("syslog tap", wasp.L(ctx))
 			wasp.L(ctx).Debug("syslog tap started")
 			err = taps.Run(ctx, "tap_syslog", messageLog, tap)
 			if err != nil {
@@ -239,7 +238,7 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Warn("failed to start nest tap", zap.Error(err))
 				return
 			}
-			defer wasp.L(ctx).Debug("nest tap stopped")
+			defer async.LogTermination("nest tap", wasp.L(ctx))
 			wasp.L(ctx).Debug("nest tap started")
 			err = taps.Run(ctx, "tap_grpc", messageLog, tap)
 			if err != nil {
@@ -248,7 +247,7 @@ func run(config *viper.Viper) {
 		})
 	}
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("publish processor stopped")
+		defer async.LogTermination("publish processor", wasp.L(ctx))
 		messageLog.Consume(ctx, "publish_processor", func(sender string, p *packet.Publish) error {
 			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, true, p)
 			if err != nil {
@@ -258,7 +257,7 @@ func run(config *viper.Viper) {
 		})
 	})
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("remote publish processor stopped")
+		defer async.LogTermination("remote publish processor", wasp.L(ctx))
 		for {
 			select {
 			case <-ctx.Done():
@@ -273,7 +272,7 @@ func run(config *viper.Viper) {
 	})
 
 	async.Run(ctx, &wg, func(ctx context.Context) {
-		defer wasp.L(ctx).Debug("publish storer stopped")
+		defer async.LogTermination("publish storer", wasp.L(ctx))
 		buf := make([]*messages.StoredMessage, 0, 100)
 		ticker := time.NewTicker(20 * time.Millisecond)
 		defer ticker.Stop()
