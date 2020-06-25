@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// Runner is fonction callable by async.Run()
+// Runner is a function callable by async.Run()
 type Runner func(ctx context.Context)
 
 // Run runs the provided function in a goroutine, and call wg.Done() when it returns.
