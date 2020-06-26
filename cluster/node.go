@@ -86,7 +86,7 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 			<-retryTicker.C
 		}
 		retryTicker.Stop()
-		logger.Info("joined gossip mesh",
+		logger.Debug("joined gossip mesh",
 			zap.Duration("gossip_join_duration", time.Since(joinStarted)), zap.Strings("gossip_node_list", joinList))
 	}
 
@@ -126,7 +126,7 @@ func (n *node) Run(ctx context.Context) {
 				n.logger.Fatal("failed to discover nodes on gossip mesh", zap.Error(err))
 			}
 		}
-		n.logger.Info("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(peers)))
+		n.logger.Debug("discovered nodes on gossip mesh", zap.Int("discovered_node_count", len(peers)))
 	} else {
 		n.logger.Debug("skipping raft node discovery: expected node count is below 1", zap.Int("expected_node_count", expectedCount))
 	}

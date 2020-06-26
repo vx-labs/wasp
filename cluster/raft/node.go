@@ -241,7 +241,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		peerID := peers[i].ID
 		rpeers[i] = raft.Peer{ID: peerID}
 		if peerID != rc.id {
-			rc.logger.Info("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
+			rc.logger.Debug("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
 		}
 	}
 	rpeers[len(rpeers)-1] = raft.Peer{ID: rc.id}

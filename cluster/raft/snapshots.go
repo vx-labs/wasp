@@ -22,8 +22,6 @@ func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.S
 		return
 	}
 
-	log.Printf("publishing snapshot at index %d", rc.snapshotIndex)
-
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
 		log.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
 	}
@@ -38,7 +36,6 @@ func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.S
 	case <-ctx.Done():
 		return
 	}
-	log.Printf("finished publishing snapshot at index %d", rc.snapshotIndex)
 }
 
 func (rc *RaftNode) maybeTriggerSnapshot() {
@@ -69,6 +66,6 @@ func (rc *RaftNode) forceTriggerSnapshot() {
 		panic(err)
 	}
 
-	rc.logger.Info("compacted log", zap.Uint64("compact_index", compactIndex))
+	rc.logger.Debug("compacted log", zap.Uint64("compact_index", compactIndex))
 	rc.snapshotIndex = rc.appliedIndex
 }

@@ -58,7 +58,7 @@ func NewMultiNode(config NodeConfig, dialer func(address string, opts ...grpc.Di
 			<-retryTicker.C
 		}
 		retryTicker.Stop()
-		logger.Info("joined gossip mesh",
+		logger.Debug("joined gossip mesh",
 			zap.Duration("gossip_join_duration", time.Since(joinStarted)), zap.Strings("gossip_node_list", joinList))
 	}
 
