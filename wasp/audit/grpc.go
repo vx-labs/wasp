@@ -33,7 +33,7 @@ func (s *grpcRecorder) Consume(ctx context.Context, consumer func(timestamp int6
 			if err != nil {
 				fromTimestamp = time.Now().UnixNano()
 				s.logger.Error("failed to receive audit events batch", zap.Error(err), zap.Int64("audit_event_timestamp", fromTimestamp))
-				continue
+				break
 			}
 			for _, event := range msg.Events {
 				attributes := make(map[string]string, len(event.Attributes))
