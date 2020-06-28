@@ -92,7 +92,7 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Fatal("failed to create authentication handler", zap.Error(err))
 	}
 
-	auditRecorder, err := getAuditRecorder(ctx, rpcDialer, config)
+	auditRecorder, err := getAuditRecorder(ctx, rpcDialer, config, wasp.L(ctx))
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}

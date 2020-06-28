@@ -4,11 +4,13 @@ import (
 	"context"
 	"time"
 
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
 type grpcRecorder struct {
 	ctx    context.Context
+	logger *zap.Logger
 	client WaspAuditRecorderClient
 }
 
@@ -23,12 +25,14 @@ func (s *grpcRecorder) Consume(ctx context.Context, consumer func(timestamp int6
 		}
 		stream, err := s.client.GetWaspEvents(ctx, &GetWaspEventsRequest{FromTimestamp: fromTimestamp})
 		if err != nil {
+			s.logger.Error("failed to start audit events stream", zap.Error(err), zap.Int64("audit_event_timestamp", fromTimestamp))
 			continue
 		}
 		for {
 			msg, err := stream.Recv()
 			if err != nil {
 				fromTimestamp = time.Now().UnixNano()
+				s.logger.Error("failed to receive audit events batch", zap.Error(err), zap.Int64("audit_event_timestamp", fromTimestamp))
 				continue
 			}
 			for _, event := range msg.Events {
@@ -56,7 +60,7 @@ func (s *grpcRecorder) RecordEvent(tenant string, eventKind event, payload map[s
 	})
 	return err
 }
-func GRPCRecorder(remote *grpc.ClientConn) Recorder {
+func GRPCRecorder(remote *grpc.ClientConn, logger *zap.Logger) Recorder {
 	client := NewWaspAuditRecorderClient(remote)
-	return &grpcRecorder{client: client, ctx: context.Background()}
+	return &grpcRecorder{client: client, ctx: context.Background(), logger: logger}
 }
