@@ -18,6 +18,7 @@ type wsListener struct {
 
 var (
 	upgrader = websocket.Upgrader{
+		Subprotocols:    []string{"mqttv3.1", "mqtt"},
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
