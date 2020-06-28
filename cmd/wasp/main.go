@@ -96,30 +96,6 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}
-	operations.Run("audit publisher", func(ctx context.Context) {
-		err := auditRecorder.Consume(ctx, func(timestamp int64, tenant, service, eventKind string, payload map[string]string) {
-			data := map[string]interface{}{
-				"timestamp":  timestamp,
-				"service":    service,
-				"event_kind": eventKind,
-			}
-			for k, v := range payload {
-				data[k] = v
-			}
-			buf, _ := json.Marshal(data)
-			publishes <- &messages.StoredMessage{
-				Sender: "_audit-recorder",
-				Publish: &packet.Publish{
-					Header:  &packet.Header{Qos: 1},
-					Topic:   []byte(fmt.Sprintf("%s/$SYS/_audit/events", tenant)),
-					Payload: buf,
-				},
-			}
-		})
-		if err != nil {
-			panic(err)
-		}
-	})
 	remotePublishCh := make(chan *messages.StoredMessage, 20)
 	stateMachine := fsm.NewFSM(id, state, commandsCh, auditRecorder)
 	mqttServer := wasp.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
@@ -222,6 +198,31 @@ func run(config *viper.Viper) {
 			}
 		}
 	})
+	operations.Run("audit publisher", func(ctx context.Context) {
+		err := auditRecorder.Consume(ctx, func(timestamp int64, tenant, service, eventKind string, payload map[string]string) {
+			data := map[string]interface{}{
+				"timestamp":  timestamp,
+				"service":    service,
+				"event_kind": eventKind,
+			}
+			for k, v := range payload {
+				data[k] = v
+			}
+			buf, _ := json.Marshal(data)
+			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, &packet.Publish{
+				Header:  &packet.Header{Qos: 1},
+				Topic:   []byte(fmt.Sprintf("%s/$SYS/_audit/events", tenant)),
+				Payload: buf,
+			})
+			if err != nil {
+				wasp.L(ctx).Info("audit event processing failed", zap.Error(err))
+			}
+		})
+		if err != nil {
+			panic(err)
+		}
+	})
+
 	messageLog, err := messages.New(messages.Options{
 		Path: config.GetString("data-dir"),
 		BoltOptions: &bolt.Options{
