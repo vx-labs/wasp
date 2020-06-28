@@ -1,6 +1,7 @@
 package audit
 
 import (
+	context "context"
 	"fmt"
 	"os"
 	"text/template"
@@ -10,6 +11,7 @@ import (
 )
 
 type stdoutRecorder struct {
+	ch chan stdoutRecorderWrappedEvent
 }
 
 var FuncMap = template.FuncMap{
@@ -42,7 +44,28 @@ var templates = map[event]*template.Template{
 	PeerLost:            parseTemplate("wasp peer {{ .peer | shorten }} left the cluster"),
 }
 
+type stdoutRecorderWrappedEvent struct {
+	tenant  string
+	service string
+	kind    string
+	payload map[string]string
+}
+
+func (s *stdoutRecorder) Consume(ctx context.Context, consumer func(timestamp int64, tenant, service, eventKind string, payload map[string]string)) error {
+	s.ch = make(chan stdoutRecorderWrappedEvent)
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case ev := <-s.ch:
+			consumer(time.Now().UnixNano(), ev.tenant, ev.service, ev.kind, ev.payload)
+		}
+	}
+}
 func (s *stdoutRecorder) RecordEvent(tenant string, eventKind event, payload map[string]string) error {
+	if s.ch != nil {
+		s.ch <- stdoutRecorderWrappedEvent{tenant: tenant, service: "wasp", kind: string(eventKind), payload: payload}
+	}
 	tpl, ok := templates[eventKind]
 	if ok {
 		return tpl.Execute(os.Stdout, payload)

@@ -1,5 +1,7 @@
 package audit
 
+import context "context"
+
 //go:generate protoc -I ${GOPATH}/src/github.com/vx-labs/wasp/vendor -I ${GOPATH}/src/github.com/vx-labs/wasp/wasp/audit/ audit.proto --go_out=plugins=grpc:.
 
 type event string
@@ -14,4 +16,5 @@ const (
 
 type Recorder interface {
 	RecordEvent(tenant string, eventKind event, payload map[string]string) error
+	Consume(ctx context.Context, consumer func(timestamp int64, tenant, service, eventKind string, payload map[string]string)) error
 }

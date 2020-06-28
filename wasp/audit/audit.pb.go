@@ -134,6 +134,116 @@ func (m *WaspEvent) GetAttributes() []*WaspEventAttribute {
 	return nil
 }
 
+type WaspAuditEvent struct {
+	Timestamp            int64                 `protobuf:"varint,1,opt,name=Timestamp,proto3" json:"Timestamp,omitempty"`
+	Tenant               string                `protobuf:"bytes,2,opt,name=Tenant,proto3" json:"Tenant,omitempty"`
+	Service              string                `protobuf:"bytes,3,opt,name=Service,proto3" json:"Service,omitempty"`
+	Kind                 string                `protobuf:"bytes,4,opt,name=Kind,proto3" json:"Kind,omitempty"`
+	Attributes           []*WaspEventAttribute `protobuf:"bytes,5,rep,name=Attributes,proto3" json:"Attributes,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}              `json:"-"`
+	XXX_unrecognized     []byte                `json:"-"`
+	XXX_sizecache        int32                 `json:"-"`
+}
+
+func (m *WaspAuditEvent) Reset()         { *m = WaspAuditEvent{} }
+func (m *WaspAuditEvent) String() string { return proto.CompactTextString(m) }
+func (*WaspAuditEvent) ProtoMessage()    {}
+func (*WaspAuditEvent) Descriptor() ([]byte, []int) {
+	return fileDescriptor_5594839dd8e38a1b, []int{2}
+}
+
+func (m *WaspAuditEvent) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_WaspAuditEvent.Unmarshal(m, b)
+}
+func (m *WaspAuditEvent) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_WaspAuditEvent.Marshal(b, m, deterministic)
+}
+func (m *WaspAuditEvent) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_WaspAuditEvent.Merge(m, src)
+}
+func (m *WaspAuditEvent) XXX_Size() int {
+	return xxx_messageInfo_WaspAuditEvent.Size(m)
+}
+func (m *WaspAuditEvent) XXX_DiscardUnknown() {
+	xxx_messageInfo_WaspAuditEvent.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_WaspAuditEvent proto.InternalMessageInfo
+
+func (m *WaspAuditEvent) GetTimestamp() int64 {
+	if m != nil {
+		return m.Timestamp
+	}
+	return 0
+}
+
+func (m *WaspAuditEvent) GetTenant() string {
+	if m != nil {
+		return m.Tenant
+	}
+	return ""
+}
+
+func (m *WaspAuditEvent) GetService() string {
+	if m != nil {
+		return m.Service
+	}
+	return ""
+}
+
+func (m *WaspAuditEvent) GetKind() string {
+	if m != nil {
+		return m.Kind
+	}
+	return ""
+}
+
+func (m *WaspAuditEvent) GetAttributes() []*WaspEventAttribute {
+	if m != nil {
+		return m.Attributes
+	}
+	return nil
+}
+
+type GetWaspEventsResponse struct {
+	Events               []*WaspAuditEvent `protobuf:"bytes,1,rep,name=Events,proto3" json:"Events,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
+	XXX_unrecognized     []byte            `json:"-"`
+	XXX_sizecache        int32             `json:"-"`
+}
+
+func (m *GetWaspEventsResponse) Reset()         { *m = GetWaspEventsResponse{} }
+func (m *GetWaspEventsResponse) String() string { return proto.CompactTextString(m) }
+func (*GetWaspEventsResponse) ProtoMessage()    {}
+func (*GetWaspEventsResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_5594839dd8e38a1b, []int{3}
+}
+
+func (m *GetWaspEventsResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetWaspEventsResponse.Unmarshal(m, b)
+}
+func (m *GetWaspEventsResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetWaspEventsResponse.Marshal(b, m, deterministic)
+}
+func (m *GetWaspEventsResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetWaspEventsResponse.Merge(m, src)
+}
+func (m *GetWaspEventsResponse) XXX_Size() int {
+	return xxx_messageInfo_GetWaspEventsResponse.Size(m)
+}
+func (m *GetWaspEventsResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetWaspEventsResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetWaspEventsResponse proto.InternalMessageInfo
+
+func (m *GetWaspEventsResponse) GetEvents() []*WaspAuditEvent {
+	if m != nil {
+		return m.Events
+	}
+	return nil
+}
+
 type PutWaspEventRequest struct {
 	Events               []*WaspEvent `protobuf:"bytes,1,rep,name=Events,proto3" json:"Events,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}     `json:"-"`
@@ -145,7 +255,7 @@ func (m *PutWaspEventRequest) Reset()         { *m = PutWaspEventRequest{} }
 func (m *PutWaspEventRequest) String() string { return proto.CompactTextString(m) }
 func (*PutWaspEventRequest) ProtoMessage()    {}
 func (*PutWaspEventRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_5594839dd8e38a1b, []int{2}
+	return fileDescriptor_5594839dd8e38a1b, []int{4}
 }
 
 func (m *PutWaspEventRequest) XXX_Unmarshal(b []byte) error {
@@ -183,7 +293,7 @@ func (m *PutWaspWaspEventsResponse) Reset()         { *m = PutWaspWaspEventsResp
 func (m *PutWaspWaspEventsResponse) String() string { return proto.CompactTextString(m) }
 func (*PutWaspWaspEventsResponse) ProtoMessage()    {}
 func (*PutWaspWaspEventsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_5594839dd8e38a1b, []int{3}
+	return fileDescriptor_5594839dd8e38a1b, []int{5}
 }
 
 func (m *PutWaspWaspEventsResponse) XXX_Unmarshal(b []byte) error {
@@ -204,34 +314,81 @@ func (m *PutWaspWaspEventsResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PutWaspWaspEventsResponse proto.InternalMessageInfo
 
+type GetWaspEventsRequest struct {
+	FromTimestamp        int64    `protobuf:"varint,1,opt,name=FromTimestamp,proto3" json:"FromTimestamp,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetWaspEventsRequest) Reset()         { *m = GetWaspEventsRequest{} }
+func (m *GetWaspEventsRequest) String() string { return proto.CompactTextString(m) }
+func (*GetWaspEventsRequest) ProtoMessage()    {}
+func (*GetWaspEventsRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_5594839dd8e38a1b, []int{6}
+}
+
+func (m *GetWaspEventsRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_GetWaspEventsRequest.Unmarshal(m, b)
+}
+func (m *GetWaspEventsRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_GetWaspEventsRequest.Marshal(b, m, deterministic)
+}
+func (m *GetWaspEventsRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetWaspEventsRequest.Merge(m, src)
+}
+func (m *GetWaspEventsRequest) XXX_Size() int {
+	return xxx_messageInfo_GetWaspEventsRequest.Size(m)
+}
+func (m *GetWaspEventsRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetWaspEventsRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetWaspEventsRequest proto.InternalMessageInfo
+
+func (m *GetWaspEventsRequest) GetFromTimestamp() int64 {
+	if m != nil {
+		return m.FromTimestamp
+	}
+	return 0
+}
+
 func init() {
 	proto.RegisterType((*WaspEventAttribute)(nil), "audit.WaspEventAttribute")
 	proto.RegisterType((*WaspEvent)(nil), "audit.WaspEvent")
+	proto.RegisterType((*WaspAuditEvent)(nil), "audit.WaspAuditEvent")
+	proto.RegisterType((*GetWaspEventsResponse)(nil), "audit.GetWaspEventsResponse")
 	proto.RegisterType((*PutWaspEventRequest)(nil), "audit.PutWaspEventRequest")
 	proto.RegisterType((*PutWaspWaspEventsResponse)(nil), "audit.PutWaspWaspEventsResponse")
+	proto.RegisterType((*GetWaspEventsRequest)(nil), "audit.GetWaspEventsRequest")
 }
 
 func init() { proto.RegisterFile("audit.proto", fileDescriptor_5594839dd8e38a1b) }
 
 var fileDescriptor_5594839dd8e38a1b = []byte{
-	// 258 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x6c, 0x51, 0x41, 0x4b, 0xf3, 0x40,
-	0x10, 0xfd, 0xf2, 0xa5, 0x0d, 0x64, 0x8a, 0x50, 0x47, 0x91, 0x6d, 0xf5, 0x10, 0xf6, 0x94, 0x53,
-	0x0f, 0xf5, 0x24, 0x08, 0xd2, 0x83, 0xa7, 0x1e, 0x94, 0xa5, 0xe8, 0x79, 0x6b, 0xe6, 0x10, 0xb0,
-	0x9b, 0x98, 0x99, 0x15, 0xfc, 0x17, 0xfe, 0x64, 0xc9, 0x76, 0x89, 0xd5, 0x7a, 0x9b, 0xf7, 0xde,
-	0xbc, 0x37, 0x0f, 0x06, 0x26, 0xd6, 0x57, 0xb5, 0x2c, 0xda, 0xae, 0x91, 0x06, 0xc7, 0x01, 0xe8,
-	0x5b, 0xc0, 0x67, 0xcb, 0xed, 0xfd, 0x3b, 0x39, 0x59, 0x89, 0x74, 0xf5, 0xd6, 0x0b, 0xe1, 0x14,
-	0xd2, 0x35, 0x7d, 0xa8, 0xa4, 0x48, 0xca, 0xdc, 0xf4, 0x23, 0x9e, 0xc3, 0xf8, 0xc9, 0xbe, 0x7a,
-	0x52, 0xff, 0x03, 0xb7, 0x07, 0xfa, 0x33, 0x81, 0x7c, 0xb0, 0xe3, 0x15, 0xe4, 0x9b, 0x7a, 0x47,
-	0x2c, 0x76, 0xd7, 0x06, 0x6f, 0x6a, 0xbe, 0x09, 0xbc, 0x80, 0x6c, 0x43, 0xce, 0x3a, 0x89, 0x11,
-	0x11, 0x21, 0xc2, 0x68, 0x5d, 0xbb, 0x4a, 0xa5, 0x81, 0x0d, 0x33, 0xde, 0x00, 0x0c, 0x65, 0x58,
-	0x8d, 0x8a, 0xb4, 0x9c, 0x2c, 0x67, 0x8b, 0x7d, 0xfd, 0xe3, 0xba, 0xe6, 0x60, 0x59, 0xdf, 0xc1,
-	0xd9, 0xa3, 0x97, 0x61, 0xc9, 0xd0, 0x9b, 0x27, 0x16, 0x2c, 0x21, 0x0b, 0x98, 0x55, 0x12, 0xd2,
-	0xa6, 0xbf, 0xd3, 0x4c, 0xd4, 0xf5, 0x25, 0xcc, 0x62, 0xc0, 0xa0, 0xb1, 0x21, 0x6e, 0x1b, 0xc7,
-	0xb4, 0xac, 0xe0, 0xb4, 0x67, 0x57, 0xbd, 0xd7, 0xd0, 0x4b, 0xd3, 0x55, 0xd4, 0xe1, 0x03, 0x9c,
-	0x1c, 0x9e, 0x64, 0x9c, 0xc7, 0xf0, 0x3f, 0x8a, 0xcc, 0x8b, 0x9f, 0xda, 0xf1, 0x0d, 0xfd, 0x6f,
-	0x9b, 0x85, 0x17, 0x5d, 0x7f, 0x05, 0x00, 0x00, 0xff, 0xff, 0x46, 0xf4, 0x13, 0x83, 0xb1, 0x01,
-	0x00, 0x00,
+	// 346 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xa4, 0x93, 0xcd, 0x4e, 0xf2, 0x40,
+	0x14, 0x86, 0xbf, 0xf9, 0x0a, 0x18, 0x0e, 0xc1, 0xe0, 0x11, 0x4c, 0xf9, 0x59, 0x90, 0xc6, 0x05,
+	0x1b, 0x89, 0xc1, 0x95, 0x09, 0x89, 0x61, 0x21, 0x2e, 0x48, 0xd4, 0x8c, 0x44, 0xd7, 0x05, 0xce,
+	0xa2, 0x89, 0xb4, 0x75, 0x66, 0x4a, 0xe2, 0x5d, 0x78, 0x27, 0x6e, 0xbc, 0x40, 0xc3, 0x74, 0x18,
+	0xa0, 0xd4, 0x85, 0x71, 0x37, 0xe7, 0x9d, 0xf7, 0x3c, 0x79, 0xa6, 0x49, 0xa1, 0xe2, 0x27, 0x8b,
+	0x40, 0xf5, 0x63, 0x11, 0xa9, 0x08, 0x8b, 0x7a, 0xf0, 0x86, 0x80, 0x2f, 0xbe, 0x8c, 0x6f, 0x57,
+	0x14, 0xaa, 0x91, 0x52, 0x22, 0x98, 0x25, 0x8a, 0xb0, 0x06, 0xce, 0x84, 0xde, 0x5d, 0xd6, 0x65,
+	0xbd, 0x32, 0x5f, 0x1f, 0xb1, 0x0e, 0xc5, 0x67, 0xff, 0x35, 0x21, 0xf7, 0xbf, 0xce, 0xd2, 0xc1,
+	0xfb, 0x60, 0x50, 0xb6, 0xeb, 0xd8, 0x81, 0xf2, 0x34, 0x58, 0x92, 0x54, 0xfe, 0x32, 0xd6, 0xbb,
+	0x0e, 0xdf, 0x06, 0x78, 0x06, 0xa5, 0x29, 0x85, 0x7e, 0xa8, 0x0c, 0xc2, 0x4c, 0x88, 0x50, 0x98,
+	0x04, 0xe1, 0xc2, 0x75, 0x74, 0xaa, 0xcf, 0x78, 0x0d, 0x60, 0x65, 0xa4, 0x5b, 0xe8, 0x3a, 0xbd,
+	0xca, 0xa0, 0xd9, 0x4f, 0xf5, 0x0f, 0x75, 0xf9, 0x4e, 0xd9, 0xfb, 0x64, 0x70, 0xbc, 0xae, 0x8c,
+	0xd6, 0xe5, 0xbf, 0x78, 0xb9, 0x70, 0xf4, 0x44, 0x62, 0x15, 0xcc, 0xc9, 0xa8, 0x6d, 0x46, 0x6b,
+	0x5c, 0xf8, 0xd1, 0xb8, 0xf8, 0x1b, 0xe3, 0x31, 0x34, 0xee, 0x48, 0xd9, 0x92, 0xe4, 0x24, 0xe3,
+	0x28, 0x94, 0x84, 0x17, 0x50, 0x4a, 0x13, 0x97, 0x69, 0x5e, 0x63, 0x87, 0xb7, 0x7d, 0x1e, 0x37,
+	0x25, 0xef, 0x06, 0x4e, 0x1f, 0x93, 0x2d, 0x87, 0xd3, 0x5b, 0x42, 0x52, 0x61, 0x2f, 0x43, 0xa9,
+	0x65, 0xad, 0x2c, 0xa0, 0x0d, 0x4d, 0x03, 0x38, 0x94, 0xf1, 0x86, 0x50, 0xcf, 0x58, 0xa6, 0xf8,
+	0x73, 0xa8, 0x8e, 0x45, 0xb4, 0xcc, 0x7e, 0xe0, 0xfd, 0x70, 0xf0, 0xc5, 0xe0, 0xc4, 0x6a, 0x73,
+	0x9a, 0x47, 0x62, 0x41, 0x02, 0x1f, 0xa0, 0xba, 0x6b, 0x2c, 0xb1, 0x65, 0xdc, 0x72, 0xde, 0xd1,
+	0xea, 0xee, 0xdf, 0xe5, 0x28, 0xfe, 0xc3, 0x7b, 0xa8, 0xee, 0x49, 0x62, 0xdb, 0x2c, 0xe5, 0xa9,
+	0xb7, 0x3a, 0xf9, 0x97, 0x1b, 0xda, 0x25, 0x9b, 0x95, 0xf4, 0xbf, 0x72, 0xf5, 0x1d, 0x00, 0x00,
+	0xff, 0xff, 0xe9, 0x26, 0x88, 0xfc, 0x3a, 0x03, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -247,6 +404,7 @@ const _ = grpc.SupportPackageIsVersion4
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type WaspAuditRecorderClient interface {
 	PutWaspEvents(ctx context.Context, in *PutWaspEventRequest, opts ...grpc.CallOption) (*PutWaspWaspEventsResponse, error)
+	GetWaspEvents(ctx context.Context, in *GetWaspEventsRequest, opts ...grpc.CallOption) (WaspAuditRecorder_GetWaspEventsClient, error)
 }
 
 type waspAuditRecorderClient struct {
@@ -266,9 +424,42 @@ func (c *waspAuditRecorderClient) PutWaspEvents(ctx context.Context, in *PutWasp
 	return out, nil
 }
 
+func (c *waspAuditRecorderClient) GetWaspEvents(ctx context.Context, in *GetWaspEventsRequest, opts ...grpc.CallOption) (WaspAuditRecorder_GetWaspEventsClient, error) {
+	stream, err := c.cc.NewStream(ctx, &_WaspAuditRecorder_serviceDesc.Streams[0], "/audit.WaspAuditRecorder/GetWaspEvents", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &waspAuditRecorderGetWaspEventsClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type WaspAuditRecorder_GetWaspEventsClient interface {
+	Recv() (*GetWaspEventsResponse, error)
+	grpc.ClientStream
+}
+
+type waspAuditRecorderGetWaspEventsClient struct {
+	grpc.ClientStream
+}
+
+func (x *waspAuditRecorderGetWaspEventsClient) Recv() (*GetWaspEventsResponse, error) {
+	m := new(GetWaspEventsResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // WaspAuditRecorderServer is the server API for WaspAuditRecorder service.
 type WaspAuditRecorderServer interface {
 	PutWaspEvents(context.Context, *PutWaspEventRequest) (*PutWaspWaspEventsResponse, error)
+	GetWaspEvents(*GetWaspEventsRequest, WaspAuditRecorder_GetWaspEventsServer) error
 }
 
 // UnimplementedWaspAuditRecorderServer can be embedded to have forward compatible implementations.
@@ -277,6 +468,9 @@ type UnimplementedWaspAuditRecorderServer struct {
 
 func (*UnimplementedWaspAuditRecorderServer) PutWaspEvents(ctx context.Context, req *PutWaspEventRequest) (*PutWaspWaspEventsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PutWaspEvents not implemented")
+}
+func (*UnimplementedWaspAuditRecorderServer) GetWaspEvents(req *GetWaspEventsRequest, srv WaspAuditRecorder_GetWaspEventsServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetWaspEvents not implemented")
 }
 
 func RegisterWaspAuditRecorderServer(s *grpc.Server, srv WaspAuditRecorderServer) {
@@ -301,6 +495,27 @@ func _WaspAuditRecorder_PutWaspEvents_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WaspAuditRecorder_GetWaspEvents_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetWaspEventsRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(WaspAuditRecorderServer).GetWaspEvents(m, &waspAuditRecorderGetWaspEventsServer{stream})
+}
+
+type WaspAuditRecorder_GetWaspEventsServer interface {
+	Send(*GetWaspEventsResponse) error
+	grpc.ServerStream
+}
+
+type waspAuditRecorderGetWaspEventsServer struct {
+	grpc.ServerStream
+}
+
+func (x *waspAuditRecorderGetWaspEventsServer) Send(m *GetWaspEventsResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 var _WaspAuditRecorder_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "audit.WaspAuditRecorder",
 	HandlerType: (*WaspAuditRecorderServer)(nil),
@@ -310,6 +525,12 @@ var _WaspAuditRecorder_serviceDesc = grpc.ServiceDesc{
 			Handler:    _WaspAuditRecorder_PutWaspEvents_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetWaspEvents",
+			Handler:       _WaspAuditRecorder_GetWaspEvents_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "audit.proto",
 }

@@ -14,11 +14,25 @@ message WaspEvent {
   string Kind = 3;
   repeated WaspEventAttribute Attributes = 4;
 }
+message WaspAuditEvent {
+  int64 Timestamp = 1;
+  string Tenant = 2;
+  string Service = 3;
+  string Kind = 4;
+  repeated WaspEventAttribute Attributes = 5;
+}
+
+message GetWaspEventsResponse {
+  repeated WaspAuditEvent Events = 1;
+}
 
 
 message PutWaspEventRequest { repeated WaspEvent Events = 1; }
 message PutWaspWaspEventsResponse {}
 
+message GetWaspEventsRequest { int64 FromTimestamp = 1;}
+
 service WaspAuditRecorder {
   rpc PutWaspEvents(PutWaspEventRequest) returns (PutWaspWaspEventsResponse) {}
+  rpc GetWaspEvents(GetWaspEventsRequest) returns (stream GetWaspEventsResponse) {}
 }
