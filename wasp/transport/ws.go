@@ -19,6 +19,7 @@ type wsListener struct {
 var (
 	upgrader = websocket.Upgrader{
 		Subprotocols:    []string{"mqttv3.1", "mqtt"},
+		CheckOrigin:     func(r *http.Request) bool { return true },
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 	}
@@ -86,9 +87,7 @@ func serveWs(cb func(net.Conn)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			if _, ok := err.(websocket.HandshakeError); !ok {
-				log.Println(err)
-			}
+			log.Println(err)
 			return
 		}
 		cb(&websocketConnector{
