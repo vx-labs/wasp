@@ -1,4 +1,6 @@
 # Wasp
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp?ref=badge_shield)
+
 
 Distributed MQTT broker, written in Go.
 
@@ -115,3 +117,7 @@ For example, if you use the default Wasp configuration, data is stored in /tmp/w
 ```
 rm -rf /tmp/wasp
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp?ref=badge_large)
