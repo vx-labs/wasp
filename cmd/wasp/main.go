@@ -200,14 +200,17 @@ func run(config *viper.Viper) {
 	})
 	operations.Run("audit publisher", func(ctx context.Context) {
 		err := auditRecorder.Consume(ctx, func(timestamp int64, tenant, service, eventKind string, payload map[string]string) {
+			attributes := map[string]string{}
+			for k, v := range payload {
+				attributes[k] = v
+			}
 			data := map[string]interface{}{
 				"timestamp":  timestamp,
 				"service":    service,
-				"event_kind": eventKind,
+				"kind":       eventKind,
+				"attributes": attributes,
 			}
-			for k, v := range payload {
-				data[k] = v
-			}
+
 			buf, _ := json.Marshal(data)
 			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, &packet.Publish{
 				Header:  &packet.Header{Qos: 1},
