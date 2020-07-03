@@ -27,7 +27,7 @@ func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message)
 	if err != nil {
 		rc.logger.Warn("failed to process raft message", zap.Error(err))
 	}
-	return &api.Payload{}, nil
+	return &api.Payload{}, err
 }
 
 func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.JoinClusterResponse, error) {
