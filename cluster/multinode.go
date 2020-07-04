@@ -84,7 +84,7 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 		ClusterID:   cluster,
 		DataDir:     path.Join(n.config.DataDirectory, "nodes", cluster),
 		GetSnapshot: raftConfig.GetStateSnapshot,
-	}, n.gossip, n.logger)
+	}, n.gossip, n.logger.With(zap.String("cluster_node_name", cluster)))
 
 	n.rafts[cluster] = raftNode
 	clusterList := make([]string, len(n.rafts))
