@@ -57,11 +57,8 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", rc.appliedIndex))
 	}
 	rc.raftStorage.SetHardState(st)
-
 	// append to storage so raft starts at the right place in log
 	rc.raftStorage.Append(ents)
-	if len(ents) > 0 {
-		rc.lastIndex = ents[len(ents)-1].Index
-	}
+	rc.lastIndex = st.Commit
 	return w
 }
