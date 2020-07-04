@@ -25,7 +25,7 @@ func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message)
 	}
 	err := rc.Process(ctx, *message)
 	if err != nil {
-		rc.logger.Warn("failed to process raft message", zap.Error(err))
+		rc.logger.Warn("failed to process raft message", zap.Error(err), zap.Uint64("commit", message.Commit), zap.Uint64("term", message.Term))
 	}
 	return &api.Payload{}, err
 }
