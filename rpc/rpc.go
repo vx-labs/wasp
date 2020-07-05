@@ -130,8 +130,10 @@ func Server(config ServerConfig) *grpc.Server {
 }
 
 func GRPCServerOptions(mTLS bool, tlsCertificateAuthorityPath, tlsCertificatePath, tlsPrivateKey string) []grpc.ServerOption {
-	opts := []grpc.ServerOption{grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
+	opts := []grpc.ServerOption{
+		grpc.StreamInterceptor(grpc_prometheus.StreamServerInterceptor),
 		grpc.UnaryInterceptor(grpc_prometheus.UnaryServerInterceptor),
+		grpc.MaxRecvMsgSize(15 * 1000 * 1000),
 	}
 	var tlsCreds credentials.TransportCredentials
 	var err error

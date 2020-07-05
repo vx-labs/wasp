@@ -132,6 +132,13 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		return err
 	}
 	for pkt := range dec.Packet() {
+		if pkt.Length() > 10*1000*1000 {
+			L(ctx).Warn("received an oversized packet",
+				zap.String("packet_type", packet.TypeString(pkt)),
+				zap.Int("received_packet_size", pkt.Length()),
+			)
+			return session.Close()
+		}
 		start := time.Now()
 		err = processPacket(ctx, peer, fsm, state, ch, session, pkt)
 		stats.HistogramVec("sessionPacketHandling").With(map[string]string{
