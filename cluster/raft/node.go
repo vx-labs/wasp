@@ -309,9 +309,6 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
 			start := time.Now()
-			if rd.HardState.Commit > 0 {
-				rc.leaderIndex = rd.HardState.Commit
-			}
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
 				if newLeader {
@@ -364,6 +361,9 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 				return
 			}
 			rc.maybeTriggerSnapshot()
+			if rd.HardState.Commit > 0 {
+				rc.leaderIndex = rd.HardState.Commit
+			}
 			rc.node.Advance()
 			stats.Histogram("raftLoopProcessingTime").Observe(stats.MilisecondsElapsed(start))
 		}
