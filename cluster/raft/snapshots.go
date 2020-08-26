@@ -17,9 +17,9 @@ func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
 	}
 	return snapshot
 }
-func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.Snapshot) {
+func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.Snapshot) error {
 	if raft.IsEmptySnap(snapshotToSave) {
-		return
+		return nil
 	}
 
 	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
@@ -28,14 +28,7 @@ func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.S
 	rc.confState = snapshotToSave.Metadata.ConfState
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
 	rc.appliedIndex = snapshotToSave.Metadata.Index
-	select {
-	case rc.commitC <- Commit{
-		Index:   snapshotToSave.Metadata.Index,
-		Payload: nil,
-	}:
-	case <-ctx.Done():
-		return
-	}
+	return rc.snapshotApplier(ctx, snapshotToSave.Metadata.Index, rc.snapshotter)
 }
 
 func (rc *RaftNode) maybeTriggerSnapshot() {

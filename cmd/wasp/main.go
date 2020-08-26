@@ -17,6 +17,7 @@ import (
 	"github.com/vx-labs/wasp/cluster"
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
+	"go.etcd.io/etcd/etcdserver/api/snap"
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -138,6 +139,23 @@ func run(config *viper.Viper) {
 				AdvertizedPort: config.GetInt("raft-advertized-port"),
 				ListeningPort:  config.GetInt("raft-port"),
 			},
+			CommitApplier: func(ctx context.Context, event raft.Commit) error {
+				stateMachine.Apply(event.Payload)
+				return nil
+			},
+			SnapshotApplier: func(ctx context.Context, index uint64, snapshotter *snap.Snapshotter) error {
+				snapshot, err := snapshotter.Load()
+				if err != nil {
+					wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
+				}
+				err = state.Load(snapshot.Data)
+				if err != nil {
+					wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
+				} else {
+					wasp.L(ctx).Debug("loaded snapshot into state")
+				}
+				return err
+			},
 		},
 	}, rpcDialer, server, wasp.L(ctx))
 	operations.Run("cluster listener", func(ctx context.Context) {
@@ -146,16 +164,6 @@ func run(config *viper.Viper) {
 			panic(err)
 		}
 	})
-	snapshotter := <-clusterNode.Snapshotter()
-	snapshot, err := snapshotter.Load()
-	if err != nil {
-		wasp.L(ctx).Debug("failed to get state snapshot", zap.Error(err))
-	} else {
-		err := state.Load(snapshot.Data)
-		if err != nil {
-			wasp.L(ctx).Warn("failed to load state snapshot", zap.Error(err))
-		}
-	}
 	operations.Run("cluster node", func(ctx context.Context) {
 		clusterNode.Run(ctx)
 	})
@@ -176,28 +184,6 @@ func run(config *viper.Viper) {
 		}
 	})
 
-	operations.Run("command processor", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event := <-clusterNode.Commits():
-				if event.Payload == nil {
-					snapshot, err := snapshotter.Load()
-					if err != nil {
-						wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
-					}
-					err = state.Load(snapshot.Data)
-					if err != nil {
-						wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
-					}
-					wasp.L(ctx).Debug("loaded snapshot into state")
-				} else {
-					stateMachine.Apply(event.Payload)
-				}
-			}
-		}
-	})
 	operations.Run("audit publisher", func(ctx context.Context) {
 		err := auditRecorder.Consume(ctx, func(timestamp int64, tenant, service, eventKind string, payload map[string]string) {
 			attributes := map[string]string{}

@@ -7,7 +7,6 @@ import (
 	"github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/membership"
 	"github.com/vx-labs/wasp/cluster/raft"
-	"go.etcd.io/etcd/etcdserver/api/snap"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -28,9 +27,6 @@ func (n *node) Call(id uint64, f func(*grpc.ClientConn) error) error {
 func (n *node) Apply(ctx context.Context, event []byte) error {
 	return n.raft.Apply(ctx, event)
 }
-func (n *node) Commits() <-chan raft.Commit {
-	return n.raft.Commits()
-}
 func (n *node) Ready() <-chan struct{} {
 	return n.ready
 }
@@ -50,10 +46,6 @@ func (n *node) Shutdown() error {
 		return nil
 	}
 	return n.gossip.Shutdown()
-}
-
-func (n *node) Snapshotter() <-chan *snap.Snapshotter {
-	return n.raft.Snapshotter()
 }
 
 func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), server *grpc.Server, logger *zap.Logger) Node {
@@ -91,9 +83,11 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 
 	raftConfig := raft.Config{
-		NodeID:      config.ID,
-		DataDir:     config.DataDirectory,
-		GetSnapshot: config.RaftConfig.GetStateSnapshot,
+		NodeID:          config.ID,
+		DataDir:         config.DataDirectory,
+		GetSnapshot:     config.RaftConfig.GetStateSnapshot,
+		CommitApplier:   config.RaftConfig.CommitApplier,
+		SnapshotApplier: config.RaftConfig.SnapshotApplier,
 	}
 	raftNode := raft.NewNode(raftConfig, gossip, logger)
 	raftNode.Serve(server)

@@ -80,10 +80,12 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 	defer n.mtx.Unlock()
 
 	raftNode := raft.NewNode(raft.Config{
-		NodeID:      n.config.ID,
-		ClusterID:   cluster,
-		DataDir:     path.Join(n.config.DataDirectory, "nodes", cluster),
-		GetSnapshot: raftConfig.GetStateSnapshot,
+		NodeID:          n.config.ID,
+		ClusterID:       cluster,
+		DataDir:         path.Join(n.config.DataDirectory, "nodes", cluster),
+		GetSnapshot:     raftConfig.GetStateSnapshot,
+		CommitApplier:   raftConfig.CommitApplier,
+		SnapshotApplier: raftConfig.SnapshotApplier,
 	}, n.gossip, n.logger.With(zap.String("cluster_node_name", cluster)))
 
 	n.rafts[cluster] = raftNode
