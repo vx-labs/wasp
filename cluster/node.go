@@ -181,6 +181,8 @@ func (n *node) Run(ctx context.Context) {
 								if clusterIndex == 0 || (applied > 0 && applied >= clusterIndex) {
 									n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
 									return
+								} else {
+									n.logger.Debug("state machine is still not up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
 								}
 								select {
 								case <-ticker.C:
