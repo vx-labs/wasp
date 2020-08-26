@@ -37,7 +37,6 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 	if !rc.IsLeader() {
 		return nil, errors.New("node not leader")
 	}
-	out := &api.JoinClusterResponse{}
 	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
 		Type:    raftpb.ConfChangeAddNode,
 		NodeID:  in.ID,
@@ -50,7 +49,7 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 		rc.logger.Info("added new cluster peer",
 			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
 	}
-	return out, err
+	return &api.JoinClusterResponse{Commit: rc.appliedIndex}, err
 }
 func (rc *RaftNode) GetStatus(ctx context.Context, in *api.GetStatusRequest) (*api.GetStatusResponse, error) {
 	return &api.GetStatusResponse{

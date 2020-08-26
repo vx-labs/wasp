@@ -142,6 +142,7 @@ func (n *node) Run(ctx context.Context) {
 						return
 					}
 					for _, peer := range peers {
+						var clusterIndex uint64
 						ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 						var err error
 						if n.cluster != "" {
@@ -157,10 +158,11 @@ func (n *node) Run(ctx context.Context) {
 							})
 						} else {
 							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
-								_, err := clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
+								out, err := clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
 									ID:      n.config.ID,
 									Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 								})
+								clusterIndex = out.Commit
 								return err
 							})
 						}
@@ -170,7 +172,7 @@ func (n *node) Run(ctx context.Context) {
 						} else {
 							n.logger.Debug("joined cluster")
 							for {
-								if !n.raft.IsLate() {
+								if clusterIndex == 0 || n.raft.Applied() <= clusterIndex {
 									n.logger.Info("state machine is up-to-date")
 									return
 								}
