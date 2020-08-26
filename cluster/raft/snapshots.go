@@ -27,8 +27,11 @@ func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.S
 	}
 	rc.confState = snapshotToSave.Metadata.ConfState
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
-	rc.appliedIndex = snapshotToSave.Metadata.Index
-	return rc.snapshotApplier(ctx, snapshotToSave.Metadata.Index, rc.snapshotter)
+	err := rc.snapshotApplier(ctx, snapshotToSave.Metadata.Index, rc.snapshotter)
+	if err == nil {
+		rc.appliedIndex = snapshotToSave.Metadata.Index
+	}
+	return err
 }
 
 func (rc *RaftNode) maybeTriggerSnapshot() {
