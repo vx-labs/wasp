@@ -143,7 +143,6 @@ func (n *node) Run(ctx context.Context) {
 					}
 					for _, peer := range peers {
 						var clusterIndex uint64
-						ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 						var err error
 						if n.cluster != "" {
 							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
@@ -171,7 +170,6 @@ func (n *node) Run(ctx context.Context) {
 								return err
 							})
 						}
-						cancel()
 						if err != nil {
 							n.logger.Debug("failed to join raft cluster, retrying", zap.Error(err))
 						} else {
