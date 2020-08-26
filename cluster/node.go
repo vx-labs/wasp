@@ -147,13 +147,14 @@ func (n *node) Run(ctx context.Context) {
 						var err error
 						if n.cluster != "" {
 							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
-								_, err := clusterpb.NewMultiRaftClient(c).JoinCluster(ctx, &clusterpb.JoinClusterRequest{
+								out, err := clusterpb.NewMultiRaftClient(c).JoinCluster(ctx, &clusterpb.JoinClusterRequest{
 									ClusterID: n.cluster,
 									Context: &clusterpb.RaftContext{
 										ID:      n.config.ID,
 										Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 									},
 								})
+								clusterIndex = out.Commit
 								return err
 							})
 						} else {
