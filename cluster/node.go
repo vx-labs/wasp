@@ -172,7 +172,7 @@ func (n *node) Run(ctx context.Context) {
 						} else {
 							n.logger.Debug("joined cluster")
 							for {
-								if clusterIndex == 0 || n.raft.Applied() <= clusterIndex {
+								if clusterIndex == 0 || (n.raft.Applied() > 0 && n.raft.Applied() <= clusterIndex) {
 									n.logger.Info("state machine is up-to-date")
 									return
 								}
