@@ -68,6 +68,7 @@ type RaftNode struct {
 	confState     raftpb.ConfState
 	snapshotIndex uint64
 	appliedIndex  uint64
+	leaderIndex   uint64
 	membership    Membership
 	node          raft.Node
 	removed       bool
@@ -172,6 +173,9 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 
 func (rc *RaftNode) IsLeader() bool {
 	return rc.currentLeader == rc.id
+}
+func (rc *RaftNode) IsLate() bool {
+	return rc.leaderIndex > 0 && rc.leaderIndex-rc.appliedIndex < 10
 }
 
 // publishEntries writes committed log entries to commit channel and returns
@@ -305,6 +309,9 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 		// store raft entries to wal, then publish over commit channel
 		case rd := <-rc.node.Ready():
 			start := time.Now()
+			if rd.HardState.Commit > 0 {
+				rc.leaderIndex = rd.HardState.Commit
+			}
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
 				if newLeader {

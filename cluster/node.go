@@ -168,8 +168,18 @@ func (n *node) Run(ctx context.Context) {
 						if err != nil {
 							n.logger.Debug("failed to join raft cluster, retrying", zap.Error(err))
 						} else {
-							n.logger.Info("joined cluster")
-							return
+							n.logger.Debug("joined cluster")
+							for {
+								if !n.raft.IsLate() {
+									n.logger.Info("state machine is up-to-date")
+									return
+								}
+								select {
+								case <-ticker.C:
+								case <-ctx.Done():
+									return
+								}
+							}
 						}
 					}
 					select {
