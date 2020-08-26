@@ -154,7 +154,9 @@ func (n *node) Run(ctx context.Context) {
 										Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 									},
 								})
-								clusterIndex = out.Commit
+								if err == nil {
+									clusterIndex = out.Commit
+								}
 								return err
 							})
 						} else {
@@ -163,7 +165,9 @@ func (n *node) Run(ctx context.Context) {
 									ID:      n.config.ID,
 									Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 								})
-								clusterIndex = out.Commit
+								if err == nil {
+									clusterIndex = out.Commit
+								}
 								return err
 							})
 						}
