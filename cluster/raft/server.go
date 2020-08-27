@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"go.etcd.io/etcd/raft/raftpb"
@@ -80,6 +81,7 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 		out[peerIdx] = member
 		peerIdx++
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return &api.GetMembersResponse{Members: out}, nil
 }
 
