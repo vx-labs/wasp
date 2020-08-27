@@ -75,12 +75,9 @@ type RaftNode struct {
 	wal           *wal.WAL
 	snapshotter   *snap.Snapshotter
 
-	snapCount uint64
-	left      chan struct{}
-	ready     chan struct{}
-
-	peers []uint64
-
+	snapCount   uint64
+	left        chan struct{}
+	ready       chan struct{}
 	leaderState *leaderState
 }
 
@@ -179,28 +176,6 @@ func (rc *RaftNode) Applied() uint64 {
 	return rc.appliedIndex
 }
 
-func appendUint64(slice []uint64, elt uint64) []uint64 {
-	found := false
-	for idx := range slice {
-		if slice[idx] == elt {
-			found = true
-		}
-	}
-	if !found {
-		slice = append(slice, elt)
-	}
-	return slice
-}
-func removeUint64(slice []uint64, elt uint64) []uint64 {
-	for idx := range slice {
-		if slice[idx] == elt {
-			slice[idx] = slice[len(slice)-1]
-			return slice[:len(slice)-1]
-		}
-	}
-	return slice
-}
-
 // publishEntries writes committed log entries to commit channel and returns
 // whether all entries could be published.
 func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) error {
@@ -224,7 +199,6 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			switch cc.Type {
 			case raftpb.ConfChangeAddNode:
 				if len(cc.Context) > 0 {
-					rc.peers = appendUint64(rc.peers, cc.NodeID)
 					if cc.NodeID == rc.id {
 						rc.logger.Info("local node added to cluster")
 						rc.left = make(chan struct{})
@@ -232,7 +206,6 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 					}
 				}
 			case raftpb.ConfChangeRemoveNode:
-				rc.peers = removeUint64(rc.peers, cc.NodeID)
 				if cc.NodeID == rc.id {
 					rc.logger.Info("local node removed from cluster")
 					rc.removed = true

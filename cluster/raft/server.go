@@ -63,9 +63,10 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 		return nil, errors.New("node not ready")
 	}
 	members := rc.membership.Members()
-	peers := rc.peers
+	peers := rc.node.Status().Config.Voters.IDs()
 	out := make([]*api.Member, len(peers))
-	for peerIdx, peer := range peers {
+	peerIdx := 0
+	for peer := range peers {
 		member := &api.Member{ID: peer}
 		if peer == rc.currentLeader {
 			member.IsLeader = true
@@ -77,6 +78,7 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 			}
 		}
 		out[peerIdx] = member
+		peerIdx++
 	}
 	return &api.GetMembersResponse{Members: out}, nil
 }
