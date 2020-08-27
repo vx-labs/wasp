@@ -114,6 +114,16 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 	}
 }
 
+func (n *multinode) RemoveMember(ctx context.Context, in *clusterpb.RemoveMultiRaftMemberRequest) (*clusterpb.RemoveMultiRaftMemberResponse, error) {
+	n.mtx.RLock()
+	defer n.mtx.RUnlock()
+	instance, ok := n.rafts[in.ClusterID]
+	if !ok {
+		return nil, status.Error(codes.NotFound, "cluster not found")
+	}
+	_, err := instance.RemoveMember(ctx, &clusterpb.RemoveMemberRequest{ID: in.ID})
+	return &clusterpb.RemoveMultiRaftMemberResponse{}, err
+}
 func (n *multinode) ProcessMessage(ctx context.Context, in *clusterpb.ProcessMessageRequest) (*clusterpb.Payload, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()

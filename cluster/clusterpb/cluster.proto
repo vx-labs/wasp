@@ -34,11 +34,17 @@ message GetStatusResponse {
   bool IsInCluster = 3;
 };
 
+message RemoveMemberRequest {
+  uint64 ID = 1;
+}
+message RemoveMemberResponse {}
+
 service Raft {
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
   rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse) {}
 }
 
 message ProcessMessageRequest {
@@ -51,11 +57,20 @@ message JoinClusterRequest {
   RaftContext Context = 2;
 }
 
+message RemoveMultiRaftMemberRequest {
+  string ClusterID = 1;
+  uint64 ID = 2;
+}
+message RemoveMultiRaftMemberResponse {}
+
+
+
 service MultiRaft {
   rpc ProcessMessage(ProcessMessageRequest) returns (Payload) {}
   rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse) {}
   rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
+  rpc RemoveMember(RemoveMultiRaftMemberRequest) returns (RemoveMultiRaftMemberResponse) {}
 }
 
 service Node {}

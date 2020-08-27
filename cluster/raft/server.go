@@ -10,6 +10,8 @@ import (
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func (rc *RaftNode) waitReadiness(ctx context.Context) error {
@@ -19,6 +21,22 @@ func (rc *RaftNode) waitReadiness(ctx context.Context) error {
 	case <-rc.Ready():
 		return nil
 	}
+}
+func (rc *RaftNode) RemoveMember(ctx context.Context, message *api.RemoveMemberRequest) (*api.RemoveMemberResponse, error) {
+	if rc.node == nil {
+		return nil, errors.New("node not ready")
+	}
+	members := rc.membership.Members()
+	for _, member := range members {
+		if member.ID == message.ID && member.IsAlive {
+			return nil, status.Error(codes.InvalidArgument, "refusing to remove an healthy member")
+		}
+	}
+	return &api.RemoveMemberResponse{}, rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: message.ID,
+	})
+
 }
 func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message) (*api.Payload, error) {
 	if rc.node == nil {
