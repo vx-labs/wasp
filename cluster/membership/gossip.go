@@ -43,7 +43,12 @@ func (m *Gossip) Members() []*api.Member {
 		out[idx] = &api.Member{ID: id, Address: peer.Conn.Target(), IsAlive: peer.Enabled}
 		idx++
 	}
-	out[idx] = &api.Member{ID: m.id, Address: m.mlist.LocalNode().FullAddress().Addr, IsAlive: true}
+	selfMD, err := DecodeMD(m.meta)
+	if err != nil {
+		out[idx] = &api.Member{ID: m.id, Address: m.mlist.LocalNode().FullAddress().Addr, IsAlive: true}
+	} else {
+		out[idx] = &api.Member{ID: m.id, Address: selfMD.RPCAddress, IsAlive: true}
+	}
 	return out
 }
 
