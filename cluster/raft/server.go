@@ -63,12 +63,22 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 		return nil, errors.New("node not ready")
 	}
 	members := rc.membership.Members()
-	for _, member := range members {
-		if member.ID == rc.currentLeader {
+	peers := rc.peers
+	out := make([]*api.Member, len(peers))
+	for peerIdx, peer := range peers {
+		member := &api.Member{ID: peer}
+		if peer == rc.currentLeader {
 			member.IsLeader = true
 		}
+		for idx := range members {
+			if members[idx].ID == peer {
+				member.Address = members[idx].Address
+				member.IsAlive = members[idx].IsAlive
+			}
+		}
+		out[peerIdx] = member
 	}
-	return &api.GetMembersResponse{Members: members}, nil
+	return &api.GetMembersResponse{Members: out}, nil
 }
 
 func (rc *RaftNode) Serve(grpcServer *grpc.Server) {
