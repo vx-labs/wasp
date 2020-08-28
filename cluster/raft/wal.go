@@ -31,8 +31,6 @@ func (rc *RaftNode) openWAL(snapshot *raftpb.Snapshot, logger *zap.Logger) *wal.
 	if err != nil {
 		logger.Fatal("failed to load WAL", zap.Error(err))
 	}
-	logger.Debug("loaded WAL", zap.Uint64("wal_term", walsnap.Term), zap.Uint64("wal_index", walsnap.Index))
-
 	return w
 }
 
@@ -60,5 +58,6 @@ func (rc *RaftNode) replayWAL(logger *zap.Logger) *wal.WAL {
 	// append to storage so raft starts at the right place in log
 	rc.raftStorage.Append(ents)
 	rc.lastIndex = st.Commit
+	rc.logger.Debug("replayed raft wal", zap.Uint64("commited_index", st.Commit), zap.Int("entry_count", len(ents)))
 	return w
 }

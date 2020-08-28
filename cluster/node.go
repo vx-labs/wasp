@@ -104,6 +104,9 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 }
 
+func (n *node) Index() uint64 {
+	return n.raft.Index()
+}
 func (n *node) Run(ctx context.Context) {
 	defer n.logger.Debug("raft node stopped")
 	join := false
@@ -175,7 +178,7 @@ func (n *node) Run(ctx context.Context) {
 						} else {
 							n.logger.Debug("joined cluster")
 							for {
-								applied := n.raft.Applied()
+								applied := n.raft.Index()
 								if clusterIndex == 0 || (applied > 0 && applied >= clusterIndex) {
 									n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
 									return

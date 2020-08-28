@@ -14,6 +14,7 @@ type Node interface {
 	Apply(context.Context, []byte) error
 	Ready() <-chan struct{}
 	Call(id uint64, f func(*grpc.ClientConn) error) error
+	Index() uint64
 }
 type MultiNode interface {
 	Node(cluster string, config RaftConfig) Node

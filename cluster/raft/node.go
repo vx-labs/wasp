@@ -143,7 +143,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	rc.appliedIndex = snap.Metadata.Index
 
 	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
-
+	rc.wal = rc.replayWAL(rc.logger)
 	return rc
 }
 func (rc *RaftNode) IsRemovedFromCluster() bool {
@@ -172,7 +172,7 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 func (rc *RaftNode) IsLeader() bool {
 	return rc.currentLeader == rc.id
 }
-func (rc *RaftNode) Applied() uint64 {
+func (rc *RaftNode) Index() uint64 {
 	return rc.appliedIndex
 }
 
@@ -229,17 +229,12 @@ type NodeConfig struct {
 }
 
 func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config NodeConfig) {
-	oldwal := wal.Exist(rc.waldir)
-	rc.wal = rc.replayWAL(rc.logger)
 	rc.leaderState = newLeaderState(config.LeaderFunc)
 
 	rpeers := make([]raft.Peer, len(peers)+1)
 	for i := range peers {
 		peerID := peers[i].ID
 		rpeers[i] = raft.Peer{ID: peerID}
-		if peerID != rc.id {
-			rc.logger.Debug("added initial raft node to transport", zap.String("hex_raft_node_id", fmt.Sprintf("%x", peerID)))
-		}
 	}
 	rpeers[len(rpeers)-1] = raft.Peer{ID: rc.id}
 	c := &raft.Config{
@@ -258,8 +253,8 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 	if os.Getenv("ENABLE_RAFT_DEBUG_LOG") == "true" {
 		c.Logger = &raft.DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
 	}
-	if oldwal || join {
-		rc.logger.Debug("restarting raft state machine")
+	if rc.hasBeenBootstrapped || join {
+		rc.logger.Debug("restarting raft state machine", zap.Uint64("last_index", rc.lastIndex))
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.logger.Debug("starting raft state machine")
@@ -270,7 +265,9 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		close(rc.ready)
 	}
 	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.lastIndex))
-	rc.hasBeenBootstrapped = true
+	if !rc.hasBeenBootstrapped {
+		rc.hasBeenBootstrapped = true
+	}
 	rc.serveChannels(ctx) //blocking loop
 	rc.node.Stop()
 	err := rc.wal.Close()
@@ -339,7 +336,14 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 					rc.currentLeader = 0
 				}
 			}
-			rc.wal.Save(rd.HardState, rd.Entries)
+			if err := rc.wal.Save(rd.HardState, rd.Entries); err != nil {
+				rc.logger.Error("failed to save raft hard state and entries", zap.Error(err))
+				return
+			}
+			if rd.HardState.Commit > 0 {
+				rc.logger.Debug("saved state", zap.Uint64("commited_index", rd.HardState.Commit), zap.Int("entry_count", len(rd.Entries)))
+			}
+
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
@@ -350,11 +354,14 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 					return
 				}
 			}
-			rc.raftStorage.Append(rd.Entries)
+			if err := rc.raftStorage.Append(rd.Entries); err != nil {
+				rc.logger.Error("failed to store raft entries", zap.Error(err))
+				return
+			}
 			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Messages))
 			if err := rc.publishEntries(ctx, rd.CommittedEntries); err != nil {
 				if err != context.Canceled {
-					rc.logger.Error("failed to publish raft entries", zap.Error(err))
+					rc.logger.Error("failed to publish raft committed entries", zap.Error(err))
 				}
 				return
 			}
