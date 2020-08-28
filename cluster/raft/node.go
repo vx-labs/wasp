@@ -158,6 +158,11 @@ func (rc *RaftNode) Reset() {
 	rc.wal.Close()
 	os.RemoveAll(rc.snapdir)
 	os.RemoveAll(rc.waldir)
+
+	if err := os.MkdirAll(rc.snapdir, 0750); err != nil {
+		rc.logger.Fatal("failed to create dir for snapshots", zap.Error(err))
+	}
+
 	rc.raftStorage = raft.NewMemoryStorage()
 	rc.snapshotter = snap.New(rc.logger, rc.snapdir)
 	snap, err := rc.raftStorage.Snapshot()

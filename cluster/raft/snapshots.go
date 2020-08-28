@@ -13,7 +13,7 @@ import (
 func (rc *RaftNode) loadSnapshot() *raftpb.Snapshot {
 	snapshot, err := rc.snapshotter.Load()
 	if err != nil && err != snap.ErrNoSnapshot {
-		log.Fatalf("raftexample: error loading snapshot (%v)", err)
+		rc.logger.Fatal("error loading snapshot", zap.Error(err))
 	}
 	return snapshot
 }
