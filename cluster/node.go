@@ -109,6 +109,11 @@ func (n *node) Index() uint64 {
 }
 func (n *node) Run(ctx context.Context) {
 	defer n.logger.Debug("raft node stopped")
+	idx := n.Index()
+	if n.config.RaftConfig.AppliedIndex > idx {
+		n.logger.Warn("AppliedIndex is greater than raft index: using raft index")
+		n.config.RaftConfig.AppliedIndex = idx
+	}
 	join := false
 	peers := raft.Peers{}
 	var err error
