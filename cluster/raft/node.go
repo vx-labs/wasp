@@ -340,9 +340,6 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 				rc.logger.Error("failed to save raft hard state and entries", zap.Error(err))
 				return
 			}
-			if rd.HardState.Commit > 0 {
-				rc.logger.Debug("saved state", zap.Uint64("commited_index", rd.HardState.Commit), zap.Int("entry_count", len(rd.Entries)))
-			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				rc.saveSnap(rd.Snapshot)
