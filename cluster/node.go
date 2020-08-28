@@ -88,6 +88,7 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 		GetSnapshot:     config.RaftConfig.GetStateSnapshot,
 		CommitApplier:   config.RaftConfig.CommitApplier,
 		SnapshotApplier: config.RaftConfig.SnapshotApplier,
+		SnapshotNotifier: config.RaftConfig.SnapshotNotifier,
 	}
 	raftNode := raft.NewNode(raftConfig, gossip, logger)
 	raftNode.Serve(server)

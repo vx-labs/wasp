@@ -44,6 +44,12 @@ func (rc *RaftNode) forceTriggerSnapshot() {
 	if rc.snapshotIndex >= rc.appliedIndex {
 		return
 	}
+	if rc.snapshotNotifier != nil {
+		if err := rc.snapshotNotifier(rc.appliedIndex); err != nil {
+			rc.logger.Error("failed to snapshot because application failed to sync", zap.Uint64("applied_index", rc.appliedIndex), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
+			return
+		}
+	}
 	rc.logger.Debug("start snapshot", zap.Uint64("applied_index", rc.appliedIndex), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
 	data, err := rc.getSnapshot()
 	if err != nil {

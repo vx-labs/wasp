@@ -36,6 +36,9 @@ type StatsProvider interface {
 type CommitApplier func(context.Context, Commit) error
 type SnapshotApplier func(context.Context, uint64, *snap.Snapshotter) error
 
+// SnapshotNotifier is called when a raft snapshot is created, and inform application to sync its state.
+type SnapshotNotifier func(uint64) error
+
 type StatsProviderGetter func() StatsProvider
 
 type Command struct {
@@ -58,6 +61,7 @@ type RaftNode struct {
 	hasBeenBootstrapped bool
 	commitApplier       CommitApplier
 	snapshotApplier     SnapshotApplier
+	snapshotNotifier    SnapshotNotifier
 	msgSnapC            chan raftpb.Message
 	logger              *zap.Logger
 	waldir              string // path to WAL directory
@@ -82,13 +86,14 @@ type RaftNode struct {
 }
 
 type Config struct {
-	NodeID          uint64
-	NodeAddress     string
-	ClusterID       string
-	DataDir         string
-	GetSnapshot     func() ([]byte, error)
-	CommitApplier   CommitApplier
-	SnapshotApplier SnapshotApplier
+	NodeID           uint64
+	NodeAddress      string
+	ClusterID        string
+	DataDir          string
+	GetSnapshot      func() ([]byte, error)
+	CommitApplier    CommitApplier
+	SnapshotApplier  SnapshotApplier
+	SnapshotNotifier SnapshotNotifier
 }
 
 type Commit struct {
@@ -108,24 +113,25 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	getSnapshot := config.GetSnapshot
 
 	rc := &RaftNode{
-		id:              id,
-		clusterID:       config.ClusterID,
-		address:         config.NodeAddress,
-		membership:      mesh,
-		currentLeader:   0,
-		hasLeader:       false,
-		logger:          logger,
-		waldir:          path.Join(datadir, "raft", "wall"),
-		snapdir:         path.Join(datadir, "raft", "snapshots"),
-		getSnapshot:     getSnapshot,
-		raftStorage:     raft.NewMemoryStorage(),
-		msgSnapC:        make(chan raftpb.Message, 16),
-		snapCount:       1000,
-		left:            make(chan struct{}),
-		ready:           make(chan struct{}),
-		removed:         true,
-		commitApplier:   config.CommitApplier,
-		snapshotApplier: config.SnapshotApplier,
+		id:               id,
+		clusterID:        config.ClusterID,
+		address:          config.NodeAddress,
+		membership:       mesh,
+		currentLeader:    0,
+		hasLeader:        false,
+		logger:           logger,
+		waldir:           path.Join(datadir, "raft", "wall"),
+		snapdir:          path.Join(datadir, "raft", "snapshots"),
+		getSnapshot:      getSnapshot,
+		raftStorage:      raft.NewMemoryStorage(),
+		msgSnapC:         make(chan raftpb.Message, 16),
+		snapCount:        1000,
+		left:             make(chan struct{}),
+		ready:            make(chan struct{}),
+		removed:          true,
+		commitApplier:    config.CommitApplier,
+		snapshotApplier:  config.SnapshotApplier,
+		snapshotNotifier: config.SnapshotNotifier,
 		// rest of structure populated after WAL replay
 	}
 	if !fileutil.Exist(rc.snapdir) {
@@ -443,7 +449,6 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 
 func (rc *RaftNode) Leave(ctx context.Context) error {
 	for {
-		rc.forceTriggerSnapshot()
 		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
 			cancel()
