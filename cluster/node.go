@@ -105,6 +105,9 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 }
 
+func (n *node) Reset() {
+	n.raft.Reset()
+}
 func (n *node) Index() uint64 {
 	return n.raft.Index()
 }

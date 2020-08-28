@@ -152,6 +152,26 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	rc.wal = rc.replayWAL(rc.logger)
 	return rc
 }
+
+// Reset wipe the on-disk raft data. Do not use if Run() has been called.
+func (rc *RaftNode) Reset() {
+	rc.wal.Close()
+	os.RemoveAll(rc.snapdir)
+	os.RemoveAll(rc.waldir)
+	rc.raftStorage = raft.NewMemoryStorage()
+	rc.snapshotter = snap.New(rc.logger, rc.snapdir)
+	snap, err := rc.raftStorage.Snapshot()
+	if err != nil {
+		panic(err)
+	}
+	rc.confState = snap.Metadata.ConfState
+	rc.snapshotIndex = snap.Metadata.Index
+	rc.appliedIndex = snap.Metadata.Index
+
+	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
+	rc.wal = rc.replayWAL(rc.logger)
+}
+
 func (rc *RaftNode) IsRemovedFromCluster() bool {
 	return rc.removed
 }
