@@ -10,6 +10,7 @@ import (
 
 type Node interface {
 	Run(context.Context)
+	RunFromAppliedIndex(ctx context.Context, idx uint64)
 	Shutdown() error
 	Apply(context.Context, []byte) error
 	Ready() <-chan struct{}

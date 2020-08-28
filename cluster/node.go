@@ -83,11 +83,11 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 
 	raftConfig := raft.Config{
-		NodeID:          config.ID,
-		DataDir:         config.DataDirectory,
-		GetSnapshot:     config.RaftConfig.GetStateSnapshot,
-		CommitApplier:   config.RaftConfig.CommitApplier,
-		SnapshotApplier: config.RaftConfig.SnapshotApplier,
+		NodeID:           config.ID,
+		DataDir:          config.DataDirectory,
+		GetSnapshot:      config.RaftConfig.GetStateSnapshot,
+		CommitApplier:    config.RaftConfig.CommitApplier,
+		SnapshotApplier:  config.RaftConfig.SnapshotApplier,
 		SnapshotNotifier: config.RaftConfig.SnapshotNotifier,
 	}
 	raftNode := raft.NewNode(raftConfig, gossip, logger)
@@ -108,13 +108,12 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 func (n *node) Index() uint64 {
 	return n.raft.Index()
 }
+func (n *node) RunFromAppliedIndex(ctx context.Context, idx uint64) {
+	n.config.RaftConfig.AppliedIndex = idx
+	n.Run(ctx)
+}
 func (n *node) Run(ctx context.Context) {
 	defer n.logger.Debug("raft node stopped")
-	idx := n.Index()
-	if n.config.RaftConfig.AppliedIndex > idx {
-		n.logger.Warn("AppliedIndex is greater than raft index: using raft index")
-		n.config.RaftConfig.AppliedIndex = idx
-	}
 	join := false
 	peers := raft.Peers{}
 	var err error
