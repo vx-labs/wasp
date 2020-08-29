@@ -12,15 +12,15 @@ import (
 
 	"google.golang.org/grpc"
 
-	"github.com/coreos/etcd/pkg/fileutil"
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/snap"
-	"github.com/coreos/etcd/wal"
-	"github.com/coreos/etcd/wal/walpb"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/stats"
+	"go.etcd.io/etcd/etcdserver/api/snap"
+	"go.etcd.io/etcd/pkg/fileutil"
+	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/wal"
+	"go.etcd.io/etcd/wal/walpb"
 
 	"go.uber.org/zap"
 )
@@ -139,7 +139,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 			rc.logger.Fatal("failed to create dir for snapshots", zap.Error(err))
 		}
 	}
-	rc.snapshotter = snap.New(rc.snapdir)
+	rc.snapshotter = snap.New(rc.logger, rc.snapdir)
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
 		panic(err)
@@ -164,7 +164,7 @@ func (rc *RaftNode) Reset() {
 	}
 
 	rc.raftStorage = raft.NewMemoryStorage()
-	rc.snapshotter = snap.New(rc.snapdir)
+	rc.snapshotter = snap.New(rc.logger, rc.snapdir)
 	snap, err := rc.raftStorage.Snapshot()
 	if err != nil {
 		panic(err)

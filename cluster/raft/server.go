@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/coreos/etcd/raft/raftpb"
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
+	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

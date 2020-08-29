@@ -3,9 +3,9 @@ package raft
 import (
 	"os"
 
-	"github.com/coreos/etcd/raft/raftpb"
-	"github.com/coreos/etcd/wal"
-	"github.com/coreos/etcd/wal/walpb"
+	"go.etcd.io/etcd/raft/raftpb"
+	"go.etcd.io/etcd/wal"
+	"go.etcd.io/etcd/wal/walpb"
 	"go.uber.org/zap"
 )
 
@@ -16,7 +16,7 @@ func (rc *RaftNode) openWAL(snapshot *raftpb.Snapshot, logger *zap.Logger) *wal.
 			logger.Fatal("failed to create dir for wal", zap.Error(err))
 		}
 
-		w, err := wal.Create(rc.waldir, nil)
+		w, err := wal.Create(rc.logger, rc.waldir, nil)
 		if err != nil {
 			logger.Fatal("create wal error", zap.Error(err))
 		}
@@ -27,7 +27,7 @@ func (rc *RaftNode) openWAL(snapshot *raftpb.Snapshot, logger *zap.Logger) *wal.
 	if snapshot != nil {
 		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
 	}
-	w, err := wal.Open(rc.waldir, walsnap)
+	w, err := wal.Open(rc.logger, rc.waldir, walsnap)
 	if err != nil {
 		logger.Fatal("failed to load WAL", zap.Error(err))
 	}

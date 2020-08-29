@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
-	"github.com/coreos/etcd/raft"
-	"github.com/coreos/etcd/raft/raftpb"
 	"github.com/prometheus/client_golang/prometheus"
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/stats"
+	"go.etcd.io/etcd/raft"
+	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
 )
 

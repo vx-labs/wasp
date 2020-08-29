@@ -3,7 +3,7 @@ syntax = "proto3";
 package cluster;
 option go_package = "clusterpb";
 
-import "github.com/coreos/etcd/raft/raftpb/raft.proto";
+import "go.etcd.io/etcd/raft/raftpb/raft.proto";
 
 message Payload { bytes Data = 1; }
 

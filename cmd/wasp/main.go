@@ -14,10 +14,10 @@ import (
 	"time"
 
 	"github.com/boltdb/bolt"
-	"github.com/coreos/etcd/snap"
 	"github.com/vx-labs/wasp/cluster"
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
+	"go.etcd.io/etcd/etcdserver/api/snap"
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"

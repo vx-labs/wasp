@@ -94,12 +94,12 @@ Wasp can refuse to start, only printing the following message.
 panic: removed all voters
 
 goroutine 32 [running]:
-github.com/coreos/etcd/raft.(*raft).applyConfChange(0xc0002a4000, 0x0, 0xc000132570, 0x1, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, ...)
-	github.com/coreos/etcd@v0.0.0-20200319002442-e784ba73c229/raft/raft.go:1514 +0x197
-github.com/coreos/etcd/raft.(*node).run(0xc0000be7e0)
-	github.com/coreos/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:356 +0x78c
-created by github.com/coreos/etcd/raft.RestartNode
-	github.com/coreos/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:240 +0x33d
+go.etcd.io/etcd/raft.(*raft).applyConfChange(0xc0002a4000, 0x0, 0xc000132570, 0x1, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, ...)
+	go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/raft.go:1514 +0x197
+go.etcd.io/etcd/raft.(*node).run(0xc0000be7e0)
+	go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:356 +0x78c
+created by go.etcd.io/etcd/raft.RestartNode
+	go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:240 +0x33d
 ```
 
 This message basically says that Wasp state became corrupted, and could not be recovered at startup.
