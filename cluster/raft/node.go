@@ -67,7 +67,7 @@ type RaftNode struct {
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
 	getSnapshot         func() ([]byte, error)
-	lastIndex           uint64 // index of log at start
+	committedIndex      uint64 // index of log at start
 
 	confState     raftpb.ConfState
 	snapshotIndex uint64
@@ -204,7 +204,7 @@ func (rc *RaftNode) IsLeader() bool {
 	return rc.currentLeader == rc.id
 }
 func (rc *RaftNode) Index() uint64 {
-	return rc.appliedIndex
+	return rc.committedIndex
 }
 
 // publishEntries writes committed log entries to commit channel and returns
@@ -245,7 +245,7 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			}
 		}
 		rc.appliedIndex = ents[i].Index
-		if rc.lastIndex > 0 && rc.appliedIndex == rc.lastIndex {
+		if rc.committedIndex > 0 && rc.appliedIndex == rc.committedIndex {
 			rc.logger.Debug("state machine is ready", zap.Uint64("index", rc.appliedIndex))
 			close(rc.ready)
 		}
@@ -285,17 +285,17 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		c.Logger = &raft.DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
 	}
 	if rc.hasBeenBootstrapped || join {
-		rc.logger.Debug("restarting raft state machine", zap.Uint64("last_index", rc.lastIndex))
+		rc.logger.Debug("restarting raft state machine", zap.Uint64("last_index", rc.committedIndex))
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.logger.Debug("starting raft state machine")
 		rc.removed = false
 		rc.node = raft.StartNode(c, rpeers)
 	}
-	if rc.lastIndex == config.AppliedIndex {
+	if rc.committedIndex == config.AppliedIndex {
 		close(rc.ready)
 	}
-	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.lastIndex))
+	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.committedIndex))
 	if !rc.hasBeenBootstrapped {
 		rc.hasBeenBootstrapped = true
 	}
