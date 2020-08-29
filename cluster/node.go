@@ -109,7 +109,7 @@ func (n *node) Reset() {
 	n.raft.Reset()
 }
 func (n *node) Index() uint64 {
-	return n.raft.Index()
+	return n.raft.CommittedIndex()
 }
 func (n *node) RunFromAppliedIndex(ctx context.Context, idx uint64) {
 	n.config.RaftConfig.AppliedIndex = idx
@@ -186,7 +186,7 @@ func (n *node) Run(ctx context.Context) {
 						} else {
 							n.logger.Debug("joined cluster")
 							for {
-								applied := n.raft.Index()
+								applied := n.raft.AppliedIndex()
 								if clusterIndex == 0 || (applied > 0 && applied >= clusterIndex) {
 									n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
 									return

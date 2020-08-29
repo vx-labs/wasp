@@ -203,8 +203,11 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 func (rc *RaftNode) IsLeader() bool {
 	return rc.currentLeader == rc.id
 }
-func (rc *RaftNode) Index() uint64 {
+func (rc *RaftNode) CommittedIndex() uint64 {
 	return rc.committedIndex
+}
+func (rc *RaftNode) AppliedIndex() uint64 {
+	return rc.appliedIndex
 }
 
 // publishEntries writes committed log entries to commit channel and returns
