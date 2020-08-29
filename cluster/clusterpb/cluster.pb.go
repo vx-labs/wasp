@@ -6,8 +6,8 @@ package clusterpb
 import (
 	context "context"
 	fmt "fmt"
+	raftpb "github.com/coreos/etcd/raft/raftpb"
 	proto "github.com/golang/protobuf/proto"
-	raftpb "go.etcd.io/etcd/raft/raftpb"
 	grpc "google.golang.org/grpc"
 	io "io"
 	math "math"

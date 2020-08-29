@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/coreos/etcd/raft/raftpb"
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
-	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -82,25 +82,13 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 		return nil, errors.New("node not ready")
 	}
 	members := rc.membership.Members()
-	peers := rc.node.Status().Config.Voters.IDs()
-	out := make([]*api.Member, len(peers))
-	peerIdx := 0
-	for peer := range peers {
-		member := &api.Member{ID: peer}
-		if peer == rc.currentLeader {
-			member.IsLeader = true
+	for idx := range members {
+		if rc.currentLeader == members[idx].ID {
+			members[idx].IsLeader = true
 		}
-		for idx := range members {
-			if members[idx].ID == peer {
-				member.Address = members[idx].Address
-				member.IsAlive = members[idx].IsAlive
-			}
-		}
-		out[peerIdx] = member
-		peerIdx++
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return &api.GetMembersResponse{Members: out}, nil
+	sort.Slice(members, func(i, j int) bool { return members[i].ID < members[j].ID })
+	return &api.GetMembersResponse{Members: members}, nil
 }
 
 func (rc *RaftNode) Serve(grpcServer *grpc.Server) {

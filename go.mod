@@ -30,7 +30,7 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.5.1
 	github.com/vx-labs/mqtt-protocol v4.3.5+incompatible
-	go.etcd.io/etcd v0.0.0-20200319002442-e784ba73c229
+	github.com/coreos/etcd v3.3.25+incompatible
 	go.uber.org/zap v1.14.1
 	golang.org/x/crypto v0.0.0-20191106202628-ed6320f186d4
 	golang.org/x/net v0.0.0-20200301022130-244492dfa37a // indirect
