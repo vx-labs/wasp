@@ -39,7 +39,22 @@ message RemoveMemberRequest { uint64 ID = 1; }
 message RemoveMemberResponse {}
 message PromoteMemberResponse {}
 
+message TopologyMemberStatus {
+  uint64 ID = 1;
+  string Address = 2;
+  bool IsLeader = 3;
+  bool IsAlive = 4;
+  uint64 Applied = 5;
+  bool IsVoter = 6;
+};
+message GetTopologyRequest { string ClusterID = 1; }
+message GetTopologyResponse {
+  string ClusterID = 1;
+  uint64 Committed = 2;
+  repeated TopologyMemberStatus Members = 3;
+}
 service Raft {
+  rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse) {}
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
   rpc PromoteMember(RaftContext) returns (PromoteMemberResponse) {}
@@ -76,6 +91,7 @@ service MultiRaft {
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
   rpc RemoveMember(RemoveMultiRaftMemberRequest)
       returns (RemoveMultiRaftMemberResponse) {}
+  rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse) {}
 }
 
 service Node {}

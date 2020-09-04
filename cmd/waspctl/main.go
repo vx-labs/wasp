@@ -73,6 +73,39 @@ func main() {
 			table.Render()
 		},
 	})
+	raft.AddCommand(&cobra.Command{
+		Use: "topology",
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			out, err := clusterpb.NewRaftClient(conn).GetTopology(ctx, &clusterpb.GetTopologyRequest{})
+			if err != nil {
+				l.Fatal("failed to get raft topology", zap.Error(err))
+			}
+			table := getTable([]string{"ID", "Leader", "Address", "Healthchecks", "Suffrage", "Progress"}, cmd.OutOrStdout())
+			for _, member := range out.GetMembers() {
+				healthString := "passing"
+				suffrageString := "unknown"
+				if !member.IsAlive {
+					healthString = "error"
+				} else {
+					if member.IsVoter {
+						suffrageString = "voter"
+					} else {
+						suffrageString = "learner"
+					}
+				}
+				table.Append([]string{
+					fmt.Sprintf("%x", member.GetID()),
+					fmt.Sprintf("%v", member.GetIsLeader()),
+					member.GetAddress(),
+					healthString,
+					suffrageString,
+					fmt.Sprintf("%d/%d", member.GetApplied(), out.Committed),
+				})
+			}
+			table.Render()
+		},
+	})
 	hostname, _ := os.Hostname()
 
 	rootCmd.AddCommand(raft)

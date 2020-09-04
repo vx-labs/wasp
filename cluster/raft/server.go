@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/vx-labs/wasp/cluster/clusterpb"
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"go.etcd.io/etcd/raft/raftpb"
 	"go.uber.org/zap"
@@ -163,6 +164,55 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return &api.GetMembersResponse{Members: out, CommittedIndex: rc.committedIndex}, nil
+}
+func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest) (*api.GetTopologyResponse, error) {
+	if rc.node == nil {
+		return nil, errors.New("node not ready")
+	}
+	if !rc.IsLeader() {
+		var out *api.GetTopologyResponse
+		if rc.clusterID != "" {
+			return out, rc.membership.Call(rc.Leader(), func(c *grpc.ClientConn) error {
+				var err error
+				out, err = clusterpb.NewMultiRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
+					ClusterID: rc.clusterID,
+				})
+				return err
+			})
+		}
+		return out, rc.membership.Call(rc.Leader(), func(c *grpc.ClientConn) error {
+			var err error
+			out, err = clusterpb.NewRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
+				ClusterID: rc.clusterID,
+			})
+			return err
+		})
+	}
+	status := rc.node.Status()
+	voters := status.Config.Voters
+	peers := voters.IDs()
+	out := make([]*api.TopologyMemberStatus, 0)
+	members := rc.membership.Members()
+	leader := rc.Leader()
+	for id := range peers {
+		peer := &api.TopologyMemberStatus{ID: id}
+		for _, member := range members {
+			if member.ID == id {
+				peer.Address = member.Address
+				peer.IsAlive = member.IsAlive
+				break
+			}
+		}
+		progress := status.Progress[id]
+		peer.Applied = progress.Next - 1
+		peer.IsVoter = !progress.IsLearner
+		if leader == id {
+			peer.IsLeader = true
+		}
+		out = append(out, peer)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return &api.GetTopologyResponse{Members: out, ClusterID: rc.clusterID, Committed: status.Commit}, nil
 }
 
 func (rc *RaftNode) Serve(grpcServer *grpc.Server) {

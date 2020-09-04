@@ -636,6 +636,203 @@ func (m *PromoteMemberResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_PromoteMemberResponse proto.InternalMessageInfo
 
+type TopologyMemberStatus struct {
+	ID                   uint64   `protobuf:"varint,1,opt,name=ID,proto3" json:"ID,omitempty"`
+	Address              string   `protobuf:"bytes,2,opt,name=Address,proto3" json:"Address,omitempty"`
+	IsLeader             bool     `protobuf:"varint,3,opt,name=IsLeader,proto3" json:"IsLeader,omitempty"`
+	IsAlive              bool     `protobuf:"varint,4,opt,name=IsAlive,proto3" json:"IsAlive,omitempty"`
+	Applied              uint64   `protobuf:"varint,5,opt,name=Applied,proto3" json:"Applied,omitempty"`
+	IsVoter              bool     `protobuf:"varint,6,opt,name=IsVoter,proto3" json:"IsVoter,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *TopologyMemberStatus) Reset()         { *m = TopologyMemberStatus{} }
+func (m *TopologyMemberStatus) String() string { return proto.CompactTextString(m) }
+func (*TopologyMemberStatus) ProtoMessage()    {}
+func (*TopologyMemberStatus) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3cfb3b8ec240c376, []int{12}
+}
+func (m *TopologyMemberStatus) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *TopologyMemberStatus) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_TopologyMemberStatus.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *TopologyMemberStatus) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_TopologyMemberStatus.Merge(m, src)
+}
+func (m *TopologyMemberStatus) XXX_Size() int {
+	return m.Size()
+}
+func (m *TopologyMemberStatus) XXX_DiscardUnknown() {
+	xxx_messageInfo_TopologyMemberStatus.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_TopologyMemberStatus proto.InternalMessageInfo
+
+func (m *TopologyMemberStatus) GetID() uint64 {
+	if m != nil {
+		return m.ID
+	}
+	return 0
+}
+
+func (m *TopologyMemberStatus) GetAddress() string {
+	if m != nil {
+		return m.Address
+	}
+	return ""
+}
+
+func (m *TopologyMemberStatus) GetIsLeader() bool {
+	if m != nil {
+		return m.IsLeader
+	}
+	return false
+}
+
+func (m *TopologyMemberStatus) GetIsAlive() bool {
+	if m != nil {
+		return m.IsAlive
+	}
+	return false
+}
+
+func (m *TopologyMemberStatus) GetApplied() uint64 {
+	if m != nil {
+		return m.Applied
+	}
+	return 0
+}
+
+func (m *TopologyMemberStatus) GetIsVoter() bool {
+	if m != nil {
+		return m.IsVoter
+	}
+	return false
+}
+
+type GetTopologyRequest struct {
+	ClusterID            string   `protobuf:"bytes,1,opt,name=ClusterID,proto3" json:"ClusterID,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *GetTopologyRequest) Reset()         { *m = GetTopologyRequest{} }
+func (m *GetTopologyRequest) String() string { return proto.CompactTextString(m) }
+func (*GetTopologyRequest) ProtoMessage()    {}
+func (*GetTopologyRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3cfb3b8ec240c376, []int{13}
+}
+func (m *GetTopologyRequest) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetTopologyRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetTopologyRequest.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetTopologyRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetTopologyRequest.Merge(m, src)
+}
+func (m *GetTopologyRequest) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetTopologyRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetTopologyRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetTopologyRequest proto.InternalMessageInfo
+
+func (m *GetTopologyRequest) GetClusterID() string {
+	if m != nil {
+		return m.ClusterID
+	}
+	return ""
+}
+
+type GetTopologyResponse struct {
+	ClusterID            string                  `protobuf:"bytes,1,opt,name=ClusterID,proto3" json:"ClusterID,omitempty"`
+	Committed            uint64                  `protobuf:"varint,2,opt,name=Committed,proto3" json:"Committed,omitempty"`
+	Members              []*TopologyMemberStatus `protobuf:"bytes,3,rep,name=Members,proto3" json:"Members,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}                `json:"-"`
+	XXX_unrecognized     []byte                  `json:"-"`
+	XXX_sizecache        int32                   `json:"-"`
+}
+
+func (m *GetTopologyResponse) Reset()         { *m = GetTopologyResponse{} }
+func (m *GetTopologyResponse) String() string { return proto.CompactTextString(m) }
+func (*GetTopologyResponse) ProtoMessage()    {}
+func (*GetTopologyResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_3cfb3b8ec240c376, []int{14}
+}
+func (m *GetTopologyResponse) XXX_Unmarshal(b []byte) error {
+	return m.Unmarshal(b)
+}
+func (m *GetTopologyResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	if deterministic {
+		return xxx_messageInfo_GetTopologyResponse.Marshal(b, m, deterministic)
+	} else {
+		b = b[:cap(b)]
+		n, err := m.MarshalTo(b)
+		if err != nil {
+			return nil, err
+		}
+		return b[:n], nil
+	}
+}
+func (m *GetTopologyResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_GetTopologyResponse.Merge(m, src)
+}
+func (m *GetTopologyResponse) XXX_Size() int {
+	return m.Size()
+}
+func (m *GetTopologyResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_GetTopologyResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_GetTopologyResponse proto.InternalMessageInfo
+
+func (m *GetTopologyResponse) GetClusterID() string {
+	if m != nil {
+		return m.ClusterID
+	}
+	return ""
+}
+
+func (m *GetTopologyResponse) GetCommitted() uint64 {
+	if m != nil {
+		return m.Committed
+	}
+	return 0
+}
+
+func (m *GetTopologyResponse) GetMembers() []*TopologyMemberStatus {
+	if m != nil {
+		return m.Members
+	}
+	return nil
+}
+
 type ProcessMessageRequest struct {
 	ClusterID            string          `protobuf:"bytes,1,opt,name=ClusterID,proto3" json:"ClusterID,omitempty"`
 	Message              *raftpb.Message `protobuf:"bytes,2,opt,name=Message,proto3" json:"Message,omitempty"`
@@ -648,7 +845,7 @@ func (m *ProcessMessageRequest) Reset()         { *m = ProcessMessageRequest{} }
 func (m *ProcessMessageRequest) String() string { return proto.CompactTextString(m) }
 func (*ProcessMessageRequest) ProtoMessage()    {}
 func (*ProcessMessageRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3cfb3b8ec240c376, []int{12}
+	return fileDescriptor_3cfb3b8ec240c376, []int{15}
 }
 func (m *ProcessMessageRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -703,7 +900,7 @@ func (m *JoinClusterRequest) Reset()         { *m = JoinClusterRequest{} }
 func (m *JoinClusterRequest) String() string { return proto.CompactTextString(m) }
 func (*JoinClusterRequest) ProtoMessage()    {}
 func (*JoinClusterRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3cfb3b8ec240c376, []int{13}
+	return fileDescriptor_3cfb3b8ec240c376, []int{16}
 }
 func (m *JoinClusterRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -758,7 +955,7 @@ func (m *PromoteMemberRequest) Reset()         { *m = PromoteMemberRequest{} }
 func (m *PromoteMemberRequest) String() string { return proto.CompactTextString(m) }
 func (*PromoteMemberRequest) ProtoMessage()    {}
 func (*PromoteMemberRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3cfb3b8ec240c376, []int{14}
+	return fileDescriptor_3cfb3b8ec240c376, []int{17}
 }
 func (m *PromoteMemberRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -813,7 +1010,7 @@ func (m *RemoveMultiRaftMemberRequest) Reset()         { *m = RemoveMultiRaftMem
 func (m *RemoveMultiRaftMemberRequest) String() string { return proto.CompactTextString(m) }
 func (*RemoveMultiRaftMemberRequest) ProtoMessage()    {}
 func (*RemoveMultiRaftMemberRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3cfb3b8ec240c376, []int{15}
+	return fileDescriptor_3cfb3b8ec240c376, []int{18}
 }
 func (m *RemoveMultiRaftMemberRequest) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -866,7 +1063,7 @@ func (m *RemoveMultiRaftMemberResponse) Reset()         { *m = RemoveMultiRaftMe
 func (m *RemoveMultiRaftMemberResponse) String() string { return proto.CompactTextString(m) }
 func (*RemoveMultiRaftMemberResponse) ProtoMessage()    {}
 func (*RemoveMultiRaftMemberResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_3cfb3b8ec240c376, []int{16}
+	return fileDescriptor_3cfb3b8ec240c376, []int{19}
 }
 func (m *RemoveMultiRaftMemberResponse) XXX_Unmarshal(b []byte) error {
 	return m.Unmarshal(b)
@@ -908,6 +1105,9 @@ func init() {
 	proto.RegisterType((*RemoveMemberRequest)(nil), "cluster.RemoveMemberRequest")
 	proto.RegisterType((*RemoveMemberResponse)(nil), "cluster.RemoveMemberResponse")
 	proto.RegisterType((*PromoteMemberResponse)(nil), "cluster.PromoteMemberResponse")
+	proto.RegisterType((*TopologyMemberStatus)(nil), "cluster.TopologyMemberStatus")
+	proto.RegisterType((*GetTopologyRequest)(nil), "cluster.GetTopologyRequest")
+	proto.RegisterType((*GetTopologyResponse)(nil), "cluster.GetTopologyResponse")
 	proto.RegisterType((*ProcessMessageRequest)(nil), "cluster.ProcessMessageRequest")
 	proto.RegisterType((*JoinClusterRequest)(nil), "cluster.JoinClusterRequest")
 	proto.RegisterType((*PromoteMemberRequest)(nil), "cluster.PromoteMemberRequest")
@@ -918,51 +1118,58 @@ func init() {
 func init() { proto.RegisterFile("cluster.proto", fileDescriptor_3cfb3b8ec240c376) }
 
 var fileDescriptor_3cfb3b8ec240c376 = []byte{
-	// 695 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x96, 0xcd, 0x4e, 0xdb, 0x40,
-	0x10, 0xc7, 0x71, 0x12, 0x25, 0x78, 0x02, 0x94, 0x2e, 0x94, 0xba, 0x86, 0xa4, 0xd1, 0x4a, 0x44,
-	0xe9, 0xa1, 0x81, 0x52, 0xf5, 0x01, 0x20, 0x91, 0xa8, 0x11, 0x54, 0xd1, 0x72, 0xeb, 0xa5, 0x75,
-	0xf0, 0x40, 0x23, 0x25, 0xd9, 0xd4, 0xbb, 0x41, 0xf4, 0xdc, 0x97, 0xe8, 0x2b, 0xf4, 0x4d, 0x7a,
-	0xec, 0x1b, 0xb4, 0xa2, 0x2f, 0x52, 0x79, 0xbd, 0x76, 0x6c, 0xe3, 0x88, 0x70, 0xe8, 0xa1, 0x17,
-	0xcc, 0x7c, 0xec, 0xec, 0xcc, 0xff, 0xe7, 0xb1, 0x02, 0xab, 0x17, 0xc3, 0xa9, 0x90, 0xe8, 0xb7,
-	0x27, 0x3e, 0x97, 0x9c, 0x54, 0xb4, 0x69, 0x37, 0xaf, 0x78, 0x1b, 0xe5, 0x85, 0xd7, 0x1e, 0xf0,
-	0xbd, 0xe0, 0xb9, 0xe7, 0xbb, 0x97, 0x52, 0xfd, 0x99, 0xf4, 0xd5, 0x23, 0x3c, 0x40, 0x6b, 0x50,
-	0xe9, 0xb9, 0x5f, 0x86, 0xdc, 0xf5, 0x08, 0x81, 0x52, 0xd7, 0x95, 0xae, 0x65, 0x34, 0x8c, 0xd6,
-	0x0a, 0x53, 0xff, 0xd3, 0x73, 0xa8, 0x32, 0xf7, 0x52, 0x76, 0xf8, 0x58, 0xe2, 0x8d, 0x24, 0x6b,
-	0x50, 0x70, 0xba, 0x2a, 0xa1, 0xc4, 0x0a, 0x4e, 0x97, 0x58, 0x50, 0x39, 0xf4, 0x3c, 0x1f, 0x85,
-	0xb0, 0x0a, 0x0d, 0xa3, 0x65, 0xb2, 0xc8, 0x24, 0x36, 0x2c, 0x77, 0xc2, 0x56, 0x84, 0x55, 0x6c,
-	0x14, 0x5b, 0x26, 0x8b, 0x6d, 0xfa, 0x12, 0x36, 0x4e, 0xf8, 0x60, 0xac, 0x6d, 0x86, 0x62, 0xc2,
-	0xc7, 0x02, 0xc9, 0x16, 0x94, 0x3b, 0x7c, 0x34, 0x1a, 0x48, 0x7d, 0x81, 0xb6, 0x68, 0x13, 0x56,
-	0x7a, 0x98, 0xce, 0x13, 0xd2, 0x95, 0x53, 0xa1, 0xf2, 0x96, 0x99, 0xb6, 0xe8, 0x2b, 0x78, 0x7c,
-	0x8c, 0xf2, 0x0c, 0x47, 0x7d, 0xf4, 0x05, 0xc3, 0xcf, 0x53, 0x14, 0x92, 0xec, 0x80, 0xa9, 0xef,
-	0xd1, 0x8d, 0x9b, 0x6c, 0xe6, 0xa0, 0x9f, 0xa0, 0x1c, 0xe6, 0x3f, 0x6c, 0x32, 0x47, 0x9c, 0xa2,
-	0xeb, 0xa1, 0x6f, 0x15, 0x55, 0x03, 0xb1, 0x1d, 0x9c, 0x72, 0xc4, 0xe1, 0x70, 0x70, 0x8d, 0x56,
-	0x49, 0x85, 0x22, 0x93, 0x5e, 0x01, 0x49, 0x36, 0xa7, 0x47, 0x79, 0x01, 0x15, 0xed, 0xb2, 0x8c,
-	0x46, 0xb1, 0x55, 0x3d, 0x78, 0xd4, 0x8e, 0x78, 0x86, 0x7e, 0x16, 0xc5, 0x49, 0x13, 0xd6, 0x42,
-	0x3d, 0x24, 0x7a, 0xce, 0xd8, 0xc3, 0x1b, 0xd5, 0x57, 0x89, 0x65, 0xbc, 0x74, 0x1f, 0xd6, 0x8f,
-	0x51, 0x9e, 0x2b, 0x49, 0x16, 0x13, 0xe1, 0xab, 0xa1, 0x84, 0x8b, 0x8e, 0xe8, 0xd6, 0x92, 0x63,
-	0x1a, 0x99, 0x31, 0xf7, 0x61, 0xe3, 0xad, 0x2b, 0x8e, 0x10, 0xc7, 0x47, 0x9c, 0x4b, 0x21, 0x7d,
-	0x77, 0x32, 0x41, 0x4f, 0x35, 0xb4, 0xcc, 0xf2, 0x42, 0xa4, 0x01, 0x55, 0x47, 0x38, 0x11, 0x72,
-	0xad, 0x5b, 0xd2, 0x45, 0x77, 0x61, 0x83, 0xe1, 0x88, 0x5f, 0xa3, 0x1e, 0x5c, 0xb7, 0x9e, 0xe1,
-	0x42, 0xb7, 0x60, 0x33, 0x9d, 0x16, 0xb6, 0x4b, 0x9f, 0xc2, 0x93, 0x9e, 0xcf, 0x47, 0x5c, 0x66,
-	0x03, 0x1f, 0x55, 0xe0, 0x02, 0x85, 0x38, 0x43, 0x21, 0xdc, 0x2b, 0x5c, 0x48, 0x94, 0x90, 0x8c,
-	0xca, 0x57, 0x63, 0x05, 0x64, 0xc2, 0xe5, 0x69, 0x47, 0x65, 0xa2, 0x38, 0xed, 0x03, 0x49, 0xbd,
-	0xce, 0x8b, 0x94, 0x6f, 0x43, 0x45, 0xef, 0x94, 0x2e, 0xbf, 0x19, 0x83, 0x4f, 0xec, 0x1b, 0x8b,
-	0x92, 0xa8, 0x07, 0x9b, 0x99, 0xf1, 0xfe, 0xc5, 0x2d, 0xa7, 0xb0, 0xa3, 0xc5, 0x9d, 0x0e, 0xe5,
-	0x20, 0x48, 0x79, 0xc8, 0x6d, 0x21, 0xaa, 0x42, 0x8c, 0xea, 0x39, 0xd4, 0xe6, 0x54, 0x0b, 0xd1,
-	0x1c, 0x7c, 0x2f, 0x42, 0x29, 0x70, 0x93, 0x37, 0xb0, 0x96, 0x66, 0x44, 0xb2, 0x6a, 0xdb, 0xeb,
-	0x71, 0xe7, 0xfa, 0x73, 0x45, 0x97, 0x48, 0x07, 0xaa, 0x09, 0xe1, 0x49, 0xee, 0x70, 0xf6, 0x4e,
-	0xec, 0xcd, 0xf9, 0xe6, 0xd0, 0x25, 0x72, 0x0c, 0xab, 0x29, 0x65, 0xe7, 0x94, 0xa9, 0xcf, 0xee,
-	0xcf, 0x7d, 0xcd, 0x82, 0x42, 0x30, 0xdb, 0x70, 0x62, 0xc7, 0xf9, 0x77, 0xbe, 0x49, 0xf6, 0x76,
-	0x6e, 0x2c, 0x2e, 0xd4, 0x05, 0x33, 0x5e, 0x47, 0xf2, 0x2c, 0x99, 0x9b, 0xda, 0x6a, 0xdb, 0xce,
-	0x0b, 0xc5, 0x55, 0xce, 0x60, 0x25, 0xb9, 0x28, 0x64, 0xa6, 0x43, 0xce, 0x9a, 0xd9, 0xb5, 0x39,
-	0xd1, 0xa8, 0xdc, 0xc1, 0xaf, 0x22, 0x98, 0x31, 0x47, 0xd2, 0xbd, 0x03, 0x2c, 0xa5, 0xcf, 0xdd,
-	0x6d, 0xcb, 0xe5, 0x77, 0x92, 0xe6, 0xb7, 0x9d, 0x4f, 0x2a, 0x3c, 0x7f, 0x1f, 0xc6, 0x5e, 0x16,
-	0x63, 0x6d, 0x1e, 0xb0, 0xb0, 0xde, 0x7f, 0xc7, 0xf3, 0x43, 0x86, 0xe7, 0x6e, 0x96, 0x58, 0xee,
-	0xca, 0xda, 0xcd, 0xfb, 0xd2, 0x62, 0xc2, 0x65, 0x28, 0xbd, 0xe3, 0x1e, 0x1e, 0x6d, 0xff, 0xb8,
-	0xad, 0x1b, 0x3f, 0x6f, 0xeb, 0xc6, 0xef, 0xdb, 0xba, 0xf1, 0xed, 0x4f, 0x7d, 0xe9, 0xbd, 0xa9,
-	0x4b, 0x4c, 0xfa, 0xfd, 0xb2, 0xfa, 0xd5, 0xf0, 0xfa, 0x6f, 0x00, 0x00, 0x00, 0xff, 0xff, 0xe0,
-	0x7d, 0x5f, 0x67, 0x77, 0x08, 0x00, 0x00,
+	// 803 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xd4, 0x56, 0x4f, 0x6f, 0x12, 0x4d,
+	0x18, 0x67, 0x81, 0x17, 0xca, 0x43, 0xdb, 0xb7, 0x0e, 0x58, 0xd7, 0xa5, 0x20, 0x99, 0xa4, 0x04,
+	0x0f, 0xd2, 0x8a, 0x31, 0x9e, 0x5b, 0x48, 0x2a, 0x4d, 0x6b, 0xc8, 0xd6, 0x78, 0xf0, 0xa2, 0x4b,
+	0x77, 0x8a, 0x24, 0xc0, 0xac, 0x3b, 0x43, 0xd3, 0x9e, 0xbd, 0xf9, 0x09, 0xfc, 0x0c, 0xfa, 0x45,
+	0x3c, 0xfa, 0x11, 0x4c, 0xfd, 0x0c, 0xde, 0xcd, 0xce, 0xce, 0x2c, 0xbb, 0xdb, 0x45, 0x69, 0x62,
+	0x0f, 0x5e, 0xba, 0x7d, 0xe6, 0xf9, 0xff, 0xfc, 0x7e, 0xf3, 0x0c, 0xb0, 0x76, 0x3a, 0x9e, 0x31,
+	0x4e, 0xdc, 0x96, 0xe3, 0x52, 0x4e, 0x51, 0x5e, 0x8a, 0x46, 0x63, 0x48, 0x5b, 0x84, 0x9f, 0xda,
+	0xad, 0x11, 0xdd, 0xf1, 0xbe, 0x3b, 0xae, 0x75, 0xc6, 0xc5, 0x1f, 0x67, 0x20, 0x3e, 0xbe, 0x03,
+	0xae, 0x42, 0xbe, 0x6f, 0x5d, 0x8e, 0xa9, 0x65, 0x23, 0x04, 0xd9, 0xae, 0xc5, 0x2d, 0x5d, 0xab,
+	0x6b, 0xcd, 0x55, 0x53, 0xfc, 0x8f, 0x4f, 0xa0, 0x68, 0x5a, 0x67, 0xbc, 0x43, 0xa7, 0x9c, 0x5c,
+	0x70, 0xb4, 0x0e, 0xe9, 0x5e, 0x57, 0x18, 0x64, 0xcd, 0x74, 0xaf, 0x8b, 0x74, 0xc8, 0xef, 0xd9,
+	0xb6, 0x4b, 0x18, 0xd3, 0xd3, 0x75, 0xad, 0x59, 0x30, 0x95, 0x88, 0x0c, 0x58, 0xe9, 0xf8, 0xa5,
+	0x30, 0x3d, 0x53, 0xcf, 0x34, 0x0b, 0x66, 0x20, 0xe3, 0x47, 0x50, 0x3a, 0xa4, 0xa3, 0xa9, 0x94,
+	0x4d, 0xc2, 0x1c, 0x3a, 0x65, 0x04, 0x6d, 0x42, 0xae, 0x43, 0x27, 0x93, 0x11, 0x97, 0x09, 0xa4,
+	0x84, 0x1b, 0xb0, 0xda, 0x27, 0x51, 0x3b, 0xc6, 0x2d, 0x3e, 0x63, 0xc2, 0x6e, 0xc5, 0x94, 0x12,
+	0x7e, 0x0c, 0x77, 0x0e, 0x08, 0x3f, 0x26, 0x93, 0x01, 0x71, 0x99, 0x49, 0xde, 0xcf, 0x08, 0xe3,
+	0x68, 0x0b, 0x0a, 0x32, 0x8f, 0x2c, 0xbc, 0x60, 0xce, 0x0f, 0xf0, 0x3b, 0xc8, 0xf9, 0xf6, 0x37,
+	0xeb, 0xac, 0xc7, 0x8e, 0x88, 0x65, 0x13, 0x57, 0xcf, 0x88, 0x02, 0x02, 0xd9, 0xf3, 0xea, 0xb1,
+	0xbd, 0xf1, 0xe8, 0x9c, 0xe8, 0x59, 0xa1, 0x52, 0x22, 0x1e, 0x02, 0x0a, 0x17, 0x27, 0x5b, 0x79,
+	0x08, 0x79, 0x79, 0xa4, 0x6b, 0xf5, 0x4c, 0xb3, 0xd8, 0xfe, 0xbf, 0xa5, 0xf0, 0xf4, 0xcf, 0x4d,
+	0xa5, 0x47, 0x0d, 0x58, 0xf7, 0xe7, 0xc1, 0x89, 0xdd, 0x9b, 0xda, 0xe4, 0x42, 0xd4, 0x95, 0x35,
+	0x63, 0xa7, 0x78, 0x17, 0x36, 0x0e, 0x08, 0x3f, 0x11, 0x23, 0x59, 0x6e, 0x08, 0x1f, 0x34, 0x31,
+	0x38, 0xe5, 0x22, 0x4b, 0x0b, 0xb7, 0xa9, 0xc5, 0xda, 0xdc, 0x85, 0xd2, 0x73, 0x8b, 0xed, 0x13,
+	0x32, 0xdd, 0xa7, 0x94, 0x33, 0xee, 0x5a, 0x8e, 0x43, 0x6c, 0x51, 0xd0, 0x8a, 0x99, 0xa4, 0x42,
+	0x75, 0x28, 0xf6, 0x58, 0x4f, 0x41, 0x2e, 0xe7, 0x16, 0x3e, 0xc2, 0xdb, 0x50, 0x32, 0xc9, 0x84,
+	0x9e, 0x13, 0xd9, 0xb8, 0x2c, 0x3d, 0x86, 0x0b, 0xde, 0x84, 0x72, 0xd4, 0xcc, 0x2f, 0x17, 0xdf,
+	0x83, 0xbb, 0x7d, 0x97, 0x4e, 0x28, 0x8f, 0x2b, 0x3e, 0x6b, 0x50, 0x7e, 0x49, 0x1d, 0x3a, 0xa6,
+	0xc3, 0x4b, 0x5f, 0xe5, 0x37, 0x7a, 0xdb, 0x88, 0x8b, 0x78, 0x8e, 0x33, 0x1e, 0x11, 0x5b, 0xff,
+	0x4f, 0x24, 0x51, 0xa2, 0xef, 0xf3, 0x8a, 0x7a, 0x83, 0xc8, 0x29, 0x1f, 0x21, 0xe2, 0xb6, 0x60,
+	0x89, 0x2a, 0x77, 0x39, 0xf8, 0x3e, 0x6a, 0x50, 0x8a, 0x38, 0x49, 0x00, 0x7f, 0xeb, 0x25, 0xb4,
+	0x8a, 0x38, 0x92, 0x49, 0xf3, 0x03, 0xf4, 0x6c, 0xce, 0xcb, 0x8c, 0xe0, 0x65, 0x35, 0xe0, 0x65,
+	0xd2, 0x2c, 0x03, 0x96, 0xe2, 0xb7, 0x02, 0x86, 0x53, 0xc2, 0xd8, 0x31, 0x61, 0xcc, 0x1a, 0x92,
+	0xa5, 0x7a, 0xf0, 0xef, 0x81, 0xb0, 0x17, 0xb5, 0x78, 0xf7, 0xc0, 0x5f, 0x55, 0x2d, 0x15, 0x46,
+	0xe9, 0xf1, 0x00, 0x50, 0x64, 0x79, 0x2c, 0x13, 0xbe, 0x05, 0x79, 0xb9, 0xc1, 0x64, 0xf8, 0x72,
+	0xd0, 0x4e, 0x68, 0xbb, 0x99, 0xca, 0x08, 0xdb, 0x50, 0x8e, 0x91, 0xe9, 0x36, 0xb2, 0x1c, 0xc1,
+	0x96, 0xa4, 0xf2, 0x6c, 0xcc, 0x47, 0x9e, 0xc9, 0x4d, 0xb2, 0xf9, 0xf4, 0x4d, 0x07, 0x17, 0xe3,
+	0x01, 0x54, 0x17, 0x44, 0xf3, 0xf9, 0xd0, 0xfe, 0x99, 0x81, 0xac, 0x77, 0x8c, 0x0e, 0xa1, 0x18,
+	0xe2, 0x0b, 0xaa, 0x04, 0x55, 0x5e, 0xa7, 0x9e, 0xb1, 0x95, 0xac, 0x94, 0x77, 0x2b, 0x85, 0x9e,
+	0xc2, 0x7a, 0x14, 0x6f, 0x14, 0x47, 0xce, 0xd8, 0x08, 0x42, 0xc8, 0x87, 0x06, 0xa7, 0x50, 0x07,
+	0x8a, 0x21, 0x10, 0x51, 0xe2, 0xa0, 0x42, 0xb9, 0x13, 0x5e, 0x0b, 0x9c, 0x42, 0x07, 0xb0, 0x16,
+	0x41, 0x69, 0x41, 0x98, 0xda, 0x3c, 0x7f, 0xe2, 0x82, 0xf0, 0x02, 0xc1, 0x7c, 0x37, 0x23, 0x23,
+	0xdc, 0x72, 0xf4, 0x35, 0x31, 0x2a, 0x89, 0xba, 0x20, 0x50, 0x17, 0x0a, 0xc1, 0x22, 0x45, 0xf7,
+	0xc3, 0xb6, 0x91, 0x7d, 0x6c, 0x18, 0x49, 0xaa, 0x20, 0xca, 0x31, 0xac, 0x86, 0x57, 0x1c, 0x9a,
+	0xcf, 0x21, 0x61, 0x41, 0x1a, 0xd5, 0x05, 0x5a, 0x15, 0xae, 0xfd, 0x25, 0x0b, 0x85, 0x80, 0x13,
+	0xa8, 0x7b, 0x0d, 0xb0, 0xc8, 0x7c, 0xae, 0xdf, 0xdc, 0x44, 0xfc, 0x0e, 0xa3, 0xf8, 0x55, 0x92,
+	0x91, 0x8a, 0x53, 0x28, 0x19, 0xc6, 0x7e, 0x1c, 0xc6, 0xea, 0x22, 0xc0, 0xfc, 0x78, 0xff, 0x1c,
+	0x9e, 0x6f, 0x62, 0x78, 0x6e, 0xc7, 0x11, 0x4b, 0xbc, 0xfe, 0x46, 0xe3, 0x4f, 0x66, 0x41, 0x82,
+	0xbf, 0x78, 0xa1, 0xdb, 0x39, 0xc8, 0xbe, 0xa0, 0x36, 0xd9, 0xaf, 0x7c, 0xbd, 0xaa, 0x69, 0xdf,
+	0xae, 0x6a, 0xda, 0xf7, 0xab, 0x9a, 0xf6, 0xe9, 0x47, 0x2d, 0xf5, 0xba, 0x20, 0x1d, 0x9d, 0xc1,
+	0x20, 0x27, 0x7e, 0x3b, 0x3e, 0xf9, 0x15, 0x00, 0x00, 0xff, 0xff, 0x8c, 0x31, 0x80, 0x73, 0x7d,
+	0x0a, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -977,6 +1184,7 @@ const _ = grpc.SupportPackageIsVersion4
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type RaftClient interface {
+	GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error)
 	ProcessMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*Payload, error)
 	JoinCluster(ctx context.Context, in *RaftContext, opts ...grpc.CallOption) (*JoinClusterResponse, error)
 	PromoteMember(ctx context.Context, in *RaftContext, opts ...grpc.CallOption) (*PromoteMemberResponse, error)
@@ -991,6 +1199,15 @@ type raftClient struct {
 
 func NewRaftClient(cc *grpc.ClientConn) RaftClient {
 	return &raftClient{cc}
+}
+
+func (c *raftClient) GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error) {
+	out := new(GetTopologyResponse)
+	err := c.cc.Invoke(ctx, "/cluster.Raft/GetTopology", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *raftClient) ProcessMessage(ctx context.Context, in *raftpb.Message, opts ...grpc.CallOption) (*Payload, error) {
@@ -1049,6 +1266,7 @@ func (c *raftClient) RemoveMember(ctx context.Context, in *RemoveMemberRequest, 
 
 // RaftServer is the server API for Raft service.
 type RaftServer interface {
+	GetTopology(context.Context, *GetTopologyRequest) (*GetTopologyResponse, error)
 	ProcessMessage(context.Context, *raftpb.Message) (*Payload, error)
 	JoinCluster(context.Context, *RaftContext) (*JoinClusterResponse, error)
 	PromoteMember(context.Context, *RaftContext) (*PromoteMemberResponse, error)
@@ -1059,6 +1277,24 @@ type RaftServer interface {
 
 func RegisterRaftServer(s *grpc.Server, srv RaftServer) {
 	s.RegisterService(&_Raft_serviceDesc, srv)
+}
+
+func _Raft_GetTopology_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTopologyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RaftServer).GetTopology(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cluster.Raft/GetTopology",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RaftServer).GetTopology(ctx, req.(*GetTopologyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _Raft_ProcessMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -1174,6 +1410,10 @@ var _Raft_serviceDesc = grpc.ServiceDesc{
 	HandlerType: (*RaftServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
+			MethodName: "GetTopology",
+			Handler:    _Raft_GetTopology_Handler,
+		},
+		{
 			MethodName: "ProcessMessage",
 			Handler:    _Raft_ProcessMessage_Handler,
 		},
@@ -1212,6 +1452,7 @@ type MultiRaftClient interface {
 	GetMembers(ctx context.Context, in *GetMembersRequest, opts ...grpc.CallOption) (*GetMembersResponse, error)
 	GetStatus(ctx context.Context, in *GetStatusRequest, opts ...grpc.CallOption) (*GetStatusResponse, error)
 	RemoveMember(ctx context.Context, in *RemoveMultiRaftMemberRequest, opts ...grpc.CallOption) (*RemoveMultiRaftMemberResponse, error)
+	GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error)
 }
 
 type multiRaftClient struct {
@@ -1276,6 +1517,15 @@ func (c *multiRaftClient) RemoveMember(ctx context.Context, in *RemoveMultiRaftM
 	return out, nil
 }
 
+func (c *multiRaftClient) GetTopology(ctx context.Context, in *GetTopologyRequest, opts ...grpc.CallOption) (*GetTopologyResponse, error) {
+	out := new(GetTopologyResponse)
+	err := c.cc.Invoke(ctx, "/cluster.MultiRaft/GetTopology", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MultiRaftServer is the server API for MultiRaft service.
 type MultiRaftServer interface {
 	ProcessMessage(context.Context, *ProcessMessageRequest) (*Payload, error)
@@ -1284,6 +1534,7 @@ type MultiRaftServer interface {
 	GetMembers(context.Context, *GetMembersRequest) (*GetMembersResponse, error)
 	GetStatus(context.Context, *GetStatusRequest) (*GetStatusResponse, error)
 	RemoveMember(context.Context, *RemoveMultiRaftMemberRequest) (*RemoveMultiRaftMemberResponse, error)
+	GetTopology(context.Context, *GetTopologyRequest) (*GetTopologyResponse, error)
 }
 
 func RegisterMultiRaftServer(s *grpc.Server, srv MultiRaftServer) {
@@ -1398,6 +1649,24 @@ func _MultiRaft_RemoveMember_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MultiRaft_GetTopology_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTopologyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MultiRaftServer).GetTopology(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cluster.MultiRaft/GetTopology",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MultiRaftServer).GetTopology(ctx, req.(*GetTopologyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _MultiRaft_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "cluster.MultiRaft",
 	HandlerType: (*MultiRaftServer)(nil),
@@ -1425,6 +1694,10 @@ var _MultiRaft_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveMember",
 			Handler:    _MultiRaft_RemoveMember_Handler,
+		},
+		{
+			MethodName: "GetTopology",
+			Handler:    _MultiRaft_GetTopology_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
@@ -1855,6 +2128,144 @@ func (m *PromoteMemberResponse) MarshalTo(dAtA []byte) (int, error) {
 	return i, nil
 }
 
+func (m *TopologyMemberStatus) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *TopologyMemberStatus) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if m.ID != 0 {
+		dAtA[i] = 0x8
+		i++
+		i = encodeVarintCluster(dAtA, i, uint64(m.ID))
+	}
+	if len(m.Address) > 0 {
+		dAtA[i] = 0x12
+		i++
+		i = encodeVarintCluster(dAtA, i, uint64(len(m.Address)))
+		i += copy(dAtA[i:], m.Address)
+	}
+	if m.IsLeader {
+		dAtA[i] = 0x18
+		i++
+		if m.IsLeader {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i++
+	}
+	if m.IsAlive {
+		dAtA[i] = 0x20
+		i++
+		if m.IsAlive {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i++
+	}
+	if m.Applied != 0 {
+		dAtA[i] = 0x28
+		i++
+		i = encodeVarintCluster(dAtA, i, uint64(m.Applied))
+	}
+	if m.IsVoter {
+		dAtA[i] = 0x30
+		i++
+		if m.IsVoter {
+			dAtA[i] = 1
+		} else {
+			dAtA[i] = 0
+		}
+		i++
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *GetTopologyRequest) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetTopologyRequest) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.ClusterID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintCluster(dAtA, i, uint64(len(m.ClusterID)))
+		i += copy(dAtA[i:], m.ClusterID)
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
+func (m *GetTopologyResponse) Marshal() (dAtA []byte, err error) {
+	size := m.Size()
+	dAtA = make([]byte, size)
+	n, err := m.MarshalTo(dAtA)
+	if err != nil {
+		return nil, err
+	}
+	return dAtA[:n], nil
+}
+
+func (m *GetTopologyResponse) MarshalTo(dAtA []byte) (int, error) {
+	var i int
+	_ = i
+	var l int
+	_ = l
+	if len(m.ClusterID) > 0 {
+		dAtA[i] = 0xa
+		i++
+		i = encodeVarintCluster(dAtA, i, uint64(len(m.ClusterID)))
+		i += copy(dAtA[i:], m.ClusterID)
+	}
+	if m.Committed != 0 {
+		dAtA[i] = 0x10
+		i++
+		i = encodeVarintCluster(dAtA, i, uint64(m.Committed))
+	}
+	if len(m.Members) > 0 {
+		for _, msg := range m.Members {
+			dAtA[i] = 0x1a
+			i++
+			i = encodeVarintCluster(dAtA, i, uint64(msg.Size()))
+			n, err := msg.MarshalTo(dAtA[i:])
+			if err != nil {
+				return 0, err
+			}
+			i += n
+		}
+	}
+	if m.XXX_unrecognized != nil {
+		i += copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	return i, nil
+}
+
 func (m *ProcessMessageRequest) Marshal() (dAtA []byte, err error) {
 	size := m.Size()
 	dAtA = make([]byte, size)
@@ -2231,6 +2642,78 @@ func (m *PromoteMemberResponse) Size() (n int) {
 	}
 	var l int
 	_ = l
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *TopologyMemberStatus) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	if m.ID != 0 {
+		n += 1 + sovCluster(uint64(m.ID))
+	}
+	l = len(m.Address)
+	if l > 0 {
+		n += 1 + l + sovCluster(uint64(l))
+	}
+	if m.IsLeader {
+		n += 2
+	}
+	if m.IsAlive {
+		n += 2
+	}
+	if m.Applied != 0 {
+		n += 1 + sovCluster(uint64(m.Applied))
+	}
+	if m.IsVoter {
+		n += 2
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetTopologyRequest) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ClusterID)
+	if l > 0 {
+		n += 1 + l + sovCluster(uint64(l))
+	}
+	if m.XXX_unrecognized != nil {
+		n += len(m.XXX_unrecognized)
+	}
+	return n
+}
+
+func (m *GetTopologyResponse) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = len(m.ClusterID)
+	if l > 0 {
+		n += 1 + l + sovCluster(uint64(l))
+	}
+	if m.Committed != 0 {
+		n += 1 + sovCluster(uint64(m.Committed))
+	}
+	if len(m.Members) > 0 {
+		for _, e := range m.Members {
+			l = e.Size()
+			n += 1 + l + sovCluster(uint64(l))
+		}
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -3407,6 +3890,415 @@ func (m *PromoteMemberResponse) Unmarshal(dAtA []byte) error {
 			return fmt.Errorf("proto: PromoteMemberResponse: illegal tag %d (wire type %d)", fieldNum, wire)
 		}
 		switch fieldNum {
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCluster(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *TopologyMemberStatus) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCluster
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: TopologyMemberStatus: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: TopologyMemberStatus: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ID", wireType)
+			}
+			m.ID = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.ID |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Address", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCluster
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Address = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 3:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsLeader", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsLeader = bool(v != 0)
+		case 4:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsAlive", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsAlive = bool(v != 0)
+		case 5:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Applied", wireType)
+			}
+			m.Applied = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Applied |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 6:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field IsVoter", wireType)
+			}
+			var v int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				v |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			m.IsVoter = bool(v != 0)
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCluster(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetTopologyRequest) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCluster
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetTopologyRequest: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetTopologyRequest: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterID", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCluster
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterID = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skipCluster(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.XXX_unrecognized = append(m.XXX_unrecognized, dAtA[iNdEx:iNdEx+skippy]...)
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+func (m *GetTopologyResponse) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflowCluster
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: GetTopologyResponse: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: GetTopologyResponse: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ClusterID", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthCluster
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.ClusterID = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 0 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Committed", wireType)
+			}
+			m.Committed = 0
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				m.Committed |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Members", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowCluster
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthCluster
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthCluster
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Members = append(m.Members, &TopologyMemberStatus{})
+			if err := m.Members[len(m.Members)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipCluster(dAtA[iNdEx:])

@@ -160,6 +160,15 @@ func (n *multinode) JoinCluster(ctx context.Context, in *clusterpb.JoinClusterRe
 	}
 	return instance.JoinCluster(ctx, in.Context)
 }
+func (n *multinode) GetTopology(ctx context.Context, in *clusterpb.GetTopologyRequest) (*clusterpb.GetTopologyResponse, error) {
+	n.mtx.RLock()
+	defer n.mtx.RUnlock()
+	instance, ok := n.rafts[in.ClusterID]
+	if !ok {
+		return nil, status.Error(codes.NotFound, "cluster not found")
+	}
+	return instance.GetTopology(ctx, in)
+}
 func (n *multinode) PromoteMember(ctx context.Context, in *clusterpb.PromoteMemberRequest) (*clusterpb.PromoteMemberResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
