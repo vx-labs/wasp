@@ -13,9 +13,7 @@ message RaftContext {
   repeated string Clusters = 3;
 }
 
-message JoinClusterResponse {
-  uint64 Commit = 1;
-}
+message JoinClusterResponse { uint64 Commit = 1; }
 
 message PeerResponse { bool status = 1; }
 
@@ -26,7 +24,10 @@ message Member {
   bool IsLeader = 3;
   bool IsAlive = 4;
 }
-message GetMembersResponse { repeated Member Members = 1; uint64 CommittedIndex = 2; }
+message GetMembersResponse {
+  repeated Member Members = 1;
+  uint64 CommittedIndex = 2;
+}
 message GetStatusRequest { string ClusterID = 1; };
 message GetStatusResponse {
   bool IsLeader = 1;
@@ -34,14 +35,29 @@ message GetStatusResponse {
   bool IsInCluster = 3;
 };
 
-message RemoveMemberRequest {
-  uint64 ID = 1;
-}
+message RemoveMemberRequest { uint64 ID = 1; }
 message RemoveMemberResponse {}
+message PromoteMemberResponse {}
 
+message TopologyMemberStatus {
+  uint64 ID = 1;
+  string Address = 2;
+  bool IsLeader = 3;
+  bool IsAlive = 4;
+  uint64 Applied = 5;
+  bool IsVoter = 6;
+};
+message GetTopologyRequest { string ClusterID = 1; }
+message GetTopologyResponse {
+  string ClusterID = 1;
+  uint64 Committed = 2;
+  repeated TopologyMemberStatus Members = 3;
+}
 service Raft {
+  rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse) {}
   rpc ProcessMessage(raftpb.Message) returns (Payload) {}
   rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
+  rpc PromoteMember(RaftContext) returns (PromoteMemberResponse) {}
   rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
   rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse) {}
@@ -56,6 +72,10 @@ message JoinClusterRequest {
   string ClusterID = 1;
   RaftContext Context = 2;
 }
+message PromoteMemberRequest {
+  string ClusterID = 1;
+  RaftContext Context = 2;
+}
 
 message RemoveMultiRaftMemberRequest {
   string ClusterID = 1;
@@ -63,14 +83,15 @@ message RemoveMultiRaftMemberRequest {
 }
 message RemoveMultiRaftMemberResponse {}
 
-
-
 service MultiRaft {
   rpc ProcessMessage(ProcessMessageRequest) returns (Payload) {}
   rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse) {}
+  rpc PromoteMember(PromoteMemberRequest) returns (PromoteMemberResponse) {}
   rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
   rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
-  rpc RemoveMember(RemoveMultiRaftMemberRequest) returns (RemoveMultiRaftMemberResponse) {}
+  rpc RemoveMember(RemoveMultiRaftMemberRequest)
+      returns (RemoveMultiRaftMemberResponse) {}
+  rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse) {}
 }
 
 service Node {}

@@ -66,8 +66,6 @@ type RaftNode struct {
 	id                  uint64 // client ID for raft session
 	clusterID           string
 	address             string
-	currentLeader       uint64
-	hasLeader           bool
 	hasBeenBootstrapped bool
 	commitApplier       CommitApplier
 	snapshotApplier     SnapshotApplier
@@ -81,16 +79,13 @@ type RaftNode struct {
 
 	confState     raftpb.ConfState
 	snapshotIndex uint64
-	appliedIndex  uint64
 	membership    Membership
 	node          raft.Node
-	removed       bool
 	raftStorage   *raft.MemoryStorage
 	wal           StableStorage
 	snapshotter   *snap.Snapshotter
 
 	snapCount   uint64
-	left        chan struct{}
 	ready       chan struct{}
 	leaderState *leaderState
 }
@@ -127,8 +122,6 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		clusterID:        config.ClusterID,
 		address:          config.NodeAddress,
 		membership:       mesh,
-		currentLeader:    0,
-		hasLeader:        false,
 		logger:           logger,
 		waldir:           path.Join(datadir, "raft", "wall"),
 		snapdir:          path.Join(datadir, "raft", "snapshots"),
@@ -136,9 +129,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		raftStorage:      raft.NewMemoryStorage(),
 		msgSnapC:         make(chan raftpb.Message, 16),
 		snapCount:        1000,
-		left:             make(chan struct{}),
 		ready:            make(chan struct{}),
-		removed:          true,
 		commitApplier:    config.CommitApplier,
 		snapshotApplier:  config.SnapshotApplier,
 		snapshotNotifier: config.SnapshotNotifier,
@@ -156,35 +147,10 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	}
 	rc.confState = snap.Metadata.ConfState
 	rc.snapshotIndex = snap.Metadata.Index
-	rc.appliedIndex = snap.Metadata.Index
 
 	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 	return rc
-}
-
-// Reset wipe the on-disk raft data. Do not use if Run() has been called.
-func (rc *RaftNode) Reset() {
-	rc.wal.Close()
-	os.RemoveAll(rc.snapdir)
-	os.RemoveAll(rc.waldir)
-
-	if err := os.MkdirAll(rc.snapdir, 0750); err != nil {
-		rc.logger.Fatal("failed to create dir for snapshots", zap.Error(err))
-	}
-
-	rc.raftStorage = raft.NewMemoryStorage()
-	rc.snapshotter = snap.New(rc.logger, rc.snapdir)
-	snap, err := rc.raftStorage.Snapshot()
-	if err != nil {
-		panic(err)
-	}
-	rc.confState = snap.Metadata.ConfState
-	rc.snapshotIndex = snap.Metadata.Index
-	rc.appliedIndex = snap.Metadata.Index
-
-	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
-	rc.wal = rc.replayWAL()
 }
 
 func createOrOpenWAL(datadir string, snapshot *raftpb.Snapshot, logger *zap.Logger) *wal.WAL {
@@ -225,11 +191,10 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 		if err != nil {
 			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
 		}
-		rc.appliedIndex = snapshot.Metadata.Index
 		rc.committedIndex = snapshot.Metadata.Index
 		rc.snapshotIndex = snapshot.Metadata.Index
 		rc.confState = snapshot.Metadata.ConfState
-		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", rc.appliedIndex))
+		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", snapshot.Metadata.Index))
 	}
 	rc.raftStorage.SetHardState(st)
 	// append to storage so raft starts at the right place in log
@@ -239,8 +204,15 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 	return w
 }
 
+func (rc *RaftNode) Leader() uint64 {
+	if rc.node == nil {
+		return 0
+	}
+	l := rc.node.Status().Lead
+	return l
+}
 func (rc *RaftNode) IsRemovedFromCluster() bool {
-	return rc.removed
+	return !rc.IsLeader() && !rc.IsVoter() && !rc.IsLeader()
 }
 func (rc *RaftNode) Ready() <-chan struct{} {
 	return rc.ready
@@ -263,13 +235,37 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 }
 
 func (rc *RaftNode) IsLeader() bool {
-	return rc.currentLeader == rc.id
+	return rc.Leader() == rc.id
+}
+func (rc *RaftNode) IsVoter() bool {
+	if rc.node == nil {
+		return false
+	}
+	status := rc.node.Status()
+	if status.Lead == 0 {
+		return false
+	}
+	_, ok := status.Config.Voters.IDs()[rc.id]
+	return ok
+}
+func (rc *RaftNode) IsLearner() bool {
+	if rc.node == nil {
+		return false
+	}
+	status := rc.node.Status()
+	if status.Lead == 0 {
+		return false
+	}
+	_, ok := status.Config.Learners[rc.id]
+	return ok
 }
 func (rc *RaftNode) CommittedIndex() uint64 {
-	return rc.committedIndex
+	status := rc.node.Status()
+	return status.Commit
 }
 func (rc *RaftNode) AppliedIndex() uint64 {
-	return rc.appliedIndex
+	status := rc.node.Status()
+	return status.Applied
 }
 
 // publishEntries writes committed log entries to commit channel and returns
@@ -292,49 +288,10 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			var cc raftpb.ConfChangeV2
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
-			for _, change := range cc.Changes {
-				switch change.Type {
-				case raftpb.ConfChangeAddNode:
-					if len(cc.Context) > 0 {
-						if change.NodeID == rc.id {
-							rc.logger.Info("local node added to cluster")
-							rc.left = make(chan struct{})
-							rc.removed = false
-						}
-					}
-				case raftpb.ConfChangeRemoveNode:
-					if change.NodeID == rc.id {
-						rc.logger.Info("local node removed from cluster")
-						rc.removed = true
-						close(rc.left)
-					}
-				}
-			}
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
 			rc.confState = *rc.node.ApplyConfChange(cc)
-			switch cc.Type {
-			case raftpb.ConfChangeAddNode:
-				if len(cc.Context) > 0 {
-					if cc.NodeID == rc.id {
-						rc.logger.Info("local node added to cluster")
-						rc.left = make(chan struct{})
-						rc.removed = false
-					}
-				}
-			case raftpb.ConfChangeRemoveNode:
-				if cc.NodeID == rc.id {
-					rc.logger.Info("local node removed from cluster")
-					rc.removed = true
-					close(rc.left)
-				}
-			}
-		}
-		rc.appliedIndex = ents[i].Index
-		if rc.committedIndex > 0 && rc.appliedIndex == rc.committedIndex {
-			rc.logger.Debug("state machine is ready", zap.Uint64("index", rc.appliedIndex))
-			close(rc.ready)
 		}
 	}
 	return nil
@@ -375,16 +332,13 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.logger.Debug("starting raft state machine")
-		rc.removed = false
 		rc.node = raft.StartNode(c, rpeers)
 	}
-	if rc.committedIndex == config.AppliedIndex {
-		close(rc.ready)
-	}
-	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.committedIndex))
 	if !rc.hasBeenBootstrapped {
 		rc.hasBeenBootstrapped = true
 	}
+	close(rc.ready)
+	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.committedIndex))
 	rc.serveChannels(ctx) //blocking loop
 	rc.node.Stop()
 	err := rc.wal.Close()
@@ -422,35 +376,30 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 		case rd := <-rc.node.Ready():
 			start := time.Now()
 			if rd.SoftState != nil {
-				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
+				currentLeader := rc.Leader()
+				newLeader := rd.SoftState.Lead != raft.None && currentLeader != rd.SoftState.Lead
 				if newLeader {
-					if !rc.hasLeader {
-						rc.hasLeader = true
-					}
 					if rd.SoftState.Lead == rc.id {
 						rc.logger.Info("cluster leadership acquired")
 						rc.leaderState.Start(ctx)
 					} else {
-						if rc.currentLeader == rc.id {
+						if currentLeader == rc.id {
 							ctx, cancel := context.WithTimeout(ctx, time.Second*1)
 							err := rc.leaderState.Cancel(ctx)
 							cancel()
 							if err != nil {
 								rc.logger.Error("failed to stop leader func", zap.Error(err))
 							}
-							rc.logger.Info("raft leadership lost", zap.String("hex_new_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+							rc.logger.Info("raft leadership lost", zap.String("hex_new_raft_leader_id", fmt.Sprintf("%x", currentLeader)))
 						} else {
-							rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+							rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", currentLeader)))
 						}
 					}
-					rc.currentLeader = rd.SoftState.Lead
 				}
 				if rd.SoftState.Lead == raft.None {
-					if rc.hasLeader {
-						rc.hasLeader = false
+					if currentLeader > 0 {
 						rc.logger.Warn("raft cluster has no leader")
 					}
-					rc.currentLeader = 0
 				}
 			}
 			if err := rc.wal.Save(rd.HardState, rd.Entries); err != nil {
@@ -496,7 +445,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 			if err != nil {
 				log.Panic(err)
 			}
-			snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &rc.confState, data)
+			snap, err := rc.raftStorage.CreateSnapshot(msg.Index, &rc.confState, data)
 			if err != nil {
 				panic(err)
 			}
@@ -559,33 +508,36 @@ func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string
 }
 
 func (rc *RaftNode) Leave(ctx context.Context) error {
+	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
+		cancel()
+		return nil
+	}
+	rc.logger.Debug("leaving raft cluster")
+	err := rc.node.ProposeConfChange(reqCtx, raftpb.ConfChangeV2{
+		Changes: []raftpb.ConfChangeSingle{raftpb.ConfChangeSingle{
+			Type:   raftpb.ConfChangeRemoveNode,
+			NodeID: rc.id,
+		}},
+	})
+	if err != nil {
+		cancel()
+		return err
+	}
+	ticker := time.NewTicker(250 * time.Millisecond)
 	for {
-		reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
+		if !rc.IsVoter() && !rc.IsLeader() {
 			cancel()
 			return nil
 		}
-		rc.logger.Debug("leaving raft cluster")
-		err := rc.node.ProposeConfChange(reqCtx, raftpb.ConfChange{
-			Type:   raftpb.ConfChangeRemoveNode,
-			NodeID: rc.id,
-		})
-		if err != nil {
-			rc.logger.Error("failed to leave raft cluster",
-				zap.Error(err))
-		}
 		select {
+		case <-ticker.C:
 		case <-ctx.Done():
 			cancel()
 			return ctx.Err()
-		case <-rc.left:
-			cancel()
-			rc.logger.Info("left raft cluster")
-			return nil
 		case <-reqCtx.Done():
-			rc.logger.Info("left timed out, retrying")
 			cancel()
-			continue
+			return errors.New("left timeout")
 		}
 	}
 }

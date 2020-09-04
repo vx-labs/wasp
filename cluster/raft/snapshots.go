@@ -22,40 +22,29 @@ func (rc *RaftNode) publishSnapshot(ctx context.Context, snapshotToSave raftpb.S
 		return nil
 	}
 
-	if snapshotToSave.Metadata.Index <= rc.appliedIndex {
-		log.Fatalf("snapshot index [%d] should > progress.appliedIndex [%d]", snapshotToSave.Metadata.Index, rc.appliedIndex)
-	}
 	rc.confState = snapshotToSave.Metadata.ConfState
 	rc.snapshotIndex = snapshotToSave.Metadata.Index
 	err := rc.snapshotApplier(ctx, snapshotToSave.Metadata.Index, rc.snapshotter)
-	if err == nil {
-		rc.appliedIndex = snapshotToSave.Metadata.Index
-	}
 	return err
 }
 
 func (rc *RaftNode) maybeTriggerSnapshot() {
-	if rc.appliedIndex-rc.snapshotIndex <= rc.snapCount {
-		return
-	}
-	rc.forceTriggerSnapshot()
-}
-func (rc *RaftNode) forceTriggerSnapshot() {
-	if rc.snapshotIndex >= rc.appliedIndex {
+	applied := rc.AppliedIndex()
+	if applied-rc.snapshotIndex <= rc.snapCount {
 		return
 	}
 	if rc.snapshotNotifier != nil {
-		if err := rc.snapshotNotifier(rc.appliedIndex); err != nil {
-			rc.logger.Error("failed to snapshot because application failed to sync", zap.Uint64("applied_index", rc.appliedIndex), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
+		if err := rc.snapshotNotifier(applied); err != nil {
+			rc.logger.Error("failed to snapshot because application failed to sync", zap.Uint64("applied_index", applied), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
 			return
 		}
 	}
-	rc.logger.Debug("start snapshot", zap.Uint64("applied_index", rc.appliedIndex), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
+	rc.logger.Debug("start snapshot", zap.Uint64("applied_index", applied), zap.Uint64("last_snapshot_index", rc.snapshotIndex))
 	data, err := rc.getSnapshot()
 	if err != nil {
 		log.Panic(err)
 	}
-	snap, err := rc.raftStorage.CreateSnapshot(rc.appliedIndex, &rc.confState, data)
+	snap, err := rc.raftStorage.CreateSnapshot(applied, &rc.confState, data)
 	if err != nil {
 		panic(err)
 	}
@@ -63,11 +52,10 @@ func (rc *RaftNode) forceTriggerSnapshot() {
 		panic(err)
 	}
 
-	compactIndex := rc.appliedIndex
-	if err := rc.raftStorage.Compact(compactIndex); err != nil {
+	if err := rc.raftStorage.Compact(applied); err != nil {
 		panic(err)
 	}
 
-	rc.logger.Debug("compacted log", zap.Uint64("compact_index", compactIndex))
-	rc.snapshotIndex = rc.appliedIndex
+	rc.logger.Debug("compacted log", zap.Uint64("compact_index", applied))
+	rc.snapshotIndex = applied
 }
