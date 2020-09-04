@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/wasp/cluster/raft"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/status"
 )
 
 type node struct {
@@ -105,9 +106,6 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 }
 
-func (n *node) Reset() {
-	n.raft.Reset()
-}
 func (n *node) Index() uint64 {
 	return n.raft.CommittedIndex()
 }
@@ -149,7 +147,8 @@ func (n *node) Run(ctx context.Context) {
 				ticker := time.NewTicker(1 * time.Second)
 				defer ticker.Stop()
 				for {
-					if n.raft.IsLeader() {
+					if n.raft.IsLeader() || n.raft.IsVoter() {
+						n.logger.Debug("local node is now a cluster member")
 						return
 					}
 					for _, peer := range peers {
@@ -182,14 +181,29 @@ func (n *node) Run(ctx context.Context) {
 							})
 						}
 						if err != nil {
+							if s, ok := status.FromError(err); ok && s.Message() == "node is already a voter" {
+								n.logger.Debug("joined cluster as voter")
+								return
+							}
 							n.logger.Debug("failed to join raft cluster, retrying", zap.Error(err))
 						} else {
 							n.logger.Debug("joined cluster")
 							for {
 								applied := n.raft.AppliedIndex()
 								if clusterIndex == 0 || (applied > 0 && applied >= clusterIndex) {
-									n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
-									return
+									err := n.gossip.Call(n.raft.Leader(), func(c *grpc.ClientConn) error {
+										_, err := clusterpb.NewRaftClient(c).PromoteMember(ctx, &clusterpb.RaftContext{
+											ID:      n.config.ID,
+											Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+										})
+										return err
+									})
+									if err != nil {
+										n.logger.Error("failed to promote local node", zap.Error(err), zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
+									} else {
+										n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
+										return
+									}
 								} else {
 									n.logger.Debug("state machine is still not up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
 								}

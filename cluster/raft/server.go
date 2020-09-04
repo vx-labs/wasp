@@ -53,6 +53,50 @@ func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message)
 	return &api.Payload{}, err
 }
 
+func (rc *RaftNode) PromoteMember(ctx context.Context, in *api.RaftContext) (*api.PromoteMemberResponse, error) {
+	if rc.node == nil {
+		return nil, errors.New("node not ready")
+	}
+	if !rc.IsLeader() {
+		return nil, errors.New("node not leader")
+	}
+	st := rc.node.Status()
+	if st.Progress == nil {
+		return nil, errors.New("node not leader")
+	}
+	nodeProgress, ok := st.Progress[in.ID]
+	if !ok {
+		return nil, errors.New("node not found")
+	}
+	if !nodeProgress.IsLearner {
+		return &api.PromoteMemberResponse{}, nil
+	}
+	if nodeProgress.PendingSnapshot != 0 || nodeProgress.Next < st.Commit {
+		return nil, errors.New("node is late")
+	}
+	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
+		Context: []byte(in.Address),
+		Changes: []raftpb.ConfChangeSingle{
+			{
+				Type:   raftpb.ConfChangeRemoveNode,
+				NodeID: in.ID,
+			},
+			{
+				Type:   raftpb.ConfChangeAddNode,
+				NodeID: in.ID,
+			},
+		},
+	})
+	if err != nil {
+		rc.logger.Error("failed to add new cluster peer",
+			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
+	} else {
+		rc.logger.Info("promoted new cluster peer",
+			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
+	}
+	return &api.PromoteMemberResponse{}, err
+
+}
 func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.JoinClusterResponse, error) {
 	if rc.node == nil {
 		return nil, errors.New("node not ready")
@@ -60,10 +104,23 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 	if !rc.IsLeader() {
 		return nil, errors.New("node not leader")
 	}
-	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
-		Type:    raftpb.ConfChangeAddNode,
-		NodeID:  in.ID,
+	status := rc.node.Status()
+	if p, ok := status.Progress[rc.id]; ok {
+		if p.RecentActive {
+			if p.IsLearner {
+				return &api.JoinClusterResponse{Commit: status.Commit}, nil
+			}
+			return nil, errors.New("node is already a voter")
+		}
+	}
+	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
 		Context: []byte(in.Address),
+		Changes: []raftpb.ConfChangeSingle{
+			{
+				Type:   raftpb.ConfChangeAddLearnerNode,
+				NodeID: in.ID,
+			},
+		},
 	})
 	if err != nil {
 		rc.logger.Error("failed to add new cluster peer",
@@ -72,13 +129,13 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 		rc.logger.Info("added new cluster peer",
 			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
 	}
-	return &api.JoinClusterResponse{Commit: rc.appliedIndex}, err
+	return &api.JoinClusterResponse{Commit: status.Commit}, err
 }
 func (rc *RaftNode) GetStatus(ctx context.Context, in *api.GetStatusRequest) (*api.GetStatusResponse, error) {
 	return &api.GetStatusResponse{
 		IsLeader:            rc.IsLeader(),
 		HasBeenBootstrapped: rc.hasBeenBootstrapped,
-		IsInCluster:         !rc.removed,
+		IsInCluster:         !rc.IsRemovedFromCluster(),
 	}, nil
 }
 func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (*api.GetMembersResponse, error) {
