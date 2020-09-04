@@ -66,8 +66,6 @@ type RaftNode struct {
 	id                  uint64 // client ID for raft session
 	clusterID           string
 	address             string
-	currentLeader       uint64
-	hasLeader           bool
 	hasBeenBootstrapped bool
 	commitApplier       CommitApplier
 	snapshotApplier     SnapshotApplier
@@ -124,8 +122,6 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		clusterID:        config.ClusterID,
 		address:          config.NodeAddress,
 		membership:       mesh,
-		currentLeader:    0,
-		hasLeader:        false,
 		logger:           logger,
 		waldir:           path.Join(datadir, "raft", "wall"),
 		snapdir:          path.Join(datadir, "raft", "snapshots"),
@@ -209,6 +205,9 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 }
 
 func (rc *RaftNode) Leader() uint64 {
+	if rc.node == nil {
+		return 0
+	}
 	l := rc.node.Status().Lead
 	return l
 }
@@ -236,10 +235,7 @@ func (rc *RaftNode) saveSnap(snap raftpb.Snapshot) error {
 }
 
 func (rc *RaftNode) IsLeader() bool {
-	if rc.node == nil {
-		return false
-	}
-	return rc.currentLeader == rc.id
+	return rc.Leader() == rc.id
 }
 func (rc *RaftNode) IsVoter() bool {
 	if rc.node == nil {
@@ -380,35 +376,30 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 		case rd := <-rc.node.Ready():
 			start := time.Now()
 			if rd.SoftState != nil {
-				newLeader := rd.SoftState.Lead != raft.None && rc.currentLeader != rd.SoftState.Lead
+				currentLeader := rc.Leader()
+				newLeader := rd.SoftState.Lead != raft.None && currentLeader != rd.SoftState.Lead
 				if newLeader {
-					if !rc.hasLeader {
-						rc.hasLeader = true
-					}
 					if rd.SoftState.Lead == rc.id {
 						rc.logger.Info("cluster leadership acquired")
 						rc.leaderState.Start(ctx)
 					} else {
-						if rc.currentLeader == rc.id {
+						if currentLeader == rc.id {
 							ctx, cancel := context.WithTimeout(ctx, time.Second*1)
 							err := rc.leaderState.Cancel(ctx)
 							cancel()
 							if err != nil {
 								rc.logger.Error("failed to stop leader func", zap.Error(err))
 							}
-							rc.logger.Info("raft leadership lost", zap.String("hex_new_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+							rc.logger.Info("raft leadership lost", zap.String("hex_new_raft_leader_id", fmt.Sprintf("%x", currentLeader)))
 						} else {
-							rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", rc.currentLeader)))
+							rc.logger.Info("raft leader elected", zap.String("hex_raft_leader_id", fmt.Sprintf("%x", currentLeader)))
 						}
 					}
-					rc.currentLeader = rd.SoftState.Lead
 				}
 				if rd.SoftState.Lead == raft.None {
-					if rc.hasLeader {
-						rc.hasLeader = false
+					if currentLeader > 0 {
 						rc.logger.Warn("raft cluster has no leader")
 					}
-					rc.currentLeader = 0
 				}
 			}
 			if err := rc.wal.Save(rd.HardState, rd.Entries); err != nil {

@@ -146,6 +146,7 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 	peers := voters.IDs()
 	out := make([]*api.Member, 0)
 	members := rc.membership.Members()
+	leader := rc.Leader()
 	for id := range peers {
 		peer := &api.Member{ID: id}
 		for _, member := range members {
@@ -155,7 +156,7 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 				break
 			}
 		}
-		if rc.currentLeader == id {
+		if leader == id {
 			peer.IsLeader = true
 		}
 		out = append(out, peer)
