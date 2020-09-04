@@ -288,6 +288,28 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			if err != nil {
 				return err
 			}
+		case raftpb.EntryConfChangeV2:
+			var cc raftpb.ConfChangeV2
+			cc.Unmarshal(ents[i].Data)
+			rc.confState = *rc.node.ApplyConfChange(cc)
+			for _, change := range cc.Changes {
+				switch change.Type {
+				case raftpb.ConfChangeAddNode:
+					if len(cc.Context) > 0 {
+						if change.NodeID == rc.id {
+							rc.logger.Info("local node added to cluster")
+							rc.left = make(chan struct{})
+							rc.removed = false
+						}
+					}
+				case raftpb.ConfChangeRemoveNode:
+					if change.NodeID == rc.id {
+						rc.logger.Info("local node removed from cluster")
+						rc.removed = true
+						close(rc.left)
+					}
+				}
+			}
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
