@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -52,6 +53,15 @@ type Membership interface {
 	Members() []*clusterpb.Member
 }
 
+type StableStorage interface {
+	io.Closer
+	ReadAll() (metadata []byte, state raftpb.HardState, ents []raftpb.Entry, err error)
+	ReleaseLockTo(index uint64) error
+	Save(st raftpb.HardState, ents []raftpb.Entry) error
+	Sync() error
+	SaveSnapshot(e walpb.Snapshot) error
+}
+
 type RaftNode struct {
 	id                  uint64 // client ID for raft session
 	clusterID           string
@@ -76,7 +86,7 @@ type RaftNode struct {
 	node          raft.Node
 	removed       bool
 	raftStorage   *raft.MemoryStorage
-	wal           *wal.WAL
+	wal           StableStorage
 	snapshotter   *snap.Snapshotter
 
 	snapCount   uint64
@@ -149,7 +159,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	rc.appliedIndex = snap.Metadata.Index
 
 	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
-	rc.wal = rc.replayWAL(rc.logger)
+	rc.wal = rc.replayWAL()
 	return rc
 }
 
@@ -174,7 +184,59 @@ func (rc *RaftNode) Reset() {
 	rc.appliedIndex = snap.Metadata.Index
 
 	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
-	rc.wal = rc.replayWAL(rc.logger)
+	rc.wal = rc.replayWAL()
+}
+
+func createOrOpenWAL(datadir string, snapshot *raftpb.Snapshot, logger *zap.Logger) *wal.WAL {
+	if !wal.Exist(datadir) {
+		if err := os.MkdirAll(datadir, 0750); err != nil {
+			logger.Fatal("failed to create dir for wal", zap.Error(err))
+		}
+
+		w, err := wal.Create(logger, datadir, nil)
+		if err != nil {
+			logger.Fatal("create wal error", zap.Error(err))
+		}
+		w.Close()
+	}
+
+	walsnap := walpb.Snapshot{}
+	if snapshot != nil {
+		walsnap.Index, walsnap.Term = snapshot.Metadata.Index, snapshot.Metadata.Term
+	}
+	w, err := wal.Open(logger, datadir, walsnap)
+	if err != nil {
+		logger.Fatal("failed to load WAL", zap.Error(err))
+	}
+	return w
+}
+
+// replayWAL replays WAL entries into the raft instance.
+func (rc *RaftNode) replayWAL() *wal.WAL {
+	snapshot := rc.loadSnapshot()
+	w := createOrOpenWAL(rc.waldir, snapshot, rc.logger)
+	_, st, ents, err := w.ReadAll()
+	if err != nil {
+		rc.logger.Fatal("failed to replay WAL", zap.Error(err))
+	}
+	if snapshot != nil {
+		rc.logger.Debug("applying snapshot")
+		err = rc.raftStorage.ApplySnapshot(*snapshot)
+		if err != nil {
+			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
+		}
+		rc.appliedIndex = snapshot.Metadata.Index
+		rc.committedIndex = snapshot.Metadata.Index
+		rc.snapshotIndex = snapshot.Metadata.Index
+		rc.confState = snapshot.Metadata.ConfState
+		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", rc.appliedIndex))
+	}
+	rc.raftStorage.SetHardState(st)
+	// append to storage so raft starts at the right place in log
+	rc.raftStorage.Append(ents)
+	rc.committedIndex = st.Commit
+	rc.logger.Debug("replayed raft wal", zap.Uint64("commited_index", st.Commit), zap.Int("entry_count", len(ents)))
+	return w
 }
 
 func (rc *RaftNode) IsRemovedFromCluster() bool {
@@ -225,6 +287,28 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			})
 			if err != nil {
 				return err
+			}
+		case raftpb.EntryConfChangeV2:
+			var cc raftpb.ConfChangeV2
+			cc.Unmarshal(ents[i].Data)
+			rc.confState = *rc.node.ApplyConfChange(cc)
+			for _, change := range cc.Changes {
+				switch change.Type {
+				case raftpb.ConfChangeAddNode:
+					if len(cc.Context) > 0 {
+						if change.NodeID == rc.id {
+							rc.logger.Info("local node added to cluster")
+							rc.left = make(chan struct{})
+							rc.removed = false
+						}
+					}
+				case raftpb.ConfChangeRemoveNode:
+					if change.NodeID == rc.id {
+						rc.logger.Info("local node removed from cluster")
+						rc.removed = true
+						close(rc.left)
+					}
+				}
 			}
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange

@@ -32,9 +32,13 @@ func (rc *RaftNode) RemoveMember(ctx context.Context, message *api.RemoveMemberR
 			return nil, status.Error(codes.InvalidArgument, "refusing to remove an healthy member")
 		}
 	}
-	return &api.RemoveMemberResponse{}, rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
-		Type:   raftpb.ConfChangeRemoveNode,
-		NodeID: message.ID,
+	return &api.RemoveMemberResponse{}, rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
+		Changes: []raftpb.ConfChangeSingle{
+			{
+				Type:   raftpb.ConfChangeRemoveNode,
+				NodeID: message.ID,
+			},
+		},
 	})
 
 }
@@ -83,7 +87,7 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 	}
 	voters := rc.node.Status().Config.Voters
 	peers := voters.IDs()
-	out := make([]*api.Member, len(peers))
+	out := make([]*api.Member, 0)
 	members := rc.membership.Members()
 	for id := range peers {
 		peer := &api.Member{ID: id}
