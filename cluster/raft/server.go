@@ -106,11 +106,13 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 		return nil, errors.New("node not leader")
 	}
 	status := rc.node.Status()
-	if p, ok := status.Progress[rc.id]; ok {
-		if p.RecentActive {
-			if p.IsLearner {
-				return &api.JoinClusterResponse{Commit: status.Commit}, nil
-			}
+	for _, id := range rc.confState.Learners {
+		if id == in.ID {
+			return &api.JoinClusterResponse{Commit: status.Commit}, nil
+		}
+	}
+	for _, id := range rc.confState.Voters {
+		if id == in.ID {
 			return nil, errors.New("node is already a voter")
 		}
 	}
