@@ -187,10 +187,21 @@ func (n *node) Run(ctx context.Context) {
 								applied := n.raft.AppliedIndex()
 								if clusterIndex == 0 || (applied > 0 && applied >= clusterIndex) {
 									err := n.gossip.Call(n.raft.Leader(), func(c *grpc.ClientConn) error {
-										_, err := clusterpb.NewRaftClient(c).PromoteMember(ctx, &clusterpb.RaftContext{
-											ID:      n.config.ID,
-											Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+										_, err := clusterpb.NewMultiRaftClient(c).PromoteMember(ctx, &clusterpb.PromoteMemberRequest{
+											ClusterID: n.cluster,
+											Context: &clusterpb.RaftContext{
+												ID:      n.config.ID,
+												Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+											},
 										})
+										if grpcErr, ok := status.FromError(err); ok {
+											if grpcErr.Code() == codes.Unimplemented {
+												_, err = clusterpb.NewRaftClient(c).PromoteMember(ctx, &clusterpb.RaftContext{
+													ID:      n.config.ID,
+													Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+												})
+											}
+										}
 										return err
 									})
 									if err != nil {
