@@ -79,10 +79,6 @@ func (rc *RaftNode) PromoteMember(ctx context.Context, in *api.RaftContext) (*ap
 		Context: []byte(in.Address),
 		Changes: []raftpb.ConfChangeSingle{
 			{
-				Type:   raftpb.ConfChangeRemoveNode,
-				NodeID: in.ID,
-			},
-			{
 				Type:   raftpb.ConfChangeAddNode,
 				NodeID: in.ID,
 			},
