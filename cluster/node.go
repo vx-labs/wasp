@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/wasp/cluster/raft"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -153,32 +154,27 @@ func (n *node) Run(ctx context.Context) {
 					for _, peer := range peers {
 						var clusterIndex uint64
 						var err error
-						if n.cluster != "" {
-							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
-								out, err := clusterpb.NewMultiRaftClient(c).JoinCluster(ctx, &clusterpb.JoinClusterRequest{
-									ClusterID: n.cluster,
-									Context: &clusterpb.RaftContext{
-										ID:      n.config.ID,
-										Address: n.config.RaftConfig.Network.AdvertizedAddress(),
-									},
-								})
-								if err == nil {
-									clusterIndex = out.Commit
-								}
-								return err
-							})
-						} else {
-							err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
-								out, err := clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
+						err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {
+							out, err := clusterpb.NewMultiRaftClient(c).JoinCluster(ctx, &clusterpb.JoinClusterRequest{
+								ClusterID: n.cluster,
+								Context: &clusterpb.RaftContext{
 									ID:      n.config.ID,
 									Address: n.config.RaftConfig.Network.AdvertizedAddress(),
-								})
-								if err == nil {
-									clusterIndex = out.Commit
-								}
-								return err
+								},
 							})
-						}
+							if grpcErr, ok := status.FromError(err); ok {
+								if grpcErr.Code() == codes.Unimplemented {
+									_, err = clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
+										ID:      n.config.ID,
+										Address: n.config.RaftConfig.Network.AdvertizedAddress(),
+									})
+								}
+							}
+							if err == nil {
+								clusterIndex = out.Commit
+							}
+							return err
+						})
 						if err != nil {
 							if s, ok := status.FromError(err); ok && s.Message() == "node is already a voter" {
 								n.logger.Debug("joined cluster as voter")

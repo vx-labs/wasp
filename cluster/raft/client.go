@@ -10,6 +10,8 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func isMsgSnap(m raftpb.Message) bool { return m.Type == raftpb.MsgSnap }
@@ -22,16 +24,16 @@ func (rc *RaftNode) Send(ctx context.Context, messages []raftpb.Message) {
 			continue
 		}
 		err := rc.membership.Call(message.To, func(c *grpc.ClientConn) error {
-			if rc.clusterID != "" {
-				_, err := api.NewMultiRaftClient(c).ProcessMessage(ctx, &api.ProcessMessageRequest{
-					ClusterID: rc.clusterID,
-					Message:   &message,
-				})
-				return err
-			} else {
-				_, err := api.NewRaftClient(c).ProcessMessage(ctx, &message)
-				return err
+			_, err := api.NewMultiRaftClient(c).ProcessMessage(ctx, &api.ProcessMessageRequest{
+				ClusterID: rc.clusterID,
+				Message:   &message,
+			})
+			if grpcErr, ok := status.FromError(err); ok {
+				if grpcErr.Code() == codes.Unimplemented {
+					_, err = api.NewRaftClient(c).ProcessMessage(ctx, &message)
+				}
 			}
+			return err
 		})
 		if err != nil {
 			stats.HistogramVec("raftRPCHandling").With(prometheus.Labels{"result": "failure", "message_type": message.Type.String()}).Observe(stats.MilisecondsElapsed(start))

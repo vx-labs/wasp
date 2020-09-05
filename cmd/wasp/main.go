@@ -119,7 +119,33 @@ func run(config *viper.Viper) {
 		joinList = append(joinList, consulJoinList...)
 	}
 
-	clusterNode := cluster.NewNode(cluster.NodeConfig{
+	raftConfig := cluster.RaftConfig{
+		GetStateSnapshot:  state.MarshalBinary,
+		ExpectedNodeCount: config.GetInt("raft-bootstrap-expect"),
+		Network: cluster.NetworkConfig{
+			AdvertizedHost: config.GetString("raft-advertized-address"),
+			AdvertizedPort: config.GetInt("raft-advertized-port"),
+			ListeningPort:  config.GetInt("raft-port"),
+		},
+		CommitApplier: func(ctx context.Context, event raft.Commit) error {
+			stateMachine.Apply(event.Payload)
+			return nil
+		},
+		SnapshotApplier: func(ctx context.Context, index uint64, snapshotter *snap.Snapshotter) error {
+			snapshot, err := snapshotter.Load()
+			if err != nil {
+				wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
+			}
+			err = state.Load(snapshot.Data)
+			if err != nil {
+				wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
+			} else {
+				wasp.L(ctx).Debug("loaded snapshot into state")
+			}
+			return err
+		},
+	}
+	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
 		ID:            id,
 		ServiceName:   "wasp",
 		DataDirectory: config.GetString("data-dir"),
@@ -131,33 +157,9 @@ func run(config *viper.Viper) {
 				ListeningPort:  config.GetInt("serf-port"),
 			},
 		},
-		RaftConfig: cluster.RaftConfig{
-			GetStateSnapshot:  state.MarshalBinary,
-			ExpectedNodeCount: config.GetInt("raft-bootstrap-expect"),
-			Network: cluster.NetworkConfig{
-				AdvertizedHost: config.GetString("raft-advertized-address"),
-				AdvertizedPort: config.GetInt("raft-advertized-port"),
-				ListeningPort:  config.GetInt("raft-port"),
-			},
-			CommitApplier: func(ctx context.Context, event raft.Commit) error {
-				stateMachine.Apply(event.Payload)
-				return nil
-			},
-			SnapshotApplier: func(ctx context.Context, index uint64, snapshotter *snap.Snapshotter) error {
-				snapshot, err := snapshotter.Load()
-				if err != nil {
-					wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
-				}
-				err = state.Load(snapshot.Data)
-				if err != nil {
-					wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
-				} else {
-					wasp.L(ctx).Debug("loaded snapshot into state")
-				}
-				return err
-			},
-		},
+		RaftConfig: raftConfig,
 	}, rpcDialer, server, wasp.L(ctx))
+	clusterNode := clusterMultiNode.Node("wasp", raftConfig)
 	operations.Run("cluster listener", func(ctx context.Context) {
 		err := server.Serve(clusterListener)
 		if err != nil {
@@ -428,6 +430,7 @@ func run(config *viper.Viper) {
 	} else {
 		wasp.L(ctx).Debug("cluster left")
 	}
+	clusterMultiNode.Shutdown()
 	healthServer.Shutdown()
 	wasp.L(ctx).Debug("health server stopped")
 	server.GracefulStop()
