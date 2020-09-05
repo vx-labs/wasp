@@ -101,7 +101,7 @@ func (f *FSM) commit(ctx context.Context, events ...*StateTransition) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 	out := make(chan error)
 	select {

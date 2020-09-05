@@ -106,6 +106,30 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 }
 
+func (n *node) isVoter(ctx context.Context, leader uint64) bool {
+	var out *clusterpb.GetTopologyResponse
+	err := n.gossip.Call(leader, func(c *grpc.ClientConn) error {
+		var err error
+		out, err = clusterpb.NewMultiRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
+			ClusterID: n.cluster,
+		})
+		if grpcErr, ok := status.FromError(err); ok {
+			if grpcErr.Code() == codes.Unimplemented {
+				out, err = clusterpb.NewRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{})
+			}
+		}
+		return err
+	})
+	if err != nil {
+		return false
+	}
+	for _, p := range out.Members {
+		if p.ID == n.config.ID {
+			return p.IsVoter
+		}
+	}
+	return false
+}
 func (n *node) Index() uint64 {
 	return n.raft.CommittedIndex()
 }
@@ -142,12 +166,11 @@ func (n *node) Run(ctx context.Context) {
 		defer close(n.ready)
 		select {
 		case <-n.raft.Ready():
-			if join && n.raft.IsRemovedFromCluster() {
-				n.logger.Debug("local node is not a cluster member, will attempt join")
+			if join {
 				ticker := time.NewTicker(1 * time.Second)
 				defer ticker.Stop()
 				for {
-					if n.raft.IsLeader() || n.raft.IsVoter() {
+					if n.raft.IsLeader() || n.isVoter(ctx, n.raft.Leader()) {
 						n.logger.Debug("local node is now a cluster member")
 						return
 					}
