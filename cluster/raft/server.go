@@ -188,6 +188,7 @@ func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest)
 	}
 	status := rc.node.Status()
 	voters := rc.confState.Voters
+	learners := rc.confState.Learners
 	out := make([]*api.TopologyMemberStatus, 0)
 	members := rc.membership.Members()
 	leader := rc.Leader()
@@ -202,7 +203,24 @@ func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest)
 		}
 		progress := status.Progress[id]
 		peer.Applied = progress.Next - 1
-		peer.IsVoter = !progress.IsLearner
+		peer.IsVoter = true
+		if leader == id {
+			peer.IsLeader = true
+		}
+		out = append(out, peer)
+	}
+	for _, id := range learners {
+		peer := &api.TopologyMemberStatus{ID: id}
+		for _, member := range members {
+			if member.ID == id {
+				peer.Address = member.Address
+				peer.IsAlive = member.IsAlive
+				break
+			}
+		}
+		progress := status.Progress[id]
+		peer.Applied = progress.Next - 1
+		peer.IsVoter = false
 		if leader == id {
 			peer.IsLeader = true
 		}
