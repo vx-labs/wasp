@@ -83,6 +83,8 @@ type RaftNode struct {
 	snapCount   uint64
 	ready       chan struct{}
 	leaderState *leaderState
+	cancel      chan struct{}
+	done        chan struct{}
 }
 
 type Config struct {
@@ -124,6 +126,8 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		msgSnapC:         make(chan raftpb.Message, 16),
 		snapCount:        1000,
 		ready:            make(chan struct{}),
+		cancel:           make(chan struct{}),
+		done:             make(chan struct{}),
 		commitApplier:    config.CommitApplier,
 		snapshotApplier:  config.SnapshotApplier,
 		// rest of structure populated after WAL replay
@@ -291,6 +295,8 @@ type NodeConfig struct {
 }
 
 func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config NodeConfig) {
+	defer close(rc.done)
+
 	rc.leaderState = newLeaderState(config.LeaderFunc)
 
 	rpeers := make([]raft.Peer, len(peers)+1)
@@ -335,7 +341,6 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 	}
 }
 
-// stop closes http, closes all channels, and stops raft.
 func (rc *RaftNode) Apply(ctx context.Context, buf []byte) error {
 	if rc.node == nil {
 		select {
@@ -355,6 +360,9 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 	// event loop on raft state machine updates
 	for {
 		select {
+		case <-rc.cancel:
+			rc.wal.Sync()
+			return
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
@@ -447,10 +455,6 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 func (rc *RaftNode) processMessagesBeforeSending(ms []raftpb.Message) []raftpb.Message {
 	for i := len(ms) - 1; i >= 0; i-- {
 		if ms[i].Type == raftpb.MsgSnap {
-			// There are two separate data store: the store for v2, and the KV for v3.
-			// The msgSnap only contains the most recent snapshot of store without KV.
-			// So we need to redirect the msgSnap to etcd server main loop for merging in the
-			// current store snapshot and KV snapshot.
 			select {
 			case rc.msgSnapC <- ms[i]:
 			default:
@@ -475,50 +479,46 @@ func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	rc.node.ReportSnapshot(id, status)
 }
 
-func (rc *RaftNode) ReportNewPeer(ctx context.Context, id uint64, address string) error {
-	if rc.node == nil {
-		return errors.New("node not ready")
-	}
-	if !rc.IsLeader() {
-		return errors.New("node not leader")
-	}
-	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChange{
-		Type:    raftpb.ConfChangeAddNode,
-		NodeID:  id,
-		Context: []byte(address),
-	})
-	if err != nil {
-		rc.logger.Error("failed to add new cluster peer",
-			zap.Error(err), zap.String("hex_raft_node_id", fmt.Sprintf("%x", id)))
-	} else {
-		rc.logger.Info("added new cluster peer",
-			zap.Error(err), zap.String("hex_raft_node_id", fmt.Sprintf("%x", id)))
-	}
-	return err
-}
-
-func (rc *RaftNode) Leave(ctx context.Context) error {
-	reqCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	if rc.IsLeader() && len(rc.node.Status().Progress) == 1 {
-		cancel()
+func (rc *RaftNode) stop(ctx context.Context) error {
+	select {
+	case <-rc.done:
 		return nil
+	default:
+	}
+	close(rc.cancel)
+	select {
+	case <-rc.done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (rc *RaftNode) Leave(ctx context.Context) error {
+	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	if rc.IsLeader() && len(rc.confState.Voters) == 1 {
+		cancel()
+		return rc.stop(ctx)
 	}
 	rc.logger.Debug("leaving raft cluster")
 	err := rc.node.ProposeConfChange(reqCtx, raftpb.ConfChangeV2{
-		Changes: []raftpb.ConfChangeSingle{raftpb.ConfChangeSingle{
-			Type:   raftpb.ConfChangeRemoveNode,
-			NodeID: rc.id,
-		}},
+		Changes: []raftpb.ConfChangeSingle{
+			{
+				Type:   raftpb.ConfChangeRemoveNode,
+				NodeID: rc.id,
+			},
+		},
 	})
 	if err != nil {
 		cancel()
 		return err
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
+	rc.logger.Debug("waiting for local node removal to be committed")
 	for {
 		if !rc.IsVoter() && !rc.IsLeader() {
 			cancel()
-			return nil
+			rc.logger.Debug("local node removed from raft cluster")
+			break
 		}
 		select {
 		case <-ticker.C:
@@ -530,4 +530,5 @@ func (rc *RaftNode) Leave(ctx context.Context) error {
 			return errors.New("left timeout")
 		}
 	}
+	return rc.stop(ctx)
 }
