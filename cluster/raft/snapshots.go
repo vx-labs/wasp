@@ -20,7 +20,7 @@ func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
 		log.Panic(err)
 	}
 
-	snap, err := rc.raftStorage.CreateSnapshot(snapIndex, rc.confState, data)
+	snap, err := rc.raftStorage.CreateSnapshot(committedIndex, rc.confState, data)
 	if err != nil {
 		if err == raft.ErrSnapOutOfDate {
 			return
@@ -36,5 +36,5 @@ func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
 	}
 
 	rc.logger.Debug("compacted log", zap.Uint64("compact_index", snapIndex))
-	rc.snapshotIndex = snapIndex
+	rc.snapshotIndex = committedIndex
 }
