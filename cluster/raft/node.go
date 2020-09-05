@@ -412,15 +412,14 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.wal.Sync()
 			if !raft.IsEmptySnap(rd.Snapshot) {
+				rc.logger.Debug("received a snapshot to apply", zap.Uint64("snapshot_index", rd.Snapshot.Metadata.Index))
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
 				rc.confState = rd.Snapshot.Metadata.ConfState
 				rc.snapshotIndex = rd.Snapshot.Metadata.Index
 				if err := rc.snapshotApplier(ctx, rd.Snapshot.Metadata.Index, rc.snapshotter); err != nil {
-					if err != context.Canceled {
-						rc.logger.Error("failed to apply state snapshot", zap.Error(err))
-						return
-					}
+					rc.logger.Error("failed to apply state snapshot", zap.Error(err))
+					return
 				}
 			}
 			if err := rc.raftStorage.Append(rd.Entries); err != nil {
