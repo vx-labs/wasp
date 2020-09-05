@@ -446,6 +446,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 			snap, err := rc.raftStorage.CreateSnapshot(msg.Commit, rc.confState, data)
 			if err != nil {
 				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Commit), zap.Error(err))
+				rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
 				continue
 			}
 			msg.Snapshot = snap
