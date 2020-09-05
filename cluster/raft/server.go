@@ -163,7 +163,7 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 		out = append(out, peer)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
-	return &api.GetMembersResponse{Members: out, CommittedIndex: rc.committedIndex}, nil
+	return &api.GetMembersResponse{Members: out, CommittedIndex: rc.CommittedIndex()}, nil
 }
 func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest) (*api.GetTopologyResponse, error) {
 	if rc.node == nil {

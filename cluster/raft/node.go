@@ -75,7 +75,6 @@ type RaftNode struct {
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
 	getSnapshot         func() ([]byte, error)
-	committedIndex      uint64 // index of log at start
 
 	confState     raftpb.ConfState
 	snapshotIndex uint64
@@ -191,7 +190,6 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 		if err != nil {
 			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
 		}
-		rc.committedIndex = snapshot.Metadata.Index
 		rc.snapshotIndex = snapshot.Metadata.Index
 		rc.confState = snapshot.Metadata.ConfState
 		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", snapshot.Metadata.Index))
@@ -199,7 +197,6 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 	rc.raftStorage.SetHardState(st)
 	// append to storage so raft starts at the right place in log
 	rc.raftStorage.Append(ents)
-	rc.committedIndex = st.Commit
 	rc.logger.Debug("replayed raft wal", zap.Uint64("commited_index", st.Commit), zap.Int("entry_count", len(ents)))
 	return w
 }
@@ -328,7 +325,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		c.Logger = &raft.DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
 	}
 	if rc.hasBeenBootstrapped || join {
-		rc.logger.Debug("restarting raft state machine", zap.Uint64("last_index", rc.committedIndex))
+		rc.logger.Debug("restarting raft state machine")
 		rc.node = raft.RestartNode(c)
 	} else {
 		rc.logger.Debug("starting raft state machine")
@@ -338,7 +335,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		rc.hasBeenBootstrapped = true
 	}
 	close(rc.ready)
-	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex), zap.Uint64("last_index", rc.committedIndex))
+	rc.logger.Debug("raft state machine started", zap.Uint64("index", config.AppliedIndex))
 	rc.serveChannels(ctx) //blocking loop
 	rc.node.Stop()
 	err := rc.wal.Close()
@@ -445,7 +442,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 			if err != nil {
 				log.Panic(err)
 			}
-			snap, err := rc.raftStorage.CreateSnapshot(msg.Index, &rc.confState, data)
+			snap, err := rc.raftStorage.CreateSnapshot(rc.CommittedIndex(), &rc.confState, data)
 			if err != nil {
 				panic(err)
 			}
