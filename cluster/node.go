@@ -152,6 +152,9 @@ func (n *node) Run(ctx context.Context) {
 						return
 					}
 					for _, peer := range peers {
+						if peer.ID == n.config.ID {
+							continue
+						}
 						var clusterIndex uint64
 						var err error
 						err = n.gossip.Call(peer.ID, func(c *grpc.ClientConn) error {

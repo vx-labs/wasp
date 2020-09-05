@@ -81,6 +81,9 @@ func (b *Gossip) NotifyUpdate(n *memberlist.Node) {
 }
 
 func (b *Gossip) Call(id uint64, f func(*grpc.ClientConn) error) error {
+	if id == b.id {
+		return errors.New("attempted to contact to local node")
+	}
 	b.mtx.RLock()
 	defer b.mtx.RUnlock()
 	peer, ok := b.peers[id]
