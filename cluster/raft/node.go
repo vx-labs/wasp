@@ -310,6 +310,7 @@ func (rc *RaftNode) Run(ctx context.Context, peers []Peer, join bool, config Nod
 		MaxInflightMsgs:           256,
 		Applied:                   config.AppliedIndex,
 		DisableProposalForwarding: config.DisableProposalForwarding,
+		CheckQuorum:               true,
 	}
 	if os.Getenv("ENABLE_RAFT_DEBUG_LOG") == "true" {
 		c.Logger = &raft.DefaultLogger{Logger: log.New(os.Stderr, "raft", log.LstdFlags)}
