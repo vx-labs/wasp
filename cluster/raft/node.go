@@ -37,9 +37,6 @@ type StatsProvider interface {
 type CommitApplier func(context.Context, Commit) error
 type SnapshotApplier func(context.Context, uint64, *snap.Snapshotter) error
 
-// SnapshotNotifier is called when a raft snapshot is created, and inform application to sync its state.
-type SnapshotNotifier func(uint64) error
-
 type StatsProviderGetter func() StatsProvider
 
 type Command struct {
@@ -69,14 +66,13 @@ type RaftNode struct {
 	hasBeenBootstrapped bool
 	commitApplier       CommitApplier
 	snapshotApplier     SnapshotApplier
-	snapshotNotifier    SnapshotNotifier
 	msgSnapC            chan raftpb.Message
 	logger              *zap.Logger
 	waldir              string // path to WAL directory
 	snapdir             string // path to snapshot directory
-	getSnapshot         func() ([]byte, error)
+	getStateSnapshot    func() ([]byte, error)
 
-	confState     raftpb.ConfState
+	confState     *raftpb.ConfState
 	snapshotIndex uint64
 	membership    Membership
 	node          raft.Node
@@ -90,14 +86,13 @@ type RaftNode struct {
 }
 
 type Config struct {
-	NodeID           uint64
-	NodeAddress      string
-	ClusterID        string
-	DataDir          string
-	GetSnapshot      func() ([]byte, error)
-	CommitApplier    CommitApplier
-	SnapshotApplier  SnapshotApplier
-	SnapshotNotifier SnapshotNotifier
+	NodeID          uint64
+	NodeAddress     string
+	ClusterID       string
+	DataDir         string
+	GetSnapshot     func() ([]byte, error)
+	CommitApplier   CommitApplier
+	SnapshotApplier SnapshotApplier
 }
 
 type Commit struct {
@@ -124,14 +119,13 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		logger:           logger,
 		waldir:           path.Join(datadir, "raft", "wall"),
 		snapdir:          path.Join(datadir, "raft", "snapshots"),
-		getSnapshot:      getSnapshot,
+		getStateSnapshot: getSnapshot,
 		raftStorage:      raft.NewMemoryStorage(),
 		msgSnapC:         make(chan raftpb.Message, 16),
-		snapCount:        1000,
+		snapCount:        10,
 		ready:            make(chan struct{}),
 		commitApplier:    config.CommitApplier,
 		snapshotApplier:  config.SnapshotApplier,
-		snapshotNotifier: config.SnapshotNotifier,
 		// rest of structure populated after WAL replay
 	}
 	if !fileutil.Exist(rc.snapdir) {
@@ -140,13 +134,6 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		}
 	}
 	rc.snapshotter = snap.New(rc.logger, rc.snapdir)
-	snap, err := rc.raftStorage.Snapshot()
-	if err != nil {
-		panic(err)
-	}
-	rc.confState = snap.Metadata.ConfState
-	rc.snapshotIndex = snap.Metadata.Index
-
 	rc.hasBeenBootstrapped = wal.Exist(rc.waldir)
 	rc.wal = rc.replayWAL()
 	return rc
@@ -178,7 +165,10 @@ func createOrOpenWAL(datadir string, snapshot *raftpb.Snapshot, logger *zap.Logg
 
 // replayWAL replays WAL entries into the raft instance.
 func (rc *RaftNode) replayWAL() *wal.WAL {
-	snapshot := rc.loadSnapshot()
+	snapshot, err := rc.snapshotter.Load()
+	if err != nil && err != snap.ErrNoSnapshot {
+		rc.logger.Fatal("error loading snapshot", zap.Error(err))
+	}
 	w := createOrOpenWAL(rc.waldir, snapshot, rc.logger)
 	_, st, ents, err := w.ReadAll()
 	if err != nil {
@@ -191,7 +181,7 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
 		}
 		rc.snapshotIndex = snapshot.Metadata.Index
-		rc.confState = snapshot.Metadata.ConfState
+		rc.confState = &snapshot.Metadata.ConfState
 		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", snapshot.Metadata.Index))
 	}
 	rc.raftStorage.SetHardState(st)
@@ -284,11 +274,11 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 		case raftpb.EntryConfChangeV2:
 			var cc raftpb.ConfChangeV2
 			cc.Unmarshal(ents[i].Data)
-			rc.confState = *rc.node.ApplyConfChange(cc)
+			rc.confState = rc.node.ApplyConfChange(cc)
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
-			rc.confState = *rc.node.ApplyConfChange(cc)
+			rc.confState = rc.node.ApplyConfChange(cc)
 		}
 	}
 	return nil
@@ -407,9 +397,11 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
-				if err := rc.publishSnapshot(ctx, rd.Snapshot); err != nil {
+				rc.confState = &rd.Snapshot.Metadata.ConfState
+				rc.snapshotIndex = rd.Snapshot.Metadata.Term
+				if err := rc.snapshotApplier(ctx, rd.Snapshot.Metadata.Index, rc.snapshotter); err != nil {
 					if err != context.Canceled {
-						rc.logger.Error("failed to publish raft snapshot", zap.Error(err))
+						rc.logger.Error("failed to apply state snapshot", zap.Error(err))
 					}
 					return
 				}
@@ -425,7 +417,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 				}
 				return
 			}
-			rc.maybeTriggerSnapshot()
+			rc.maybeTriggerSnapshot(rd.Commit)
 			rc.node.Advance()
 			stats.Histogram("raftLoopProcessingTime").Observe(stats.MilisecondsElapsed(start))
 		}
@@ -438,11 +430,11 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case msg := <-rc.msgSnapC:
-			data, err := rc.getSnapshot()
+			data, err := rc.getStateSnapshot()
 			if err != nil {
 				log.Panic(err)
 			}
-			snap, err := rc.raftStorage.CreateSnapshot(rc.CommittedIndex(), &rc.confState, data)
+			snap, err := rc.raftStorage.CreateSnapshot(rc.CommittedIndex(), rc.confState, data)
 			if err != nil {
 				panic(err)
 			}

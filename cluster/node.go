@@ -84,12 +84,11 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	}
 
 	raftConfig := raft.Config{
-		NodeID:           config.ID,
-		DataDir:          config.DataDirectory,
-		GetSnapshot:      config.RaftConfig.GetStateSnapshot,
-		CommitApplier:    config.RaftConfig.CommitApplier,
-		SnapshotApplier:  config.RaftConfig.SnapshotApplier,
-		SnapshotNotifier: config.RaftConfig.SnapshotNotifier,
+		NodeID:          config.ID,
+		DataDir:         config.DataDirectory,
+		GetSnapshot:     config.RaftConfig.GetStateSnapshot,
+		CommitApplier:   config.RaftConfig.CommitApplier,
+		SnapshotApplier: config.RaftConfig.SnapshotApplier,
 	}
 	raftNode := raft.NewNode(raftConfig, gossip, logger)
 	raftNode.Serve(server)
