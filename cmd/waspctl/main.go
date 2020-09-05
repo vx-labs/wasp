@@ -56,7 +56,7 @@ func main() {
 		Use: "members",
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			out, err := clusterpb.NewRaftClient(conn).GetMembers(ctx, &clusterpb.GetMembersRequest{})
+			out, err := clusterpb.NewMultiRaftClient(conn).GetMembers(ctx, &clusterpb.GetMembersRequest{ClusterID: "wasp"})
 			if err != nil {
 				l.Fatal("failed to list raft members", zap.Error(err))
 			}
@@ -77,7 +77,7 @@ func main() {
 		Use: "topology",
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			out, err := clusterpb.NewRaftClient(conn).GetTopology(ctx, &clusterpb.GetTopologyRequest{})
+			out, err := clusterpb.NewMultiRaftClient(conn).GetTopology(ctx, &clusterpb.GetTopologyRequest{ClusterID: "wasp"})
 			if err != nil {
 				l.Fatal("failed to get raft topology", zap.Error(err))
 			}

@@ -8,13 +8,14 @@ import (
 )
 
 func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
-	if committedIndex < rc.snapCount {
+	if committedIndex < rc.snapCount || committedIndex < rc.snapshotIndex {
+		return
+	}
+	if committedIndex-rc.snapshotIndex <= rc.snapCount {
 		return
 	}
 	snapIndex := committedIndex - rc.snapCount
-	if snapIndex-rc.snapshotIndex <= rc.snapCount {
-		return
-	}
+
 	data, err := rc.getStateSnapshot()
 	if err != nil {
 		log.Panic(err)

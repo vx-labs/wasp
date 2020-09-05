@@ -122,10 +122,10 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 		},
 	})
 	if err != nil {
-		rc.logger.Error("failed to add new cluster peer",
+		rc.logger.Error("failed to add raft learner",
 			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
 	} else {
-		rc.logger.Info("added new cluster peer",
+		rc.logger.Info("added new raft learner",
 			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
 	}
 	return &api.JoinClusterResponse{Commit: status.Commit}, err
@@ -187,12 +187,11 @@ func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest)
 		})
 	}
 	status := rc.node.Status()
-	voters := status.Config.Voters
-	peers := voters.IDs()
+	voters := rc.confState.Voters
 	out := make([]*api.TopologyMemberStatus, 0)
 	members := rc.membership.Members()
 	leader := rc.Leader()
-	for id := range peers {
+	for _, id := range voters {
 		peer := &api.TopologyMemberStatus{ID: id}
 		for _, member := range members {
 			if member.ID == id {

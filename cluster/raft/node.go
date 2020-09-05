@@ -229,26 +229,34 @@ func (rc *RaftNode) IsLeader() bool {
 	return rc.Leader() == rc.id
 }
 func (rc *RaftNode) IsVoter() bool {
-	if rc.node == nil {
+	if rc.node == nil || rc.confState == nil {
 		return false
 	}
 	status := rc.node.Status()
 	if status.Lead == 0 {
 		return false
 	}
-	_, ok := status.Config.Voters.IDs()[rc.id]
-	return ok
+	for _, i := range rc.confState.Voters {
+		if i == rc.id {
+			return true
+		}
+	}
+	return false
 }
 func (rc *RaftNode) IsLearner() bool {
-	if rc.node == nil {
+	if rc.node == nil || rc.confState == nil {
 		return false
 	}
 	status := rc.node.Status()
 	if status.Lead == 0 {
 		return false
 	}
-	_, ok := status.Config.Learners[rc.id]
-	return ok
+	for _, i := range rc.confState.Learners {
+		if i == rc.id {
+			return true
+		}
+	}
+	return false
 }
 func (rc *RaftNode) CommittedIndex() uint64 {
 	status := rc.node.Status()
@@ -419,7 +427,7 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 				rc.logger.Error("failed to store raft entries", zap.Error(err))
 				return
 			}
-			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Messages))
+			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Commit, rd.Messages))
 			if err := rc.publishEntries(ctx, rd.CommittedEntries); err != nil {
 				if err != context.Canceled {
 					rc.logger.Error("failed to publish raft committed entries", zap.Error(err))
@@ -443,9 +451,18 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 			if err != nil {
 				log.Panic(err)
 			}
-			snap, err := rc.raftStorage.CreateSnapshot(rc.AppliedIndex(), rc.confState, data)
+			var snap raftpb.Snapshot
+			if rc.snapshotIndex >= msg.Index {
+				oldSnap, loadErr := rc.snapshotter.Load()
+				if oldSnap != nil {
+					snap = *oldSnap
+				}
+				err = loadErr
+			} else {
+				snap, err = rc.raftStorage.CreateSnapshot(msg.Index, rc.confState, data)
+			}
 			if err != nil {
-				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", rc.AppliedIndex()), zap.Error(err))
+				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Index), zap.Error(err))
 				rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
 				continue
 			}
@@ -454,9 +471,10 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 		}
 	}
 }
-func (rc *RaftNode) processMessagesBeforeSending(ms []raftpb.Message) []raftpb.Message {
+func (rc *RaftNode) processMessagesBeforeSending(committedIndex uint64, ms []raftpb.Message) []raftpb.Message {
 	for i := len(ms) - 1; i >= 0; i-- {
 		if ms[i].Type == raftpb.MsgSnap {
+			ms[i].Index = committedIndex
 			select {
 			case rc.msgSnapC <- ms[i]:
 			default:
@@ -527,9 +545,6 @@ func (rc *RaftNode) Leave(ctx context.Context) error {
 		case <-ctx.Done():
 			cancel()
 			return ctx.Err()
-		case <-reqCtx.Done():
-			cancel()
-			return errors.New("left timeout")
 		}
 	}
 	return rc.stop(ctx)
