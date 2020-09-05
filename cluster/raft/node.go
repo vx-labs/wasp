@@ -500,11 +500,6 @@ func (rc *RaftNode) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 }
 
 func (rc *RaftNode) stop(ctx context.Context) error {
-	select {
-	case <-rc.done:
-		return nil
-	default:
-	}
 	close(rc.cancel)
 	select {
 	case <-rc.done:
@@ -514,13 +509,11 @@ func (rc *RaftNode) stop(ctx context.Context) error {
 	}
 }
 func (rc *RaftNode) Leave(ctx context.Context) error {
-	reqCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	if rc.IsLeader() && len(rc.confState.Voters) == 1 {
-		cancel()
 		return rc.stop(ctx)
 	}
 	rc.logger.Debug("leaving raft cluster")
-	err := rc.node.ProposeConfChange(reqCtx, raftpb.ConfChangeV2{
+	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
 		Changes: []raftpb.ConfChangeSingle{
 			{
 				Type:   raftpb.ConfChangeRemoveNode,
@@ -529,21 +522,18 @@ func (rc *RaftNode) Leave(ctx context.Context) error {
 		},
 	})
 	if err != nil {
-		cancel()
 		return err
 	}
 	ticker := time.NewTicker(250 * time.Millisecond)
 	rc.logger.Debug("waiting for local node removal to be committed")
 	for {
 		if !rc.IsVoter() && !rc.IsLeader() {
-			cancel()
 			rc.logger.Debug("local node removed from raft cluster")
 			break
 		}
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			cancel()
 			return ctx.Err()
 		}
 	}
