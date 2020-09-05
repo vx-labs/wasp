@@ -452,16 +452,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 				rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
 				continue
 			}
-			var snap raftpb.Snapshot
-			if rc.snapshotIndex >= msg.Index {
-				oldSnap, loadErr := rc.snapshotter.Load()
-				if oldSnap != nil {
-					snap = *oldSnap
-				}
-				err = loadErr
-			} else {
-				snap, err = rc.raftStorage.CreateSnapshot(msg.Index, &rc.confState, data)
-			}
+			snap, err := rc.raftStorage.CreateSnapshot(msg.Index, &rc.confState, data)
 			if err != nil {
 				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Index), zap.Error(err))
 				rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
