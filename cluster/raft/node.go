@@ -453,7 +453,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 				continue
 			}
 			var snap raftpb.Snapshot
-			if rc.snapshotIndex == msg.Index {
+			if rc.snapshotIndex >= msg.Index {
 				oldSnap, loadErr := rc.snapshotter.Load()
 				if oldSnap != nil {
 					snap = *oldSnap
