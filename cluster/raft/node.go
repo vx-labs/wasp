@@ -72,7 +72,7 @@ type RaftNode struct {
 	snapdir             string // path to snapshot directory
 	getStateSnapshot    func() ([]byte, error)
 
-	confState     *raftpb.ConfState
+	confState     raftpb.ConfState
 	snapshotIndex uint64
 	membership    Membership
 	node          raft.Node
@@ -185,7 +185,7 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
 		}
 		rc.snapshotIndex = snapshot.Metadata.Index
-		rc.confState = &snapshot.Metadata.ConfState
+		rc.confState = snapshot.Metadata.ConfState
 		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", snapshot.Metadata.Index))
 	}
 	rc.raftStorage.SetHardState(st)
@@ -229,7 +229,7 @@ func (rc *RaftNode) IsLeader() bool {
 	return rc.Leader() == rc.id
 }
 func (rc *RaftNode) IsVoter() bool {
-	if rc.node == nil || rc.confState == nil {
+	if rc.node == nil || len(rc.confState.Voters) == 0 {
 		return false
 	}
 	status := rc.node.Status()
@@ -244,7 +244,7 @@ func (rc *RaftNode) IsVoter() bool {
 	return false
 }
 func (rc *RaftNode) IsLearner() bool {
-	if rc.node == nil || rc.confState == nil {
+	if rc.node == nil || len(rc.confState.Voters) == 0 {
 		return false
 	}
 	status := rc.node.Status()
@@ -286,11 +286,11 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 		case raftpb.EntryConfChangeV2:
 			var cc raftpb.ConfChangeV2
 			cc.Unmarshal(ents[i].Data)
-			rc.confState = rc.node.ApplyConfChange(cc)
+			rc.confState = *rc.node.ApplyConfChange(cc)
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
-			rc.confState = rc.node.ApplyConfChange(cc)
+			rc.confState = *rc.node.ApplyConfChange(cc)
 		}
 	}
 	return nil
@@ -414,13 +414,13 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				rc.saveSnap(rd.Snapshot)
 				rc.raftStorage.ApplySnapshot(rd.Snapshot)
-				rc.confState = &rd.Snapshot.Metadata.ConfState
-				rc.snapshotIndex = rd.Snapshot.Metadata.Term
+				rc.confState = rd.Snapshot.Metadata.ConfState
+				rc.snapshotIndex = rd.Snapshot.Metadata.Index
 				if err := rc.snapshotApplier(ctx, rd.Snapshot.Metadata.Index, rc.snapshotter); err != nil {
 					if err != context.Canceled {
 						rc.logger.Error("failed to apply state snapshot", zap.Error(err))
+						return
 					}
-					return
 				}
 			}
 			if err := rc.raftStorage.Append(rd.Entries); err != nil {
@@ -459,7 +459,7 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 				}
 				err = loadErr
 			} else {
-				snap, err = rc.raftStorage.CreateSnapshot(msg.Index, rc.confState, data)
+				snap, err = rc.raftStorage.CreateSnapshot(msg.Index, &rc.confState, data)
 			}
 			if err != nil {
 				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Index), zap.Error(err))

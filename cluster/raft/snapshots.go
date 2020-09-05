@@ -21,7 +21,7 @@ func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
 		log.Panic(err)
 	}
 
-	snap, err := rc.raftStorage.CreateSnapshot(committedIndex, rc.confState, data)
+	snap, err := rc.raftStorage.CreateSnapshot(committedIndex, &rc.confState, data)
 	if err != nil {
 		if err == raft.ErrSnapOutOfDate {
 			return
