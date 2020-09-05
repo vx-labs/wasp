@@ -122,7 +122,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 		getStateSnapshot: getSnapshot,
 		raftStorage:      raft.NewMemoryStorage(),
 		msgSnapC:         make(chan raftpb.Message, 16),
-		snapCount:        10,
+		snapCount:        1000,
 		ready:            make(chan struct{}),
 		commitApplier:    config.CommitApplier,
 		snapshotApplier:  config.SnapshotApplier,
