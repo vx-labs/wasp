@@ -8,10 +8,13 @@ import (
 )
 
 func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
-	if committedIndex < rc.snapCount || committedIndex < rc.snapshotIndex {
+	rc.progressMu.Lock()
+	defer rc.progressMu.Unlock()
+
+	if committedIndex < rc.snapCount || committedIndex < rc.progress.snapshotIndex {
 		return
 	}
-	if committedIndex-rc.snapshotIndex <= rc.snapCount {
+	if committedIndex-rc.progress.snapshotIndex <= rc.snapCount {
 		return
 	}
 	snapIndex := committedIndex - rc.snapCount
@@ -21,7 +24,7 @@ func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
 		log.Panic(err)
 	}
 
-	snap, err := rc.raftStorage.CreateSnapshot(committedIndex, &rc.confState, data)
+	snap, err := rc.raftStorage.CreateSnapshot(committedIndex, &rc.progress.confState, data)
 	if err != nil {
 		if err == raft.ErrSnapOutOfDate {
 			return
@@ -37,5 +40,5 @@ func (rc *RaftNode) maybeTriggerSnapshot(committedIndex uint64) {
 	}
 
 	rc.logger.Debug("compacted log", zap.Uint64("compact_index", snapIndex))
-	rc.snapshotIndex = committedIndex
+	rc.progress.snapshotIndex = committedIndex
 }

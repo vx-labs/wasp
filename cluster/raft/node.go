@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"sync"
 	"time"
 
 	"google.golang.org/grpc"
@@ -32,6 +33,13 @@ type LeaderFunc func(context.Context) error
 
 type StatsProvider interface {
 	Histogram(name string) *prometheus.Histogram
+}
+
+type progress struct {
+	confState     raftpb.ConfState
+	snapshotIndex uint64
+	appliedIndex  uint64
+	appliedTerm   uint64
 }
 
 type CommitApplier func(context.Context, Commit) error
@@ -72,13 +80,13 @@ type RaftNode struct {
 	snapdir             string // path to snapshot directory
 	getStateSnapshot    func() ([]byte, error)
 
-	confState     raftpb.ConfState
-	snapshotIndex uint64
-	membership    Membership
-	node          raft.Node
-	raftStorage   *raft.MemoryStorage
-	wal           StableStorage
-	snapshotter   *snap.Snapshotter
+	progress    progress
+	progressMu  sync.RWMutex
+	membership  Membership
+	node        raft.Node
+	raftStorage *raft.MemoryStorage
+	wal         StableStorage
+	snapshotter *snap.Snapshotter
 
 	snapCount   uint64
 	ready       chan struct{}
@@ -184,8 +192,14 @@ func (rc *RaftNode) replayWAL() *wal.WAL {
 		if err != nil {
 			rc.logger.Fatal("failed to apply snapshot", zap.Error(err))
 		}
-		rc.snapshotIndex = snapshot.Metadata.Index
-		rc.confState = snapshot.Metadata.ConfState
+		rc.progressMu.Lock()
+		rc.progress = progress{
+			confState:     snapshot.Metadata.ConfState,
+			snapshotIndex: snapshot.Metadata.Index,
+			appliedTerm:   snapshot.Metadata.Term,
+			appliedIndex:  snapshot.Metadata.Index,
+		}
+		rc.progressMu.Unlock()
 		rc.logger.Debug("applied snapshot", zap.Uint64("snapshot_index", snapshot.Metadata.Index))
 	}
 	rc.raftStorage.SetHardState(st)
@@ -229,14 +243,16 @@ func (rc *RaftNode) IsLeader() bool {
 	return rc.Leader() == rc.id
 }
 func (rc *RaftNode) IsVoter() bool {
-	if rc.node == nil || len(rc.confState.Voters) == 0 {
+	rc.progressMu.RLock()
+	defer rc.progressMu.RUnlock()
+	if rc.node == nil || len(rc.progress.confState.Voters) == 0 {
 		return false
 	}
 	status := rc.node.Status()
 	if status.Lead == 0 {
 		return false
 	}
-	for _, i := range rc.confState.Voters {
+	for _, i := range rc.progress.confState.Voters {
 		if i == rc.id {
 			return true
 		}
@@ -244,14 +260,17 @@ func (rc *RaftNode) IsVoter() bool {
 	return false
 }
 func (rc *RaftNode) IsLearner() bool {
-	if rc.node == nil || len(rc.confState.Voters) == 0 {
+	rc.progressMu.RLock()
+	defer rc.progressMu.RUnlock()
+
+	if rc.node == nil || len(rc.progress.confState.Voters) == 0 {
 		return false
 	}
 	status := rc.node.Status()
 	if status.Lead == 0 {
 		return false
 	}
-	for _, i := range rc.confState.Learners {
+	for _, i := range rc.progress.confState.Learners {
 		if i == rc.id {
 			return true
 		}
@@ -270,6 +289,9 @@ func (rc *RaftNode) AppliedIndex() uint64 {
 // publishEntries writes committed log entries to commit channel and returns
 // whether all entries could be published.
 func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) error {
+	rc.progressMu.Lock()
+	defer rc.progressMu.Unlock()
+
 	for i := range ents {
 		switch ents[i].Type {
 		case raftpb.EntryNormal:
@@ -286,12 +308,14 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 		case raftpb.EntryConfChangeV2:
 			var cc raftpb.ConfChangeV2
 			cc.Unmarshal(ents[i].Data)
-			rc.confState = *rc.node.ApplyConfChange(cc)
+			rc.progress.confState = *rc.node.ApplyConfChange(cc)
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
-			rc.confState = *rc.node.ApplyConfChange(cc)
+			rc.progress.confState = *rc.node.ApplyConfChange(cc)
 		}
+		rc.progress.appliedIndex = ents[i].Index
+		rc.progress.appliedTerm = ents[i].Term
 	}
 	return nil
 }
@@ -412,12 +436,19 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 			}
 			rc.wal.Sync()
 			if !raft.IsEmptySnap(rd.Snapshot) {
+				rc.progressMu.Lock()
+				snapshot := rd.Snapshot
 				rc.logger.Debug("received a snapshot to apply", zap.Uint64("snapshot_index", rd.Snapshot.Metadata.Index))
-				rc.saveSnap(rd.Snapshot)
-				rc.raftStorage.ApplySnapshot(rd.Snapshot)
-				rc.confState = rd.Snapshot.Metadata.ConfState
-				rc.snapshotIndex = rd.Snapshot.Metadata.Index
-				if err := rc.snapshotApplier(ctx, rd.Snapshot.Metadata.Index, rc.snapshotter); err != nil {
+				rc.saveSnap(snapshot)
+				rc.raftStorage.ApplySnapshot(snapshot)
+				rc.progress = progress{
+					confState:     snapshot.Metadata.ConfState,
+					snapshotIndex: snapshot.Metadata.Index,
+					appliedTerm:   snapshot.Metadata.Term,
+					appliedIndex:  snapshot.Metadata.Index,
+				}
+				rc.progressMu.Unlock()
+				if err := rc.snapshotApplier(ctx, snapshot.Metadata.Index, rc.snapshotter); err != nil {
 					rc.logger.Error("failed to apply state snapshot", zap.Error(err))
 					return
 				}
@@ -426,7 +457,8 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 				rc.logger.Error("failed to store raft entries", zap.Error(err))
 				return
 			}
-			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Commit, rd.Messages))
+
+			rc.Send(ctx, rc.processMessagesBeforeSending(rd.Messages))
 			if err := rc.publishEntries(ctx, rd.CommittedEntries); err != nil {
 				if err != context.Canceled {
 					rc.logger.Error("failed to publish raft committed entries", zap.Error(err))
@@ -440,42 +472,42 @@ func (rc *RaftNode) serveChannels(ctx context.Context) {
 	}
 }
 
+func (rc *RaftNode) processSnapshotRequest(ctx context.Context, msg raftpb.Message) {
+	rc.progressMu.Lock()
+	defer rc.progressMu.Unlock()
+	data, err := rc.getStateSnapshot()
+	if err != nil {
+		rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Index), zap.Error(err))
+		rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
+		return
+	}
+	snap := raftpb.Snapshot{
+		Data: data,
+		Metadata: raftpb.SnapshotMetadata{
+			ConfState: rc.progress.confState,
+			Index:     rc.progress.appliedIndex,
+			Term:      rc.progress.appliedTerm,
+		},
+	}
+	msg.Snapshot = snap
+	rc.Send(ctx, []raftpb.Message{msg})
+}
 func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case msg := <-rc.msgSnapC:
-			data, err := rc.getStateSnapshot()
-			if err != nil {
-				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Index), zap.Error(err))
-				rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
-				continue
-			}
-			var snap raftpb.Snapshot
-			if rc.snapshotIndex >= msg.Index {
-				oldSnap, loadErr := rc.snapshotter.Load()
-				if oldSnap != nil {
-					snap = *oldSnap
-				}
-				err = loadErr
-			} else {
-				snap, err = rc.raftStorage.CreateSnapshot(msg.Index, &rc.confState, data)
-			}
-			if err != nil {
-				rc.logger.Error("failed to create snapshot", zap.Uint64("requested_snapshot_index", msg.Index), zap.Error(err))
-				rc.ReportSnapshot(msg.To, raft.SnapshotFailure)
-				continue
-			}
-			msg.Snapshot = snap
-			rc.Send(ctx, []raftpb.Message{msg})
+			rc.processSnapshotRequest(ctx, msg)
 		}
 	}
 }
-func (rc *RaftNode) processMessagesBeforeSending(committedIndex uint64, ms []raftpb.Message) []raftpb.Message {
+func (rc *RaftNode) processMessagesBeforeSending(ms []raftpb.Message) []raftpb.Message {
 	for i := len(ms) - 1; i >= 0; i-- {
 		if ms[i].Type == raftpb.MsgSnap {
-			ms[i].Index = committedIndex
+			// ms[i].Index = committedIndex
+			// ms[i].Term = term
+			log.Printf("BLAAAA t=%d, i=%d", ms[i].Term, ms[i].Index)
 			select {
 			case rc.msgSnapC <- ms[i]:
 			default:
@@ -510,7 +542,7 @@ func (rc *RaftNode) stop(ctx context.Context) error {
 	}
 }
 func (rc *RaftNode) Leave(ctx context.Context) error {
-	if rc.IsLeader() && len(rc.confState.Voters) == 1 {
+	if rc.IsLeader() && len(rc.progress.confState.Voters) == 1 {
 		return rc.stop(ctx)
 	}
 	rc.logger.Debug("leaving raft cluster")

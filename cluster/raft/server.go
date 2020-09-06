@@ -101,13 +101,16 @@ func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.
 	if !rc.IsLeader() {
 		return nil, errors.New("node not leader")
 	}
+	rc.progressMu.RLock()
+	defer rc.progressMu.RUnlock()
+
 	status := rc.node.Status()
-	for _, id := range rc.confState.Learners {
+	for _, id := range rc.progress.confState.Learners {
 		if id == in.ID {
 			return &api.JoinClusterResponse{Commit: status.Commit}, nil
 		}
 	}
-	for _, id := range rc.confState.Voters {
+	for _, id := range rc.progress.confState.Voters {
 		if id == in.ID {
 			return nil, errors.New("node is already a voter")
 		}
@@ -186,9 +189,12 @@ func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest)
 			return err
 		})
 	}
+	rc.progressMu.RLock()
+	defer rc.progressMu.RUnlock()
+
 	status := rc.node.Status()
-	voters := rc.confState.Voters
-	learners := rc.confState.Learners
+	voters := rc.progress.confState.Voters
+	learners := rc.progress.confState.Learners
 	out := make([]*api.TopologyMemberStatus, 0)
 	members := rc.membership.Members()
 	leader := rc.Leader()
