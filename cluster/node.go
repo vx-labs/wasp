@@ -233,8 +233,21 @@ func (n *node) Run(ctx context.Context) {
 									if err != nil {
 										n.logger.Error("failed to promote local node", zap.Error(err), zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
 									} else {
-										n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
-										return
+										timeout := time.After(5 * time.Second)
+									waitPromote:
+										for {
+											if n.isVoter(ctx, n.raft.Leader()) {
+												n.logger.Info("state machine is up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
+												return
+											}
+											select {
+											case <-ticker.C:
+											case <-timeout:
+												break waitPromote
+											case <-ctx.Done():
+												return
+											}
+										}
 									}
 								} else {
 									n.logger.Debug("state machine is still not up-to-date", zap.Uint64("cluster_index", clusterIndex), zap.Uint64("index", applied))
