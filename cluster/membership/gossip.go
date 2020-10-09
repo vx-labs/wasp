@@ -35,6 +35,13 @@ type Gossip struct {
 	meta                []byte
 }
 
+func (m *Gossip) DoesMemberExists(id uint64) bool {
+	m.mtx.RLock()
+	defer m.mtx.RUnlock()
+	_, ok := m.peers[id]
+	return ok
+}
+
 func (m *Gossip) Members() []*api.Member {
 	m.mtx.RLock()
 	defer m.mtx.RUnlock()
