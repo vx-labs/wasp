@@ -43,6 +43,7 @@ type progress struct {
 }
 
 type CommitApplier func(context.Context, Commit) error
+type ConfChangeApplier func(context.Context, uint64, raftpb.ConfChangeI) error
 type SnapshotApplier func(context.Context, uint64, *snap.Snapshotter) error
 
 type StatsProviderGetter func() StatsProvider
@@ -74,6 +75,7 @@ type RaftNode struct {
 	hasBeenBootstrapped bool
 	commitApplier       CommitApplier
 	snapshotApplier     SnapshotApplier
+	confChangeApplier   ConfChangeApplier
 	msgSnapC            chan raftpb.Message
 	logger              *zap.Logger
 	waldir              string // path to WAL directory
@@ -96,13 +98,14 @@ type RaftNode struct {
 }
 
 type Config struct {
-	NodeID          uint64
-	NodeAddress     string
-	ClusterID       string
-	DataDir         string
-	GetSnapshot     func() ([]byte, error)
-	CommitApplier   CommitApplier
-	SnapshotApplier SnapshotApplier
+	NodeID            uint64
+	NodeAddress       string
+	ClusterID         string
+	DataDir           string
+	GetSnapshot       func() ([]byte, error)
+	CommitApplier     CommitApplier
+	ConfChangeApplier ConfChangeApplier
+	SnapshotApplier   SnapshotApplier
 }
 
 type Commit struct {
@@ -122,22 +125,23 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	getSnapshot := config.GetSnapshot
 
 	rc := &RaftNode{
-		id:               id,
-		clusterID:        config.ClusterID,
-		address:          config.NodeAddress,
-		membership:       mesh,
-		logger:           logger,
-		waldir:           path.Join(datadir, "raft", "wall"),
-		snapdir:          path.Join(datadir, "raft", "snapshots"),
-		getStateSnapshot: getSnapshot,
-		raftStorage:      raft.NewMemoryStorage(),
-		msgSnapC:         make(chan raftpb.Message, 16),
-		snapCount:        1000,
-		ready:            make(chan struct{}),
-		cancel:           make(chan struct{}),
-		done:             make(chan struct{}),
-		commitApplier:    config.CommitApplier,
-		snapshotApplier:  config.SnapshotApplier,
+		id:                id,
+		clusterID:         config.ClusterID,
+		address:           config.NodeAddress,
+		membership:        mesh,
+		logger:            logger,
+		waldir:            path.Join(datadir, "raft", "wall"),
+		snapdir:           path.Join(datadir, "raft", "snapshots"),
+		getStateSnapshot:  getSnapshot,
+		raftStorage:       raft.NewMemoryStorage(),
+		msgSnapC:          make(chan raftpb.Message, 16),
+		snapCount:         1000,
+		ready:             make(chan struct{}),
+		cancel:            make(chan struct{}),
+		done:              make(chan struct{}),
+		commitApplier:     config.CommitApplier,
+		snapshotApplier:   config.SnapshotApplier,
+		confChangeApplier: config.ConfChangeApplier,
 		// rest of structure populated after WAL replay
 	}
 	if !fileutil.Exist(rc.snapdir) {
@@ -309,10 +313,22 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			var cc raftpb.ConfChangeV2
 			cc.Unmarshal(ents[i].Data)
 			rc.progress.confState = *rc.node.ApplyConfChange(cc)
+			if rc.confChangeApplier != nil {
+				err := rc.confChangeApplier(ctx, ents[i].Index, cc)
+				if err != nil {
+					return err
+				}
+			}
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
 			rc.progress.confState = *rc.node.ApplyConfChange(cc)
+			if rc.confChangeApplier != nil {
+				err := rc.confChangeApplier(ctx, ents[i].Index, cc)
+				if err != nil {
+					return err
+				}
+			}
 		}
 		rc.progress.appliedIndex = ents[i].Index
 		rc.progress.appliedTerm = ents[i].Term

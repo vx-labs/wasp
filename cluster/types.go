@@ -39,6 +39,7 @@ type RaftConfig struct {
 	GetStateSnapshot          func() ([]byte, error)
 	CommitApplier             raft.CommitApplier
 	SnapshotApplier           raft.SnapshotApplier
+	ConfChangeApplier         raft.ConfChangeApplier
 }
 type NetworkConfig struct {
 	AdvertizedHost string

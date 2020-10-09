@@ -18,6 +18,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
 	"go.etcd.io/etcd/etcdserver/api/snap"
+	"go.etcd.io/etcd/raft/raftpb"
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -143,6 +144,10 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Debug("loaded snapshot into state")
 			}
 			return err
+		},
+		ConfChangeApplier: func(c context.Context, index uint64, r raftpb.ConfChangeI) error {
+			wasp.L(ctx).Info("conf changed")
+			return nil
 		},
 	}
 	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
