@@ -11,6 +11,7 @@ import (
 	packet "github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/wasp/audit"
+	"go.etcd.io/etcd/raft/raftpb"
 )
 
 type State interface {
@@ -119,13 +120,6 @@ func (f *FSM) commit(ctx context.Context, events ...*StateTransition) error {
 		}
 	}
 }
-func (f *FSM) Shutdown(ctx context.Context) error {
-	return f.commit(ctx, &StateTransition{Event: &StateTransition_PeerLost{
-		PeerLost: &PeerLost{
-			Peer: f.id,
-		},
-	}})
-}
 func (f *FSM) RetainedMessage(ctx context.Context, publish *packet.Publish) error {
 	return f.commit(ctx, &StateTransition{Event: &StateTransition_RetainedMessageStored{
 		RetainedMessageStored: &RetainedMessageStored{
@@ -183,7 +177,28 @@ func (f *FSM) Unsubscribe(ctx context.Context, id string, pattern []byte) error 
 		},
 	}})
 }
+func (f *FSM) removePeer(id uint64) {
+	f.state.DeleteSessionMetadatasByPeer(id)
+	f.state.RemoveSubscriptionsForPeer(id)
+}
 
+func (f *FSM) ApplyConfChange(ctx context.Context, index uint64, cc raftpb.ConfChangeI) error {
+	ccv1, ok := cc.AsV1()
+	if ok {
+		switch ccv1.Type {
+		case raftpb.ConfChangeRemoveNode:
+			f.removePeer(ccv1.NodeID)
+		}
+	} else {
+		for _, change := range cc.AsV2().Changes {
+			switch change.Type {
+			case raftpb.ConfChangeRemoveNode:
+				f.removePeer(change.NodeID)
+			}
+		}
+	}
+	return nil
+}
 func (f *FSM) Apply(b []byte) error {
 	events, err := decode(b)
 	if err != nil {
@@ -205,8 +220,7 @@ func (f *FSM) Apply(b []byte) error {
 			err = f.state.Unsubscribe(input.SessionID, input.Pattern)
 		case *StateTransition_PeerLost:
 			input := event.PeerLost
-			f.state.RemoveSubscriptionsForPeer(input.Peer)
-			f.state.DeleteSessionMetadatasByPeer(input.Peer)
+			f.removePeer(input.Peer)
 		case *StateTransition_SessionCreated:
 			input := event.SessionCreated
 			f.state.CreateSessionMetadata(input.SessionID, input.Peer, input.ClientID, input.ConnectedAt, input.LWT, input.MountPoint)

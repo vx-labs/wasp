@@ -18,7 +18,6 @@ import (
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
 	"go.etcd.io/etcd/etcdserver/api/snap"
-	"go.etcd.io/etcd/raft/raftpb"
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -145,10 +144,7 @@ func run(config *viper.Viper) {
 			}
 			return err
 		},
-		ConfChangeApplier: func(c context.Context, index uint64, r raftpb.ConfChangeI) error {
-			wasp.L(ctx).Info("conf changed")
-			return nil
-		},
+		ConfChangeApplier: stateMachine.ApplyConfChange,
 	}
 	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
 		ID:            id,
@@ -423,12 +419,6 @@ func run(config *viper.Viper) {
 		listener.listener.Close()
 	}
 	wasp.L(ctx).Debug("mqtt listeners stopped")
-	err = stateMachine.Shutdown(ctx)
-	if err != nil {
-		wasp.L(ctx).Error("failed to stop state machine", zap.Error(err))
-	} else {
-		wasp.L(ctx).Debug("state machine stopped")
-	}
 	err = clusterNode.Shutdown()
 	if err != nil {
 		wasp.L(ctx).Error("failed to leave cluster", zap.Error(err))
