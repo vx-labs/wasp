@@ -18,7 +18,7 @@ import (
 type multinode struct {
 	mtx    sync.RWMutex
 	rafts  map[string]*raft.RaftNode
-	gossip *membership.Gossip
+	gossip membership.Pool
 	logger *zap.Logger
 	config NodeConfig
 	dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)

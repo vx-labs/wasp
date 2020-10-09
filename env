@@ -1,0 +1,4 @@
+export WASPCTL_RPC_TLS_CERTIFICATE_FILE=$(pwd)/run_config/cert.pem
+export WASPCTL_RPC_TLS_CERTIFICATE_AUTHORITY_FILE=$(pwd)/run_config/cert.pem
+export WASPCTL_RPC_TLS_PRIVATE_KEY_FILE=$(pwd)/run_config/privkey.pem
+export WASPCTL_USE_VAULT=false

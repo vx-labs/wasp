@@ -16,7 +16,7 @@ import (
 type node struct {
 	cluster string
 	raft    *raft.RaftNode
-	gossip  *membership.Gossip
+	gossip  membership.Pool
 	logger  *zap.Logger
 	config  NodeConfig
 	dialer  func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)

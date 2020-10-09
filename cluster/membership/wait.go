@@ -22,7 +22,7 @@ type MemberlistMemberProvider interface {
 	Members() []api.RaftContext
 }
 
-func (mesh *Gossip) WaitForNodes(ctx context.Context, clusterName, nodeName string, expectedNumber int, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
+func (mesh *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string, expectedNumber int, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)

@@ -1,12 +1,12 @@
 package membership
 
-func (l *Gossip) NotifyMsg(b []byte) {
+func (p *pool) NotifyMsg(b []byte) {
 }
-func (l *Gossip) GetBroadcasts(overhead, limit int) [][]byte {
+func (p *pool) GetBroadcasts(overhead, limit int) [][]byte {
 	return nil
 }
-func (l *Gossip) LocalState(join bool) []byte {
+func (p *pool) LocalState(join bool) []byte {
 	return nil
 }
 
-func (m *Gossip) MergeRemoteState(buf []byte, join bool) {}
+func (p *pool) MergeRemoteState(buf []byte, join bool) {}

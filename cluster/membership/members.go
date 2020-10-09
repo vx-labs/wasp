@@ -14,7 +14,9 @@ import (
 )
 
 var (
+	// ErrPeerNotFound indicates that the requested peer does not exist in the pool.
 	ErrPeerNotFound = errors.New("peer not found")
+	// ErrPeerDisabled indicates that the requested peer has recently failed healthchecks.
 	ErrPeerDisabled = errors.New("peer disabled by healthchecks")
 )
 
@@ -22,25 +24,31 @@ func parseID(id string) uint64 {
 	return binary.BigEndian.Uint64([]byte(id))
 }
 
+type member struct {
+	Conn       *grpc.ClientConn
+	LastUpdate time.Time
+	Enabled    bool
+}
+
 // NotifyJoin is called if a peer joins the cluster.
-func (b *Gossip) NotifyJoin(n *memberlist.Node) {
+func (p *pool) NotifyJoin(n *memberlist.Node) {
 	id := parseID(n.Name)
-	if id == b.id {
+	if id == p.id {
 		return
 	}
-	b.logger.Debug("gossip node joined", zap.String("new_node_id", fmt.Sprintf("%x", id)))
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
+	p.logger.Debug("gossip node joined", zap.String("new_node_id", fmt.Sprintf("%x", id)))
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 	md, err := DecodeMD(n.Meta)
 	if err != nil {
-		b.logger.Error("failed to decode new node meta", zap.String("new_node_id", fmt.Sprintf("%x", id)), zap.Error(err))
+		p.logger.Error("failed to decode new node meta", zap.String("new_node_id", fmt.Sprintf("%x", id)), zap.Error(err))
 		return
 	}
 	if md.ID != id {
-		b.logger.Error("mismatch between node metadata id and node name", zap.String("new_node_id", fmt.Sprintf("%x", id)), zap.Error(err))
+		p.logger.Error("mismatch between node metadata id and node name", zap.String("new_node_id", fmt.Sprintf("%x", id)), zap.Error(err))
 		return
 	}
-	old, ok := b.peers[md.ID]
+	old, ok := p.peers[md.ID]
 	if ok && old != nil {
 		if old.Conn.Target() == md.RPCAddress {
 			old.LastUpdate = time.Now()
@@ -48,12 +56,12 @@ func (b *Gossip) NotifyJoin(n *memberlist.Node) {
 		}
 		old.Conn.Close()
 	}
-	conn, err := b.rpcDialer(md.RPCAddress)
+	conn, err := p.rpcDialer(md.RPCAddress)
 	if err != nil {
-		b.logger.Error("failed to dial new gossip nope", zap.Error(err))
+		p.logger.Error("failed to dial new gossip nope", zap.Error(err))
 		return
 	}
-	b.peers[md.ID] = &Peer{
+	p.peers[md.ID] = &member{
 		Conn:       conn,
 		LastUpdate: time.Now(),
 		Enabled:    true,
@@ -62,33 +70,33 @@ func (b *Gossip) NotifyJoin(n *memberlist.Node) {
 }
 
 // NotifyLeave is called if a peer leaves the cluster.
-func (b *Gossip) NotifyLeave(n *memberlist.Node) {
+func (p *pool) NotifyLeave(n *memberlist.Node) {
 	id := parseID(n.Name)
-	if id == b.id {
+	if id == p.id {
 		return
 	}
-	b.logger.Debug("gossip node left", zap.String("left_node_id", fmt.Sprintf("%x", id)))
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	old, ok := b.peers[id]
+	p.logger.Debug("gossip node left", zap.String("left_node_id", fmt.Sprintf("%x", id)))
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	old, ok := p.peers[id]
 	if ok && old != nil {
 		old.Conn.Close()
-		delete(b.peers, id)
+		delete(p.peers, id)
 	}
 }
 
 // NotifyUpdate is called if a cluster peer gets updated.
-func (b *Gossip) NotifyUpdate(n *memberlist.Node) {
-	b.NotifyJoin(n)
+func (p *pool) NotifyUpdate(n *memberlist.Node) {
+	p.NotifyJoin(n)
 }
 
-func (b *Gossip) Call(id uint64, f func(*grpc.ClientConn) error) error {
-	if id == b.id {
+func (p *pool) Call(id uint64, f func(*grpc.ClientConn) error) error {
+	if id == p.id {
 		return errors.New("attempted to contact to local node")
 	}
-	b.mtx.RLock()
-	defer b.mtx.RUnlock()
-	peer, ok := b.peers[id]
+	p.mtx.RLock()
+	defer p.mtx.RUnlock()
+	peer, ok := p.peers[id]
 	if !ok {
 		return ErrPeerNotFound
 	}
@@ -98,10 +106,10 @@ func (b *Gossip) Call(id uint64, f func(*grpc.ClientConn) error) error {
 	return f(peer.Conn)
 }
 
-func (t *Gossip) runHealthchecks(ctx context.Context) error {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	for _, peer := range t.peers {
+func (p *pool) runHealthchecks(ctx context.Context) error {
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
+	for _, peer := range p.peers {
 		ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 		resp, err := healthpb.NewHealthClient(peer.Conn).Check(ctx, &healthpb.HealthCheckRequest{})
 		cancel()
