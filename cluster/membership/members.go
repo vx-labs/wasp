@@ -66,7 +66,9 @@ func (p *pool) NotifyJoin(n *memberlist.Node) {
 		LastUpdate: time.Now(),
 		Enabled:    true,
 	}
-
+	if p.recorder != nil {
+		p.recorder.NotifyJoin(id)
+	}
 }
 
 // NotifyLeave is called if a peer leaves the cluster.
@@ -82,6 +84,9 @@ func (p *pool) NotifyLeave(n *memberlist.Node) {
 	if ok && old != nil {
 		old.Conn.Close()
 		delete(p.peers, id)
+	}
+	if p.recorder != nil {
+		p.recorder.NotifyLeave(id)
 	}
 }
 

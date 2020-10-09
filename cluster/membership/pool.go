@@ -15,6 +15,7 @@ import (
 
 	"go.uber.org/zap"
 )
+
 type pool struct {
 	id                  uint64
 	mtx                 sync.RWMutex
@@ -25,6 +26,7 @@ type pool struct {
 	peers               map[uint64]*member
 	mlist               *memberlist.Memberlist
 	logger              *zap.Logger
+	recorder            Recorder
 	meta                []byte
 }
 
@@ -53,6 +55,9 @@ func (p *pool) Members() []*api.Member {
 	return out
 }
 
+func (p *pool) UseRecorder(recorder Recorder) {
+	p.recorder = recorder
+}
 func (p *pool) NodeMeta(limit int) []byte {
 	return p.meta
 }

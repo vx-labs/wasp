@@ -7,6 +7,7 @@ import (
 	"github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/membership"
 	"github.com/vx-labs/wasp/cluster/raft"
+	"github.com/vx-labs/wasp/cluster/topology"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -14,13 +15,14 @@ import (
 )
 
 type node struct {
-	cluster string
-	raft    *raft.RaftNode
-	gossip  membership.Pool
-	logger  *zap.Logger
-	config  NodeConfig
-	dialer  func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
-	ready   chan struct{}
+	cluster  string
+	raft     *raft.RaftNode
+	recorder topology.Recorder
+	gossip   membership.Pool
+	logger   *zap.Logger
+	config   NodeConfig
+	dialer   func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+	ready    chan struct{}
 }
 
 func (n *node) Call(id uint64, f func(*grpc.ClientConn) error) error {
@@ -98,12 +100,13 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 	clusterpb.RegisterNodeServer(server, newNodeRPCServer())
 
 	return &node{
-		config: config,
-		raft:   raftNode,
-		gossip: gossip,
-		logger: logger,
-		dialer: dialer,
-		ready:  make(chan struct{}),
+		config:   config,
+		raft:     raftNode,
+		gossip:   gossip,
+		logger:   logger,
+		dialer:   dialer,
+		recorder: topology.NewRecorder(raftNode),
+		ready:    make(chan struct{}),
 	}
 }
 

@@ -140,7 +140,7 @@ func (rc *RaftNode) GetStatus(ctx context.Context, in *api.GetStatusRequest) (*a
 		IsInCluster:         !rc.IsRemovedFromCluster(),
 	}, nil
 }
-func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (*api.GetMembersResponse, error) {
+func (rc *RaftNode) GetClusterMembers() (*api.GetMembersResponse, error) {
 	if rc.node == nil {
 		return nil, errors.New("node not ready")
 	}
@@ -165,6 +165,12 @@ func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return &api.GetMembersResponse{Members: out, CommittedIndex: rc.CommittedIndex()}, nil
+}
+func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (*api.GetMembersResponse, error) {
+	if rc.node == nil {
+		return nil, errors.New("node not ready")
+	}
+	return rc.GetClusterMembers()
 }
 func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest) (*api.GetTopologyResponse, error) {
 	if rc.node == nil {
