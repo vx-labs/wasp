@@ -43,6 +43,7 @@ func (b *Gossip) NotifyJoin(n *memberlist.Node) {
 	old, ok := b.peers[md.ID]
 	if ok && old != nil {
 		if old.Conn.Target() == md.RPCAddress {
+			old.LastUpdate = time.Now()
 			return
 		}
 		old.Conn.Close()
@@ -53,8 +54,9 @@ func (b *Gossip) NotifyJoin(n *memberlist.Node) {
 		return
 	}
 	b.peers[md.ID] = &Peer{
-		Conn:    conn,
-		Enabled: true,
+		Conn:       conn,
+		LastUpdate: time.Now(),
+		Enabled:    true,
 	}
 
 }
@@ -99,16 +101,18 @@ func (b *Gossip) Call(id uint64, f func(*grpc.ClientConn) error) error {
 func (t *Gossip) runHealthchecks(ctx context.Context) error {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
-	for _, conn := range t.peers {
+	for _, peer := range t.peers {
 		ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
-		resp, err := healthpb.NewHealthClient(conn.Conn).Check(ctx, &healthpb.HealthCheckRequest{})
+		resp, err := healthpb.NewHealthClient(peer.Conn).Check(ctx, &healthpb.HealthCheckRequest{})
 		cancel()
 		if err != nil || resp.Status != healthpb.HealthCheckResponse_SERVING {
-			if conn.Enabled {
-				conn.Enabled = false
+			if peer.Enabled {
+				peer.Enabled = false
+				peer.LastUpdate = time.Now()
 			}
-		} else if !conn.Enabled {
-			conn.Enabled = true
+		} else if !peer.Enabled {
+			peer.Enabled = true
+			peer.LastUpdate = time.Now()
 		}
 	}
 	return nil

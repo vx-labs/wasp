@@ -17,8 +17,9 @@ import (
 )
 
 type Peer struct {
-	Conn    *grpc.ClientConn
-	Enabled bool
+	Conn       *grpc.ClientConn
+	LastUpdate time.Time
+	Enabled    bool
 }
 
 type Gossip struct {
