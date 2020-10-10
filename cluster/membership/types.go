@@ -19,7 +19,6 @@ type Pool interface {
 	MemberCount() int
 	Shutdown() error
 	WaitForNodes(ctx context.Context, clusterName, nodeName string, expectedNumber int, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error)
-	UseRecorder(Recorder)
 }
 
 // Recorder records membership changes

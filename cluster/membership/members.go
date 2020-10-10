@@ -35,7 +35,6 @@ func (p *pool) NotifyJoin(n *memberlist.Node) {
 	if id == p.id {
 		return
 	}
-	p.logger.Debug("gossip node joined", zap.String("new_node_id", fmt.Sprintf("%x", id)))
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	md, err := DecodeMD(n.Meta)
@@ -74,7 +73,6 @@ func (p *pool) NotifyLeave(n *memberlist.Node) {
 	if id == p.id {
 		return
 	}
-	p.logger.Debug("gossip node left", zap.String("left_node_id", fmt.Sprintf("%x", id)))
 	p.mtx.Lock()
 	defer p.mtx.Unlock()
 	old, ok := p.peers[id]

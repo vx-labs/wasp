@@ -35,6 +35,11 @@ type StatsProvider interface {
 	Histogram(name string) *prometheus.Histogram
 }
 
+// Recorder records membership changes
+type Recorder interface {
+	NotifyRaftConfChange(cluster string, cc raftpb.ConfChangeI)
+}
+
 type progress struct {
 	confState     raftpb.ConfState
 	snapshotIndex uint64
@@ -73,6 +78,8 @@ type RaftNode struct {
 	clusterID           string
 	address             string
 	hasBeenBootstrapped bool
+	hasBeenRemoved      bool
+	recorder            Recorder
 	commitApplier       CommitApplier
 	snapshotApplier     SnapshotApplier
 	confChangeApplier   ConfChangeApplier
@@ -118,7 +125,7 @@ type Commit struct {
 // provided the proposal channel. All log entries are replayed over the
 // commit channel, followed by a nil message (to indicate the channel is
 // current), then new log entries. To shutdown, close proposeC and read errorC.
-func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
+func NewNode(config Config, mesh Membership, recorder Recorder, logger *zap.Logger) *RaftNode {
 
 	id := config.NodeID
 	datadir := config.DataDir
@@ -127,6 +134,7 @@ func NewNode(config Config, mesh Membership, logger *zap.Logger) *RaftNode {
 	rc := &RaftNode{
 		id:                id,
 		clusterID:         config.ClusterID,
+		recorder:          recorder,
 		address:           config.NodeAddress,
 		membership:        mesh,
 		logger:            logger,
@@ -313,20 +321,41 @@ func (rc *RaftNode) publishEntries(ctx context.Context, ents []raftpb.Entry) err
 			var cc raftpb.ConfChangeV2
 			cc.Unmarshal(ents[i].Data)
 			rc.progress.confState = *rc.node.ApplyConfChange(cc)
+
+			rc.recorder.NotifyRaftConfChange(rc.clusterID, cc)
 			if rc.confChangeApplier != nil {
 				err := rc.confChangeApplier(ctx, ents[i].Index, cc)
 				if err != nil {
-					return err
+					rc.logger.Error("failed to forward raft conf change to application", zap.Error(err))
+				}
+			}
+			for _, change := range cc.AsV2().Changes {
+				if change.NodeID == rc.id {
+					switch change.Type {
+					case raftpb.ConfChangeRemoveNode:
+						rc.hasBeenRemoved = true
+					case raftpb.ConfChangeAddNode:
+						rc.hasBeenRemoved = false
+					}
 				}
 			}
 		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			cc.Unmarshal(ents[i].Data)
 			rc.progress.confState = *rc.node.ApplyConfChange(cc)
+			rc.recorder.NotifyRaftConfChange(rc.clusterID, cc)
 			if rc.confChangeApplier != nil {
 				err := rc.confChangeApplier(ctx, ents[i].Index, cc)
 				if err != nil {
-					return err
+					rc.logger.Error("failed to forward raft conf change to application", zap.Error(err))
+				}
+			}
+			if cc.NodeID == rc.id {
+				switch cc.Type {
+				case raftpb.ConfChangeRemoveNode:
+					rc.hasBeenRemoved = true
+				case raftpb.ConfChangeAddNode:
+					rc.hasBeenRemoved = false
 				}
 			}
 		}
@@ -521,9 +550,6 @@ func (rc *RaftNode) processSnapshotRequests(ctx context.Context) {
 func (rc *RaftNode) processMessagesBeforeSending(ms []raftpb.Message) []raftpb.Message {
 	for i := len(ms) - 1; i >= 0; i-- {
 		if ms[i].Type == raftpb.MsgSnap {
-			// ms[i].Index = committedIndex
-			// ms[i].Term = term
-			log.Printf("BLAAAA t=%d, i=%d", ms[i].Term, ms[i].Index)
 			select {
 			case rc.msgSnapC <- ms[i]:
 			default:
@@ -576,7 +602,7 @@ func (rc *RaftNode) Leave(ctx context.Context) error {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	rc.logger.Debug("waiting for local node removal to be committed")
 	for {
-		if !rc.IsVoter() && !rc.IsLeader() {
+		if rc.hasBeenRemoved {
 			rc.logger.Debug("local node removed from raft cluster")
 			break
 		}

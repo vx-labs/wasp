@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/membership"
 	"github.com/vx-labs/wasp/cluster/raft"
+	"github.com/vx-labs/wasp/cluster/topology"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -16,12 +17,13 @@ import (
 )
 
 type multinode struct {
-	mtx    sync.RWMutex
-	rafts  map[string]*raft.RaftNode
-	gossip membership.Pool
-	logger *zap.Logger
-	config NodeConfig
-	dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
+	mtx      sync.RWMutex
+	rafts    map[string]*raft.RaftNode
+	gossip   membership.Pool
+	logger   *zap.Logger
+	recorder topology.Recorder
+	config   NodeConfig
+	dialer   func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)
 }
 
 func (n *multinode) Shutdown() error {
@@ -29,14 +31,14 @@ func (n *multinode) Shutdown() error {
 }
 
 func NewMultiNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), server *grpc.Server, logger *zap.Logger) MultiNode {
-
+	recorder := topology.NewRecorder(logger)
 	gossipNetworkConfig := config.GossipConfig.Network
 	joinList := config.GossipConfig.JoinList
 	gossip := membership.New(config.ID,
 		config.ServiceName,
 		gossipNetworkConfig.ListeningPort, gossipNetworkConfig.AdvertizedHost, gossipNetworkConfig.AdvertizedPort,
 		config.RaftConfig.Network.AdvertizedPort,
-		dialer, logger)
+		dialer, recorder, logger)
 
 	rpcAddress := config.RaftConfig.Network.AdvertizedAddress()
 
@@ -65,11 +67,12 @@ func NewMultiNode(config NodeConfig, dialer func(address string, opts ...grpc.Di
 	clusterpb.RegisterNodeServer(server, newNodeRPCServer())
 
 	m := &multinode{
-		config: config,
-		rafts:  map[string]*raft.RaftNode{},
-		gossip: gossip,
-		logger: logger,
-		dialer: dialer,
+		config:   config,
+		rafts:    map[string]*raft.RaftNode{},
+		gossip:   gossip,
+		logger:   logger,
+		recorder: recorder,
+		dialer:   dialer,
 	}
 
 	clusterpb.RegisterMultiRaftServer(server, m)
@@ -87,7 +90,7 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 		CommitApplier:     raftConfig.CommitApplier,
 		SnapshotApplier:   raftConfig.SnapshotApplier,
 		ConfChangeApplier: raftConfig.ConfChangeApplier,
-	}, n.gossip, n.logger.With(zap.String("cluster_node_name", cluster)))
+	}, n.gossip, n.recorder, n.logger.With(zap.String("cluster_node_name", cluster)))
 
 	n.rafts[cluster] = raftNode
 	clusterList := make([]string, len(n.rafts))
@@ -105,13 +108,14 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 	config.RaftConfig = raftConfig
 
 	return &node{
-		raft:    n.rafts[cluster],
-		cluster: cluster,
-		config:  config,
-		dialer:  n.dialer,
-		gossip:  n.gossip,
-		logger:  n.logger,
-		ready:   make(chan struct{}),
+		raft:     n.rafts[cluster],
+		cluster:  cluster,
+		config:   config,
+		dialer:   n.dialer,
+		gossip:   n.gossip,
+		logger:   n.logger,
+		recorder: n.recorder,
+		ready:    make(chan struct{}),
 	}
 }
 

@@ -53,14 +53,14 @@ func (n *node) Shutdown() error {
 }
 
 func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), server *grpc.Server, logger *zap.Logger) Node {
-
+	recorder := topology.NewRecorder(logger)
 	gossipNetworkConfig := config.GossipConfig.Network
 	joinList := config.GossipConfig.JoinList
 	gossip := membership.New(config.ID,
 		config.ServiceName,
 		gossipNetworkConfig.ListeningPort, gossipNetworkConfig.AdvertizedHost, gossipNetworkConfig.AdvertizedPort,
 		config.RaftConfig.Network.AdvertizedPort,
-		dialer, logger)
+		dialer, recorder, logger)
 
 	rpcAddress := config.RaftConfig.Network.AdvertizedAddress()
 
@@ -94,7 +94,7 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 		SnapshotApplier:   config.RaftConfig.SnapshotApplier,
 		ConfChangeApplier: config.RaftConfig.ConfChangeApplier,
 	}
-	raftNode := raft.NewNode(raftConfig, gossip, logger)
+	raftNode := raft.NewNode(raftConfig, gossip, recorder, logger)
 	raftNode.Serve(server)
 
 	clusterpb.RegisterNodeServer(server, newNodeRPCServer())
@@ -105,7 +105,7 @@ func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOpt
 		gossip:   gossip,
 		logger:   logger,
 		dialer:   dialer,
-		recorder: topology.NewRecorder(raftNode),
+		recorder: recorder,
 		ready:    make(chan struct{}),
 	}
 }
