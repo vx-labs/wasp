@@ -7,7 +7,7 @@ import (
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
 )
 
-// Recorder records membership changes from an external pool, and use compares it to raft members to detect node failures.
+// Recorder records membership changes from an external pool, and compares it to raft members to detect node failures.
 type Recorder interface {
 	NotifyJoin(id uint64)
 	NotifyLeave(id uint64)
