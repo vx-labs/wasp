@@ -9,8 +9,8 @@ import (
 
 // Recorder records membership changes from an external pool, and compares it to raft members to detect node failures.
 type Recorder interface {
-	NotifyJoin(id uint64)
-	NotifyLeave(id uint64)
+	NotifyGossipJoin(id uint64)
+	NotifyGossipLeave(id uint64)
 	ListDeadNodes(time.Duration) []uint64
 }
 
@@ -35,7 +35,7 @@ func NewRecorder(r raft) Recorder {
 	return &recorder{raft: r, nodes: []*node{}}
 }
 
-func (r *recorder) NotifyJoin(id uint64) {
+func (r *recorder) NotifyGossipJoin(id uint64) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	for _, node := range r.nodes {
@@ -48,7 +48,7 @@ func (r *recorder) NotifyJoin(id uint64) {
 		lastUpdate: time.Now(),
 	})
 }
-func (r *recorder) NotifyLeave(id uint64) {
+func (r *recorder) NotifyGossipLeave(id uint64) {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()
 	raftMembers, err := r.raft.GetClusterMembers()

@@ -64,7 +64,7 @@ func (p *pool) NotifyJoin(n *memberlist.Node) {
 		Enabled: true,
 	}
 	if p.recorder != nil {
-		p.recorder.NotifyJoin(id)
+		p.recorder.NotifyGossipJoin(id)
 	}
 }
 
@@ -83,7 +83,7 @@ func (p *pool) NotifyLeave(n *memberlist.Node) {
 		delete(p.peers, id)
 	}
 	if p.recorder != nil {
-		p.recorder.NotifyLeave(id)
+		p.recorder.NotifyGossipLeave(id)
 	}
 }
 

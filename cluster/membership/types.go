@@ -24,6 +24,6 @@ type Pool interface {
 
 // Recorder records membership changes
 type Recorder interface {
-	NotifyJoin(id uint64)
-	NotifyLeave(id uint64)
+	NotifyGossipJoin(id uint64)
+	NotifyGossipLeave(id uint64)
 }
