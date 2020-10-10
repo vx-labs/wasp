@@ -22,7 +22,7 @@ type MemberlistMemberProvider interface {
 	Members() []api.RaftContext
 }
 
-func (mesh *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string, expectedNumber int, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
+func (p *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string, expectedNumber int, rpcDialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error)) ([]raft.Peer, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	ticker := time.NewTicker(1 * time.Second)
@@ -31,7 +31,7 @@ func (mesh *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string
 	for {
 		for {
 			clusterChecked := 0
-			nodes := mesh.mlist.Members()
+			nodes := p.mlist.Members()
 			for idx := range nodes {
 				md, err := DecodeMD(nodes[idx].Meta)
 				if err != nil {
@@ -43,7 +43,7 @@ func (mesh *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string
 				conn, err := rpcDialer(md.RPCAddress)
 				if err != nil {
 					if err != context.DeadlineExceeded {
-						mesh.logger.Debug("failed to dial peer", zap.Error(err))
+						p.logger.Debug("failed to dial peer", zap.Error(err))
 					}
 					continue
 				}
@@ -51,15 +51,15 @@ func (mesh *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string
 				out, err := api.NewMultiRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{ClusterID: nodeName})
 				if grpcErr, ok := status.FromError(err); ok {
 					if grpcErr.Code() == codes.Unimplemented {
-						_, err = clusterpb.NewRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{})
+						out, err = clusterpb.NewRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{})
 					}
 				}
 				cancel()
 				if err != nil {
-					mesh.logger.Debug("failed to get peer status", zap.String("remote_address", md.RPCAddress), zap.Error(err))
+					p.logger.Debug("failed to get peer status", zap.String("remote_address", md.RPCAddress), zap.Error(err))
 					continue
 				}
-				if md.ID != mesh.id && out.HasBeenBootstrapped {
+				if md.ID != p.id && out.HasBeenBootstrapped {
 					clusterFound = true
 				}
 				clusterChecked++
