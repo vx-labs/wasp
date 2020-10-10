@@ -81,7 +81,9 @@ func main() {
 	config.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	config.AutomaticEnv()
 	cmd := &cobra.Command{
-		Use: "wasp",
+		Use:     "wasp",
+		Short:   "Distributed MQTT Broker",
+		Version: BuiltVersion,
 		PreRun: func(cmd *cobra.Command, _ []string) {
 			config.BindPFlags(cmd.Flags())
 			if !cmd.Flags().Changed("serf-advertized-port") {
