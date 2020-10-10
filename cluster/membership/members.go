@@ -25,9 +25,8 @@ func parseID(id string) uint64 {
 }
 
 type member struct {
-	Conn       *grpc.ClientConn
-	LastUpdate time.Time
-	Enabled    bool
+	Conn    *grpc.ClientConn
+	Enabled bool
 }
 
 // NotifyJoin is called if a peer joins the cluster.
@@ -51,7 +50,6 @@ func (p *pool) NotifyJoin(n *memberlist.Node) {
 	old, ok := p.peers[md.ID]
 	if ok && old != nil {
 		if old.Conn.Target() == md.RPCAddress {
-			old.LastUpdate = time.Now()
 			return
 		}
 		old.Conn.Close()
@@ -62,9 +60,8 @@ func (p *pool) NotifyJoin(n *memberlist.Node) {
 		return
 	}
 	p.peers[md.ID] = &member{
-		Conn:       conn,
-		LastUpdate: time.Now(),
-		Enabled:    true,
+		Conn:    conn,
+		Enabled: true,
 	}
 	if p.recorder != nil {
 		p.recorder.NotifyJoin(id)
@@ -121,11 +118,9 @@ func (p *pool) runHealthchecks(ctx context.Context) error {
 		if err != nil || resp.Status != healthpb.HealthCheckResponse_SERVING {
 			if peer.Enabled {
 				peer.Enabled = false
-				peer.LastUpdate = time.Now()
 			}
 		} else if !peer.Enabled {
 			peer.Enabled = true
-			peer.LastUpdate = time.Now()
 		}
 	}
 	return nil
