@@ -616,22 +616,12 @@ func (rc *RaftNode) waitForLeaderChange(ctx context.Context, currentLeader uint6
 
 func (rc *RaftNode) askLeaderForRemoval(ctx context.Context) error {
 	leader := rc.Leader()
-	if rc.clusterID != "" {
-		return rc.membership.Call(leader, func(c *grpc.ClientConn) error {
-			var err error
-			_, err = clusterpb.NewMultiRaftClient(c).RemoveMember(ctx, &clusterpb.RemoveMultiRaftMemberRequest{
-				ClusterID: rc.clusterID,
-				Force:     true,
-				ID:        rc.id,
-			})
-			return err
-		})
-	}
 	return rc.membership.Call(leader, func(c *grpc.ClientConn) error {
 		var err error
-		_, err = clusterpb.NewRaftClient(c).RemoveMember(ctx, &clusterpb.RemoveMemberRequest{
-			ID:    rc.id,
-			Force: true,
+		_, err = clusterpb.NewMultiRaftClient(c).RemoveMember(ctx, &clusterpb.RemoveMultiRaftMemberRequest{
+			ClusterID: rc.clusterID,
+			Force:     true,
+			ID:        rc.id,
 		})
 		return err
 	})

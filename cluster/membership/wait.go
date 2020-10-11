@@ -5,13 +5,10 @@ import (
 	"errors"
 	"time"
 
-	"github.com/vx-labs/wasp/cluster/clusterpb"
 	api "github.com/vx-labs/wasp/cluster/clusterpb"
 	"github.com/vx-labs/wasp/cluster/raft"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 var (
@@ -49,11 +46,6 @@ func (p *pool) WaitForNodes(ctx context.Context, clusterName, nodeName string, e
 				}
 				ctx, cancel := context.WithTimeout(ctx, 300*time.Millisecond)
 				out, err := api.NewMultiRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{ClusterID: nodeName})
-				if grpcErr, ok := status.FromError(err); ok {
-					if grpcErr.Code() == codes.Unimplemented {
-						out, err = clusterpb.NewRaftClient(conn).GetStatus(ctx, &api.GetStatusRequest{})
-					}
-				}
 				cancel()
 				if err != nil {
 					p.logger.Debug("failed to get peer status", zap.String("remote_address", md.RPCAddress), zap.Error(err))

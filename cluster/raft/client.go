@@ -10,8 +10,6 @@ import (
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func isMsgSnap(m raftpb.Message) bool { return m.Type == raftpb.MsgSnap }
@@ -28,11 +26,6 @@ func (rc *RaftNode) Send(ctx context.Context, messages []raftpb.Message) {
 				ClusterID: rc.clusterID,
 				Message:   &message,
 			})
-			if grpcErr, ok := status.FromError(err); ok {
-				if grpcErr.Code() == codes.Unimplemented {
-					_, err = api.NewRaftClient(c).ProcessMessage(ctx, &message)
-				}
-			}
 			return err
 		})
 		if err != nil {

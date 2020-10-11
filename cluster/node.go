@@ -10,7 +10,6 @@ import (
 	"github.com/vx-labs/wasp/cluster/topology"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
@@ -52,64 +51,6 @@ func (n *node) Shutdown() error {
 	return n.gossip.Shutdown()
 }
 
-func NewNode(config NodeConfig, dialer func(address string, opts ...grpc.DialOption) (*grpc.ClientConn, error), server *grpc.Server, logger *zap.Logger) Node {
-	recorder := topology.NewRecorder(logger)
-	gossipNetworkConfig := config.GossipConfig.Network
-	joinList := config.GossipConfig.JoinList
-	gossip := membership.New(config.ID,
-		config.ServiceName,
-		gossipNetworkConfig.ListeningPort, gossipNetworkConfig.AdvertizedHost, gossipNetworkConfig.AdvertizedPort,
-		config.RaftConfig.Network.AdvertizedPort,
-		dialer, recorder, logger)
-
-	rpcAddress := config.RaftConfig.Network.AdvertizedAddress()
-
-	gossip.UpdateMetadata(membership.EncodeMD(config.ID,
-		config.ServiceName,
-		rpcAddress,
-	))
-
-	if len(joinList) > 0 {
-		joinStarted := time.Now()
-		retryTicker := time.NewTicker(3 * time.Second)
-		for {
-			err := gossip.Join(joinList)
-			if err != nil {
-				logger.Warn("failed to join gossip mesh", zap.Error(err))
-			} else {
-				break
-			}
-			<-retryTicker.C
-		}
-		retryTicker.Stop()
-		logger.Debug("joined gossip mesh",
-			zap.Duration("gossip_join_duration", time.Since(joinStarted)), zap.Strings("gossip_node_list", joinList))
-	}
-
-	raftConfig := raft.Config{
-		NodeID:            config.ID,
-		DataDir:           config.DataDirectory,
-		GetSnapshot:       config.RaftConfig.GetStateSnapshot,
-		CommitApplier:     config.RaftConfig.CommitApplier,
-		SnapshotApplier:   config.RaftConfig.SnapshotApplier,
-		ConfChangeApplier: config.RaftConfig.ConfChangeApplier,
-	}
-	raftNode := raft.NewNode(raftConfig, gossip, recorder, logger)
-	raftNode.Serve(server)
-
-	clusterpb.RegisterNodeServer(server, newNodeRPCServer())
-
-	return &node{
-		config:   config,
-		raft:     raftNode,
-		gossip:   gossip,
-		logger:   logger,
-		dialer:   dialer,
-		recorder: recorder,
-		ready:    make(chan struct{}),
-	}
-}
-
 func (n *node) isVoter(ctx context.Context, leader uint64) bool {
 	var out *clusterpb.GetTopologyResponse
 	err := n.gossip.Call(leader, func(c *grpc.ClientConn) error {
@@ -117,11 +58,6 @@ func (n *node) isVoter(ctx context.Context, leader uint64) bool {
 		out, err = clusterpb.NewMultiRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
 			ClusterID: n.cluster,
 		})
-		if grpcErr, ok := status.FromError(err); ok {
-			if grpcErr.Code() == codes.Unimplemented {
-				out, err = clusterpb.NewRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{})
-			}
-		}
 		return err
 	})
 	if err != nil {
@@ -192,14 +128,6 @@ func (n *node) Run(ctx context.Context) {
 									Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 								},
 							})
-							if grpcErr, ok := status.FromError(err); ok {
-								if grpcErr.Code() == codes.Unimplemented {
-									_, err = clusterpb.NewRaftClient(c).JoinCluster(ctx, &clusterpb.RaftContext{
-										ID:      n.config.ID,
-										Address: n.config.RaftConfig.Network.AdvertizedAddress(),
-									})
-								}
-							}
 							if err == nil {
 								clusterIndex = out.Commit
 							}
@@ -224,14 +152,6 @@ func (n *node) Run(ctx context.Context) {
 												Address: n.config.RaftConfig.Network.AdvertizedAddress(),
 											},
 										})
-										if grpcErr, ok := status.FromError(err); ok {
-											if grpcErr.Code() == codes.Unimplemented {
-												_, err = clusterpb.NewRaftClient(c).PromoteMember(ctx, &clusterpb.RaftContext{
-													ID:      n.config.ID,
-													Address: n.config.RaftConfig.Network.AdvertizedAddress(),
-												})
-											}
-										}
 										return err
 									})
 									if err != nil {

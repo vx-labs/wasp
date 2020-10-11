@@ -53,16 +53,6 @@ message GetTopologyResponse {
   uint64 Committed = 2;
   repeated TopologyMemberStatus Members = 3;
 }
-service Raft {
-  rpc GetTopology(GetTopologyRequest) returns (GetTopologyResponse) {}
-  rpc ProcessMessage(raftpb.Message) returns (Payload) {}
-  rpc JoinCluster(RaftContext) returns (JoinClusterResponse) {}
-  rpc PromoteMember(RaftContext) returns (PromoteMemberResponse) {}
-  rpc GetMembers(GetMembersRequest) returns (GetMembersResponse) {}
-  rpc GetStatus(GetStatusRequest) returns (GetStatusResponse) {}
-  rpc RemoveMember(RemoveMemberRequest) returns (RemoveMemberResponse) {}
-}
-
 message ProcessMessageRequest {
   string ClusterID = 1;
   raftpb.Message Message = 2;

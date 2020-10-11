@@ -180,18 +180,9 @@ func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest)
 	}
 	if !rc.IsLeader() {
 		var out *api.GetTopologyResponse
-		if rc.clusterID != "" {
-			return out, rc.membership.Call(rc.Leader(), func(c *grpc.ClientConn) error {
-				var err error
-				out, err = clusterpb.NewMultiRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
-					ClusterID: rc.clusterID,
-				})
-				return err
-			})
-		}
 		return out, rc.membership.Call(rc.Leader(), func(c *grpc.ClientConn) error {
 			var err error
-			out, err = clusterpb.NewRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
+			out, err = clusterpb.NewMultiRaftClient(c).GetTopology(ctx, &clusterpb.GetTopologyRequest{
 				ClusterID: rc.clusterID,
 			})
 			return err
@@ -242,8 +233,4 @@ func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return &api.GetTopologyResponse{Members: out, ClusterID: rc.clusterID, Committed: status.Commit}, nil
-}
-
-func (rc *RaftNode) Serve(grpcServer *grpc.Server) {
-	api.RegisterRaftServer(grpcServer, rc)
 }
