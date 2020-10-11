@@ -40,6 +40,7 @@ type RaftConfig struct {
 	CommitApplier             raft.CommitApplier
 	SnapshotApplier           raft.SnapshotApplier
 	ConfChangeApplier         raft.ConfChangeApplier
+	OnNodeRemoved             func(id uint64)
 }
 type NetworkConfig struct {
 	AdvertizedHost string

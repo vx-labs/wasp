@@ -18,7 +18,7 @@ import (
 
 type multinode struct {
 	mtx      sync.RWMutex
-	rafts    map[string]*raft.RaftNode
+	nodes    map[string]*node
 	gossip   membership.Pool
 	logger   *zap.Logger
 	recorder topology.Recorder
@@ -68,7 +68,7 @@ func NewMultiNode(config NodeConfig, dialer func(address string, opts ...grpc.Di
 
 	m := &multinode{
 		config:   config,
-		rafts:    map[string]*raft.RaftNode{},
+		nodes:    map[string]*node{},
 		gossip:   gossip,
 		logger:   logger,
 		recorder: recorder,
@@ -92,10 +92,9 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 		ConfChangeApplier: raftConfig.ConfChangeApplier,
 	}, n.gossip, n.recorder, n.logger.With(zap.String("cluster_node_name", cluster)))
 
-	n.rafts[cluster] = raftNode
-	clusterList := make([]string, len(n.rafts))
+	clusterList := make([]string, len(n.nodes))
 	idx := 0
-	for cluster := range n.rafts {
+	for cluster := range n.nodes {
 		clusterList[idx] = cluster
 		idx++
 	}
@@ -107,8 +106,8 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 	config := n.config
 	config.RaftConfig = raftConfig
 
-	return &node{
-		raft:     n.rafts[cluster],
+	n.nodes[cluster] = &node{
+		raft:     raftNode,
 		cluster:  cluster,
 		config:   config,
 		dialer:   n.dialer,
@@ -117,71 +116,77 @@ func (n *multinode) Node(cluster string, raftConfig RaftConfig) Node {
 		recorder: n.recorder,
 		ready:    make(chan struct{}),
 	}
+	return n.nodes[cluster]
 }
 
 func (n *multinode) RemoveMember(ctx context.Context, in *clusterpb.RemoveMultiRaftMemberRequest) (*clusterpb.RemoveMultiRaftMemberResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	err := instance.RemoveMember(ctx, in.ID, in.Force)
+	err := instance.raft.RemoveMember(ctx, in.ID, in.Force)
+	if err == nil {
+		if instance.config.RaftConfig.OnNodeRemoved != nil {
+			instance.config.RaftConfig.OnNodeRemoved(in.ID)
+		}
+	}
 	return &clusterpb.RemoveMultiRaftMemberResponse{}, err
 }
 func (n *multinode) ProcessMessage(ctx context.Context, in *clusterpb.ProcessMessageRequest) (*clusterpb.Payload, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	err := instance.ProcessMessage(ctx, in.Message)
+	err := instance.raft.ProcessMessage(ctx, in.Message)
 	return &clusterpb.Payload{}, err
 }
 func (n *multinode) GetMembers(ctx context.Context, in *clusterpb.GetMembersRequest) (*clusterpb.GetMembersResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.GetClusterMembers()
+	return instance.raft.GetClusterMembers()
 }
 func (n *multinode) GetStatus(ctx context.Context, in *clusterpb.GetStatusRequest) (*clusterpb.GetStatusResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.GetStatus(ctx), nil
+	return instance.raft.GetStatus(ctx), nil
 }
 func (n *multinode) JoinCluster(ctx context.Context, in *clusterpb.JoinClusterRequest) (*clusterpb.JoinClusterResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return &clusterpb.JoinClusterResponse{Commit: instance.CommittedIndex()},
-		instance.AddLearner(ctx, in.Context.ID, in.Context.Address)
+	return &clusterpb.JoinClusterResponse{Commit: instance.raft.CommittedIndex()},
+		instance.raft.AddLearner(ctx, in.Context.ID, in.Context.Address)
 }
 func (n *multinode) GetTopology(ctx context.Context, in *clusterpb.GetTopologyRequest) (*clusterpb.GetTopologyResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.GetTopology(ctx, in)
+	return instance.raft.GetTopology(ctx, in)
 }
 func (n *multinode) PromoteMember(ctx context.Context, in *clusterpb.PromoteMemberRequest) (*clusterpb.PromoteMemberResponse, error) {
 	n.mtx.RLock()
 	defer n.mtx.RUnlock()
-	instance, ok := n.rafts[in.ClusterID]
+	instance, ok := n.nodes[in.ClusterID]
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return &clusterpb.PromoteMemberResponse{}, instance.PromoteMember(ctx, in.Context.ID, in.Context.Address)
+	return &clusterpb.PromoteMemberResponse{}, instance.raft.PromoteMember(ctx, in.Context.ID, in.Context.Address)
 }
