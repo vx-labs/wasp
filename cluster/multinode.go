@@ -126,7 +126,7 @@ func (n *multinode) RemoveMember(ctx context.Context, in *clusterpb.RemoveMultiR
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	_, err := instance.RemoveMember(ctx, &clusterpb.RemoveMemberRequest{ID: in.ID, Force: in.Force})
+	err := instance.RemoveMember(ctx, in.ID, in.Force)
 	return &clusterpb.RemoveMultiRaftMemberResponse{}, err
 }
 func (n *multinode) ProcessMessage(ctx context.Context, in *clusterpb.ProcessMessageRequest) (*clusterpb.Payload, error) {
@@ -136,7 +136,8 @@ func (n *multinode) ProcessMessage(ctx context.Context, in *clusterpb.ProcessMes
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.ProcessMessage(ctx, in.Message)
+	err := instance.ProcessMessage(ctx, in.Message)
+	return &clusterpb.Payload{}, err
 }
 func (n *multinode) GetMembers(ctx context.Context, in *clusterpb.GetMembersRequest) (*clusterpb.GetMembersResponse, error) {
 	n.mtx.RLock()
@@ -145,7 +146,7 @@ func (n *multinode) GetMembers(ctx context.Context, in *clusterpb.GetMembersRequ
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.GetMembers(ctx, in)
+	return instance.GetClusterMembers()
 }
 func (n *multinode) GetStatus(ctx context.Context, in *clusterpb.GetStatusRequest) (*clusterpb.GetStatusResponse, error) {
 	n.mtx.RLock()
@@ -154,7 +155,7 @@ func (n *multinode) GetStatus(ctx context.Context, in *clusterpb.GetStatusReques
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.GetStatus(ctx, in)
+	return instance.GetStatus(ctx), nil
 }
 func (n *multinode) JoinCluster(ctx context.Context, in *clusterpb.JoinClusterRequest) (*clusterpb.JoinClusterResponse, error) {
 	n.mtx.RLock()
@@ -163,7 +164,8 @@ func (n *multinode) JoinCluster(ctx context.Context, in *clusterpb.JoinClusterRe
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.JoinCluster(ctx, in.Context)
+	return &clusterpb.JoinClusterResponse{Commit: instance.CommittedIndex()},
+		instance.AddLearner(ctx, in.Context.ID, in.Context.Address)
 }
 func (n *multinode) GetTopology(ctx context.Context, in *clusterpb.GetTopologyRequest) (*clusterpb.GetTopologyResponse, error) {
 	n.mtx.RLock()
@@ -181,5 +183,5 @@ func (n *multinode) PromoteMember(ctx context.Context, in *clusterpb.PromoteMemb
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	return instance.PromoteMember(ctx, in.Context)
+	return &clusterpb.PromoteMemberResponse{}, instance.PromoteMember(ctx, in.Context.ID, in.Context.Address)
 }

@@ -23,124 +23,123 @@ func (rc *RaftNode) waitReadiness(ctx context.Context) error {
 		return nil
 	}
 }
-func (rc *RaftNode) RemoveMember(ctx context.Context, message *api.RemoveMemberRequest) (*api.RemoveMemberResponse, error) {
+func (rc *RaftNode) RemoveMember(ctx context.Context, id uint64, force bool) error {
 	if rc.node == nil {
-		return nil, errors.New("node not ready")
+		return errors.New("node not ready")
 	}
-	if !message.Force {
+	if !force {
 		members := rc.membership.Members()
 		for _, member := range members {
-			if member.ID == message.ID && member.IsAlive {
-				return nil, status.Error(codes.InvalidArgument, "refusing to remove an healthy member")
+			if member.ID == id && member.IsAlive {
+				return status.Error(codes.InvalidArgument, "refusing to remove an healthy member")
 			}
 		}
 	}
-	return &api.RemoveMemberResponse{}, rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
+	return rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
 		Changes: []raftpb.ConfChangeSingle{
 			{
 				Type:   raftpb.ConfChangeRemoveNode,
-				NodeID: message.ID,
+				NodeID: id,
 			},
 		},
 	})
 
 }
-func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message) (*api.Payload, error) {
+func (rc *RaftNode) ProcessMessage(ctx context.Context, message *raftpb.Message) error {
 	if rc.node == nil {
-		return nil, errors.New("node not ready")
+		return errors.New("node not ready")
 	}
 	err := rc.Process(ctx, *message)
 	if err != nil {
 		rc.logger.Warn("failed to process raft message", zap.Error(err), zap.Uint64("commit", message.Commit), zap.Uint64("term", message.Term))
 	}
-	return &api.Payload{}, err
+	return err
 }
 
-func (rc *RaftNode) PromoteMember(ctx context.Context, in *api.RaftContext) (*api.PromoteMemberResponse, error) {
+func (rc *RaftNode) PromoteMember(ctx context.Context, id uint64, address string) error {
 	if rc.node == nil {
-		return nil, errors.New("node not ready")
+		return errors.New("node not ready")
 	}
 	if !rc.IsLeader() {
-		return nil, errors.New("node not leader")
+		return errors.New("node not leader")
 	}
 	st := rc.node.Status()
 	if st.Progress == nil {
-		return nil, errors.New("node not leader")
+		return errors.New("node not leader")
 	}
-	nodeProgress, ok := st.Progress[in.ID]
+	nodeProgress, ok := st.Progress[id]
 	if !ok {
-		return nil, errors.New("node not found")
+		return errors.New("node not found")
 	}
 	if !nodeProgress.IsLearner {
-		return &api.PromoteMemberResponse{}, nil
+		return nil
 	}
 	if nodeProgress.PendingSnapshot != 0 || nodeProgress.Next < st.Commit {
-		return nil, errors.New("node is late")
+		return errors.New("node is late")
 	}
 	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
-		Context: []byte(in.Address),
+		Context: []byte(address),
 		Changes: []raftpb.ConfChangeSingle{
 			{
 				Type:   raftpb.ConfChangeAddNode,
-				NodeID: in.ID,
+				NodeID: id,
 			},
 		},
 	})
 	if err != nil {
-		rc.logger.Error("failed to add new cluster peer",
-			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
+		rc.logger.Error("failed to promote cluster peer",
+			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", id)))
 	} else {
 		rc.logger.Info("promoted new cluster peer",
-			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
+			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", id)))
 	}
-	return &api.PromoteMemberResponse{}, err
+	return err
 
 }
-func (rc *RaftNode) JoinCluster(ctx context.Context, in *api.RaftContext) (*api.JoinClusterResponse, error) {
+func (rc *RaftNode) AddLearner(ctx context.Context, id uint64, address string) error {
 	if rc.node == nil {
-		return nil, errors.New("node not ready")
+		return errors.New("node not ready")
 	}
 	if !rc.IsLeader() {
-		return nil, errors.New("node not leader")
+		return errors.New("node not leader")
 	}
 	rc.progressMu.RLock()
 	defer rc.progressMu.RUnlock()
 
-	status := rc.node.Status()
-	for _, id := range rc.progress.confState.Learners {
-		if id == in.ID {
-			return &api.JoinClusterResponse{Commit: status.Commit}, nil
+	for _, learnerID := range rc.progress.confState.Learners {
+		if learnerID == id {
+			return nil
 		}
 	}
-	for _, id := range rc.progress.confState.Voters {
-		if id == in.ID {
-			return nil, errors.New("node is already a voter")
+	for _, voterID := range rc.progress.confState.Voters {
+		if id == voterID {
+			return errors.New("node is already a voter")
 		}
 	}
 	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
-		Context: []byte(in.Address),
+		Context: []byte(address),
 		Changes: []raftpb.ConfChangeSingle{
 			{
 				Type:   raftpb.ConfChangeAddLearnerNode,
-				NodeID: in.ID,
+				NodeID: id,
 			},
 		},
 	})
 	if err != nil {
 		rc.logger.Error("failed to add raft learner",
-			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
+			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", id)))
 	} else {
 		rc.logger.Info("added new raft learner",
-			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", in.ID)))
+			zap.Error(err), zap.String("hex_remote_raft_node_id", fmt.Sprintf("%x", id)))
 	}
-	return &api.JoinClusterResponse{Commit: status.Commit}, err
+	return err
 }
-func (rc *RaftNode) GetStatus(ctx context.Context, in *api.GetStatusRequest) (*api.GetStatusResponse, error) {
+func (rc *RaftNode) GetStatus(ctx context.Context) *api.GetStatusResponse {
 	return &api.GetStatusResponse{
 		IsLeader:            rc.IsLeader(),
 		HasBeenBootstrapped: rc.hasBeenBootstrapped,
 		IsInCluster:         !rc.IsRemovedFromCluster(),
-	}, nil
+	}
 }
 func (rc *RaftNode) GetClusterMembers() (*api.GetMembersResponse, error) {
 	if rc.node == nil {
@@ -167,12 +166,6 @@ func (rc *RaftNode) GetClusterMembers() (*api.GetMembersResponse, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return &api.GetMembersResponse{Members: out, CommittedIndex: rc.CommittedIndex()}, nil
-}
-func (rc *RaftNode) GetMembers(ctx context.Context, in *api.GetMembersRequest) (*api.GetMembersResponse, error) {
-	if rc.node == nil {
-		return nil, errors.New("node not ready")
-	}
-	return rc.GetClusterMembers()
 }
 func (rc *RaftNode) GetTopology(ctx context.Context, in *api.GetTopologyRequest) (*api.GetTopologyResponse, error) {
 	if rc.node == nil {
