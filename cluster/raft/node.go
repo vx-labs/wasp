@@ -583,28 +583,14 @@ func (rc *RaftNode) stop(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
-func (rc *RaftNode) Leave(ctx context.Context) error {
-	if rc.IsLeader() && len(rc.progress.confState.Voters) == 1 {
-		return rc.stop(ctx)
-	}
-	rc.logger.Debug("leaving raft cluster")
-	err := rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
-		Changes: []raftpb.ConfChangeSingle{
-			{
-				Type:   raftpb.ConfChangeRemoveNode,
-				NodeID: rc.id,
-			},
-		},
-	})
-	if err != nil {
-		return err
-	}
+func (rc *RaftNode) waitForRemoval(ctx context.Context) error {
 	ticker := time.NewTicker(250 * time.Millisecond)
-	rc.logger.Debug("waiting for local node removal to be committed")
+	defer ticker.Stop()
+
 	for {
 		if rc.hasBeenRemoved {
 			rc.logger.Debug("local node removed from raft cluster")
-			break
+			return nil
 		}
 		select {
 		case <-ticker.C:
@@ -612,5 +598,77 @@ func (rc *RaftNode) Leave(ctx context.Context) error {
 			return ctx.Err()
 		}
 	}
-	return rc.stop(ctx)
+}
+func (rc *RaftNode) waitForLeaderChange(ctx context.Context, currentLeader uint64) error {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if rc.Leader() != currentLeader {
+			return nil
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+func (rc *RaftNode) askLeaderForRemoval(ctx context.Context) error {
+	leader := rc.Leader()
+	if rc.clusterID != "" {
+		return rc.membership.Call(leader, func(c *grpc.ClientConn) error {
+			var err error
+			_, err = clusterpb.NewMultiRaftClient(c).RemoveMember(ctx, &clusterpb.RemoveMultiRaftMemberRequest{
+				ClusterID: rc.clusterID,
+				Force:     true,
+				ID:        rc.id,
+			})
+			return err
+		})
+	}
+	return rc.membership.Call(leader, func(c *grpc.ClientConn) error {
+		var err error
+		_, err = clusterpb.NewRaftClient(c).RemoveMember(ctx, &clusterpb.RemoveMemberRequest{
+			ID:    rc.id,
+			Force: true,
+		})
+		return err
+	})
+}
+
+func (rc *RaftNode) Leave(ctx context.Context) error {
+	for {
+		if len(rc.progress.confState.Voters) == 1 {
+			return rc.stop(ctx)
+		}
+		rc.logger.Debug("leaving raft cluster")
+		if !rc.IsLeader() {
+			err := rc.askLeaderForRemoval(ctx)
+			if err != nil {
+				if err == context.Canceled {
+					return err
+				}
+				rc.logger.Debug("failed to ask leader for removal", zap.Error(err))
+				return err
+			}
+			err = rc.waitForRemoval(ctx)
+			if err != nil {
+				continue
+			}
+			return rc.stop(ctx)
+		}
+		var candidate uint64 = 0
+		for _, id := range rc.progress.confState.Voters {
+			if id != rc.id {
+				candidate = id
+				break
+			}
+		}
+		if candidate == 0 {
+			continue
+		}
+		rc.node.TransferLeadership(ctx, rc.id, candidate)
+		rc.waitForLeaderChange(ctx, rc.id)
+	}
 }

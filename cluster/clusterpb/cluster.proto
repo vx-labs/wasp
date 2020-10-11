@@ -35,7 +35,7 @@ message GetStatusResponse {
   bool IsInCluster = 3;
 };
 
-message RemoveMemberRequest { uint64 ID = 1; }
+message RemoveMemberRequest { uint64 ID = 1; bool Force = 2; }
 message RemoveMemberResponse {}
 message PromoteMemberResponse {}
 
@@ -80,6 +80,7 @@ message PromoteMemberRequest {
 message RemoveMultiRaftMemberRequest {
   string ClusterID = 1;
   uint64 ID = 2;
+  bool Force = 3;
 }
 message RemoveMultiRaftMemberResponse {}
 

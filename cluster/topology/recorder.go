@@ -16,6 +16,7 @@ type Recorder interface {
 	NotifyGossipLeave(id uint64)
 	NotifyRaftConfChange(cluster string, cc raftpb.ConfChangeI)
 	ListDeadNodes(time.Duration) []uint64
+	RaftMemberCount(cluster string) int
 }
 
 type raft interface {
@@ -117,12 +118,14 @@ func (r *recorder) notifyRaftLeave(cluster string, id uint64) {
 	for idx, node := range r.nodes {
 		if node.id == id {
 			delete(node.isRaftAlive, cluster)
+
 			if !node.isGossipAlive && len(node.isRaftAlive) == 0 {
 				// node has left, remove it from the record
 				r.nodes[idx] = r.nodes[len(r.nodes)-1]
 				r.nodes = r.nodes[:len(r.nodes)-1]
-				r.logger.Debug("raft member left", zap.String("left_node_id", fmt.Sprintf("%x", id)))
+				r.logger.Debug("node left", zap.String("left_node_id", fmt.Sprintf("%x", id)))
 			} else {
+				r.logger.Debug("raft member left", zap.String("left_node_id", fmt.Sprintf("%x", id)))
 				node.lastUpdate = time.Now()
 			}
 			break
@@ -130,6 +133,17 @@ func (r *recorder) notifyRaftLeave(cluster string, id uint64) {
 	}
 }
 
+func (r *recorder) RaftMemberCount(cluster string) int {
+	r.mtx.Lock()
+	defer r.mtx.Unlock()
+	count := 0
+	for _, node := range r.nodes {
+		if _, ok := node.isRaftAlive[cluster]; ok {
+			count++
+		}
+	}
+	return count
+}
 func (r *recorder) ListDeadNodes(deadline time.Duration) []uint64 {
 	r.mtx.Lock()
 	defer r.mtx.Unlock()

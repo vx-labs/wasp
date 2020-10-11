@@ -126,7 +126,7 @@ func (n *multinode) RemoveMember(ctx context.Context, in *clusterpb.RemoveMultiR
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	_, err := instance.RemoveMember(ctx, &clusterpb.RemoveMemberRequest{ID: in.ID})
+	_, err := instance.RemoveMember(ctx, &clusterpb.RemoveMemberRequest{ID: in.ID, Force: in.Force})
 	return &clusterpb.RemoveMultiRaftMemberResponse{}, err
 }
 func (n *multinode) ProcessMessage(ctx context.Context, in *clusterpb.ProcessMessageRequest) (*clusterpb.Payload, error) {

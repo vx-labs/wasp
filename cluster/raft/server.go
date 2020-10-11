@@ -27,10 +27,12 @@ func (rc *RaftNode) RemoveMember(ctx context.Context, message *api.RemoveMemberR
 	if rc.node == nil {
 		return nil, errors.New("node not ready")
 	}
-	members := rc.membership.Members()
-	for _, member := range members {
-		if member.ID == message.ID && member.IsAlive {
-			return nil, status.Error(codes.InvalidArgument, "refusing to remove an healthy member")
+	if !message.Force {
+		members := rc.membership.Members()
+		for _, member := range members {
+			if member.ID == message.ID && member.IsAlive {
+				return nil, status.Error(codes.InvalidArgument, "refusing to remove an healthy member")
+			}
 		}
 	}
 	return &api.RemoveMemberResponse{}, rc.node.ProposeConfChange(ctx, raftpb.ConfChangeV2{
