@@ -7,7 +7,7 @@ RUN go mod download
 COPY . ./
 RUN go test ./...
 ARG BUILT_VERSION="snapshot"
-RUN go build -buildmode=exe -ldflags="-s -w -X github.com/vx-labs/wasp/cmd/wasp/version.BuiltVersion=${BUILT_VERSION}" \
+RUN go build -buildmode=exe -ldflags="-s -w -X main.BuiltVersion=${BUILT_VERSION}" \
        -a -o /bin/wasp ./cmd/wasp
 
 FROM alpine as prod
