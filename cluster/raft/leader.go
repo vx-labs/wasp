@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 )
+
 type leaderState struct {
 	f        LeaderFunc
 	funcDone chan struct{}

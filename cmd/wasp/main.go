@@ -144,6 +144,16 @@ func run(config *viper.Viper) {
 			}
 			return err
 		},
+		OnNodeRemoved: func(id uint64, leader bool) {
+			if leader {
+				sessions := state.ListSessionMetadatas()
+				for _, session := range sessions {
+					if session.Peer == id && session.LWT != nil {
+						publishes <- &messages.StoredMessage{Publish: session.LWT, Sender: session.SessionID}
+					}
+				}
+			}
+		},
 		ConfChangeApplier: stateMachine.ApplyConfChange,
 	}
 	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
@@ -314,7 +324,7 @@ func run(config *viper.Viper) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-			wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes,
+			err := wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes,
 				func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error) {
 					principal, err := authHandler.Authenticate(ctx, mqtt, auth.TransportContext{
 						Encrypted:       m.Encrypted,
@@ -323,6 +333,9 @@ func run(config *viper.Viper) {
 					})
 					return principal.ID, principal.MountPoint, err
 				})
+			if err != nil {
+				wasp.L(ctx).Error("failed to run session", zap.Error(err))
+			}
 		}()
 		return nil
 	}

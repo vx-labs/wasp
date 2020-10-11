@@ -31,6 +31,9 @@ type Membership interface {
 }
 
 func ProcessPublish(ctx context.Context, id uint64, transport Membership, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
+	if p == nil {
+		return nil
+	}
 	start := time.Now()
 	defer func() {
 		if local {

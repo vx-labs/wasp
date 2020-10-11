@@ -126,12 +126,11 @@ func (n *multinode) RemoveMember(ctx context.Context, in *clusterpb.RemoveMultiR
 	if !ok {
 		return nil, status.Error(codes.NotFound, "cluster not found")
 	}
-	err := instance.raft.RemoveMember(ctx, in.ID, in.Force)
-	if err == nil {
-		if instance.config.RaftConfig.OnNodeRemoved != nil {
-			instance.config.RaftConfig.OnNodeRemoved(in.ID)
-		}
+	if instance.config.RaftConfig.OnNodeRemoved != nil {
+		instance.config.RaftConfig.OnNodeRemoved(in.ID, instance.raft.IsLeader())
 	}
+
+	err := instance.raft.RemoveMember(ctx, in.ID, in.Force)
 	return &clusterpb.RemoveMultiRaftMemberResponse{}, err
 }
 func (n *multinode) ProcessMessage(ctx context.Context, in *clusterpb.ProcessMessageRequest) (*clusterpb.Payload, error) {

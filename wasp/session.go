@@ -92,11 +92,13 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		if err != nil {
 			return err
 		}
+		L(ctx).Debug("deleted old session metadata")
 	}
 	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.Lwt, session.MountPoint)
 	if err != nil {
 		return err
 	}
+	L(ctx).Debug("session metadata created")
 	state.SaveSession(session.ID, session)
 	defer state.CloseSession(session.ID)
 	keepAlive = connectPkt.KeepaliveTimer

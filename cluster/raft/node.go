@@ -290,6 +290,9 @@ func (rc *RaftNode) IsLearner() bool {
 	return false
 }
 func (rc *RaftNode) CommittedIndex() uint64 {
+	if rc.node == nil {
+		return 0
+	}
 	status := rc.node.Status()
 	return status.Commit
 }
