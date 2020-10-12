@@ -26,6 +26,7 @@ type Tree interface {
 	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
 	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
+	MatchPeers(topic []byte, peers *[]uint64) error
 	List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
 	RemovePeer(peer uint64) int
 	RemoveSession(id string) int
@@ -87,6 +88,12 @@ func (this *tree) Count() int {
 	this.mtx.RLock()
 	defer this.mtx.RUnlock()
 	return this.root.count(0)
+}
+func (this *tree) MatchPeers(topic []byte, peers *[]uint64) error {
+	this.mtx.RLock()
+	defer this.mtx.RUnlock()
+	*peers = (*peers)[0:0]
+	return this.root.matchPeers(topic, peers)
 }
 func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
@@ -245,6 +252,20 @@ func (this *Node) appendRecipents(peers *[]uint64, subs *[]string, qoss *[]int32
 		*peers = append(*peers, this.Peer[i])
 	}
 }
+func (this *Node) appendUniquePeers(peers *[]uint64) {
+	for i := range this.Recipients {
+		found := false
+		for _, peer := range *peers {
+			if this.Peer[i] == peer {
+				found = true
+				break
+			}
+		}
+		if !found {
+			*peers = append(*peers, this.Peer[i])
+		}
+	}
+}
 func (this *Node) match(topic format.Topic, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	topic, token := topic.Next()
 
@@ -259,6 +280,27 @@ func (this *Node) match(topic format.Topic, peers *[]uint64, subs *[]string, qos
 			n.appendRecipents(peers, subs, qoss)
 		} else if k == SWC || k == token {
 			if err := n.match(topic, peers, subs, qoss); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+func (this *Node) matchPeers(topic format.Topic, peers *[]uint64) error {
+	topic, token := topic.Next()
+
+	if token == "" {
+		this.appendUniquePeers(peers)
+		return nil
+	}
+
+	for k, n := range this.Children {
+		// If the key is "#", then these subscribers are added to the result set
+		if k == MWC {
+			n.appendUniquePeers(peers)
+		} else if k == SWC || k == token {
+			if err := n.matchPeers(topic, peers); err != nil {
 				return err
 			}
 		}

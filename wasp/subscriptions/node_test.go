@@ -39,6 +39,18 @@ func TestTree_Match(t *testing.T) {
 	require.Contains(t, recipientIds, "test")
 	require.Contains(t, recipientIds, "test2")
 }
+func TestTree_MatchPeers(t *testing.T) {
+	myTree := &tree{
+		root: newNode(),
+	}
+	require.NoError(t, myTree.Insert(1, []byte("test/a"), 0, "test"))
+	require.NoError(t, myTree.Insert(3, []byte("test/+"), 1, "test2"))
+	require.NoError(t, myTree.Insert(2, []byte("test/b/c"), 1, "test3"))
+	recipientPeers := []uint64{}
+	require.NoError(t, myTree.MatchPeers([]byte("test/a"), &recipientPeers))
+	require.Equal(t, 2, len(recipientPeers))
+	require.Equal(t, uint64(1), recipientPeers[0])
+}
 func TestTree_Count(t *testing.T) {
 	myTree := &tree{
 		root: newNode(),
