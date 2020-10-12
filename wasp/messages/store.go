@@ -32,8 +32,8 @@ var (
 
 type Log interface {
 	io.Closer
-	Append(b []*packet.Publish) error
-	Consume(ctx context.Context, from uint64, f func(string, *packet.Publish) error) error
+	Append(payload []*StoredMessage) error
+	Consume(ctx context.Context, consumerName string, f func(string, *packet.Publish) error) error
 }
 
 type messageLog struct {
@@ -79,7 +79,7 @@ func mustDecode(b []byte) *StoredMessage {
 	return p
 }
 
-func New(options Options) (*messageLog, error) {
+func New(options Options) (Log, error) {
 	handle, err := bolt.Open(path.Join(options.Path, "messages"), dbFileMode, options.BoltOptions)
 	if err != nil {
 		return nil, err
@@ -187,7 +187,7 @@ func (b *messageLog) advanceOffset(consumer []byte, offset uint64) error {
 		return config.Put(consumer, uint64ToBytes(offset))
 	})
 }
-func (b *messageLog) Get(offset uint64, buff []*StoredMessage) (int, uint64, error) {
+func (b *messageLog) get(offset uint64, buff []*StoredMessage) (int, uint64, error) {
 	tx, err := b.conn.Begin(false)
 	if err != nil {
 		return 0, 0, err
@@ -239,7 +239,7 @@ func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(st
 	b.subscribe(id, notifications)
 	for range notifications {
 		for {
-			count, next, err := b.Get(lastSeen, buf)
+			count, next, err := b.get(lastSeen, buf)
 			if err != nil {
 				return err
 			}
