@@ -60,13 +60,22 @@ func run(config *viper.Viper) {
 		}()
 		wasp.L(ctx).Info("started pprof", zap.String("pprof_url", fmt.Sprintf("http://%s/", address)))
 	}
-
+	messageLog, err := messages.New(messages.Options{
+		Path: config.GetString("data-dir"),
+		BoltOptions: &bolt.Options{
+			Timeout:         0,
+			InitialMmapSize: 5 * 1000 * 1000,
+			ReadOnly:        false,
+		},
+	})
+	if err != nil {
+		panic(err)
+	}
 	operations := async.NewOperations(ctx, wasp.L(ctx))
 
 	healthServer := health.NewServer()
 	healthServer.Resume()
 	cancelCh := make(chan struct{})
-	publishes := make(chan *messages.StoredMessage, 20)
 	commandsCh := make(chan raft.Command)
 	state := wasp.NewState()
 	if config.GetInt("raft-bootstrap-expect") > 1 {
@@ -97,9 +106,8 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}
-	remotePublishCh := make(chan *messages.StoredMessage, 20)
 	stateMachine := fsm.NewFSM(id, state, commandsCh, auditRecorder)
-	mqttServer := wasp.NewMQTTServer(state, stateMachine, publishes, remotePublishCh)
+	mqttServer := wasp.NewMQTTServer(state, stateMachine, messageLog)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {
@@ -117,6 +125,12 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Debug("discovered nodes using Consul",
 			zap.Duration("consul_discovery_duration", time.Since(discoveryStarted)), zap.Int("node_count", len(consulJoinList)))
 		joinList = append(joinList, consulJoinList...)
+	}
+
+	publishStorer := wasp.PublishStorer{
+		ID:      id,
+		State:   state,
+		Storage: messageLog,
 	}
 
 	raftConfig := cluster.RaftConfig{
@@ -149,7 +163,7 @@ func run(config *viper.Viper) {
 				sessions := state.ListSessionMetadatas()
 				for _, session := range sessions {
 					if session.Peer == id && session.LWT != nil {
-						publishes <- &messages.StoredMessage{Publish: session.LWT, Sender: session.SessionID}
+						publishStorer.Store(ctx, session.LWT)
 					}
 				}
 			}
@@ -171,6 +185,9 @@ func run(config *viper.Viper) {
 		RaftConfig: raftConfig,
 	}, rpcDialer, server, wasp.L(ctx))
 	clusterNode := clusterMultiNode.Node("wasp", raftConfig)
+
+	publishStorer.Transport = clusterNode
+
 	operations.Run("cluster listener", func(ctx context.Context) {
 		err := server.Serve(clusterListener)
 		if err != nil {
@@ -225,17 +242,7 @@ func run(config *viper.Viper) {
 		}
 	})
 
-	messageLog, err := messages.New(messages.Options{
-		Path: config.GetString("data-dir"),
-		BoltOptions: &bolt.Options{
-			Timeout:         0,
-			InitialMmapSize: 5 * 1000 * 1000,
-			ReadOnly:        false,
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
+	loadedTaps := []taps.Tap{}
 	if remote := config.GetString("syslog-tap-address"); remote != "" {
 		operations.Run("syslog tap", func(ctx context.Context) {
 			tap, err := taps.Syslog(ctx, remote)
@@ -243,10 +250,7 @@ func run(config *viper.Viper) {
 				wasp.L(ctx).Warn("failed to start syslog tap", zap.Error(err))
 				return
 			}
-			err = taps.Run(ctx, "tap_syslog", messageLog, tap)
-			if err != nil {
-				wasp.L(ctx).Info("syslog tap failed", zap.Error(err))
-			}
+			loadedTaps = append(loadedTaps, tap)
 		})
 	}
 	if target := config.GetString("nest-tap-address"); target != "" {
@@ -262,69 +266,49 @@ func run(config *viper.Viper) {
 				return
 			}
 			wasp.L(ctx).Debug("nest tap started")
-			err = taps.Run(ctx, "tap_grpc", messageLog, tap)
-			if err != nil {
-				wasp.L(ctx).Info("nest tap failed", zap.Error(err))
-			}
+			loadedTaps = append(loadedTaps, tap)
 		})
 	}
 	operations.Run("publish processor", func(ctx context.Context) {
-		messageLog.Consume(ctx, "publish_processor", func(sender string, p *packet.Publish) error {
-			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, true, p)
+		publishDistributor := wasp.PublishDistributor{
+			ID:    id,
+			State: state,
+		}
+		messageLog.Consume(ctx, "publish_processor", func(p *packet.Publish) error {
+			err := publishDistributor.Distribute(ctx, p)
 			if err != nil {
-				wasp.L(ctx).Info("publish processing failed", zap.Error(err))
+				wasp.L(ctx).Info("publish distribution failed", zap.Error(err))
 			}
 			return err
 		})
 	})
-	operations.Run("remote publish processor", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case p := <-remotePublishCh:
-				err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, p.Publish)
-				if err != nil {
-					wasp.L(ctx).Info("remote publish processing failed", zap.Error(err))
-				}
-			}
-		}
-	})
 
-	operations.Run("publish storer", func(ctx context.Context) {
-		buf := make([]*messages.StoredMessage, 0, 100)
-		ticker := time.NewTicker(20 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				if len(buf) > 0 {
-					err := wasp.StorePublish(messageLog, buf)
-					if err != nil {
-						wasp.L(ctx).Error("publish storing failed", zap.Error(err))
-					}
-				}
-				buf = buf[:0]
-			case p := <-publishes:
-				buf = append(buf, p)
-				if len(buf) == 100 {
-					err := wasp.StorePublish(messageLog, buf)
-					if err != nil {
-						wasp.L(ctx).Error("publish storing failed", zap.Error(err))
-					}
-					buf = buf[:0]
-				}
-			}
-		}
-	})
 	handler := func(m transport.Metadata) error {
 		go func() {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
 			ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-			err := wasp.RunSession(ctx, id, stateMachine, state, m.Channel, publishes,
+			err := wasp.RunSession(ctx, id, stateMachine, state, m.Channel,
+				func(ctx context.Context, sender string, publish *packet.Publish) error {
+					for _, tap := range loadedTaps {
+						err := tap(ctx, sender, publish)
+						if err != nil {
+							wasp.L(ctx).Warn("failed to run tap", zap.Error(err))
+						}
+					}
+					if publish.Header.Retain {
+						if publish.Payload == nil {
+							err = stateMachine.DeleteRetainedMessage(ctx, publish.Topic)
+						} else {
+							err = stateMachine.RetainedMessage(ctx, publish)
+						}
+						if err != nil {
+							wasp.L(ctx).Warn("failed to retain message", zap.Error(err))
+						}
+						publish.Header.Retain = false
+					}
+					return publishStorer.Store(ctx, publish)
+				},
 				func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error) {
 					principal, err := authHandler.Authenticate(ctx, mqtt, auth.TransportContext{
 						Encrypted:       m.Encrypted,

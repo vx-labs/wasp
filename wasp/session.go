@@ -10,7 +10,6 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/auth"
-	"github.com/vx-labs/wasp/wasp/messages"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
@@ -28,6 +27,8 @@ var (
 
 type AuthenticationHandler func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error)
 
+type PublishHandler func(ctx context.Context, sender string, publish *packet.Publish) error
+
 func doAuth(ctx context.Context, connectPkt *packet.Connect, handler AuthenticationHandler) (string, string, error) {
 	return handler(ctx,
 		auth.ApplicationContext{
@@ -37,7 +38,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 		})
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, ch chan *messages.StoredMessage, authHandler AuthenticationHandler) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler) error {
 	defer c.Close()
 	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
 		"protocol": "mqtt",
@@ -122,7 +123,10 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		if err != nil {
 			L(ctx).Debug("session lost", zap.String("loss_reason", err.Error()))
 			if session.Lwt != nil {
-				ch <- &messages.StoredMessage{Publish: session.Lwt, Sender: session.ID}
+				err := publishHandler(ctx, session.ID, session.Lwt)
+				if err != nil {
+					L(ctx).Error("failed to publish session LWT", zap.Error(err))
+				}
 			}
 		}
 	}()
@@ -142,7 +146,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			return session.Close()
 		}
 		start := time.Now()
-		err = processPacket(ctx, peer, fsm, state, ch, session, pkt)
+		err = processPacket(ctx, peer, fsm, state, publishHandler, session, pkt)
 		stats.HistogramVec("sessionPacketHandling").With(map[string]string{
 			"packet_type": packet.TypeString(pkt),
 		}).Observe(stats.MilisecondsElapsed(start))

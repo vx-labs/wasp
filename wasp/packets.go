@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/messages"
 	"github.com/vx-labs/wasp/wasp/sessions"
 )
 
@@ -19,7 +18,7 @@ type FSM interface {
 	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 
-func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishes chan *messages.StoredMessage, session *sessions.Session, pkt interface{}) error {
+func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishHander PublishHandler, session *sessions.Session, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -27,13 +26,12 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		return session.Close()
 	case *packet.Publish:
 		p.Topic = sessions.PrefixMountPoint(session.MountPoint, p.Topic)
-		select {
-		case publishes <- &messages.StoredMessage{Sender: session.ID, Publish: p}:
-		case <-ctx.Done():
-			return ctx.Err()
+		err := publishHander(ctx, session.ID, p)
+		if err != nil {
+			return err
 		}
 		if p.Header.Qos == 1 {
-			session.Encoder.PubAck(&packet.PubAck{
+			return session.Encoder.PubAck(&packet.PubAck{
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			})
