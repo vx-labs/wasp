@@ -228,7 +228,7 @@ func run(config *viper.Viper) {
 			}
 
 			buf, _ := json.Marshal(data)
-			err := wasp.ProcessPublish(ctx, id, clusterNode, stateMachine, state, false, &packet.Publish{
+			err := messageLog.Append(&packet.Publish{
 				Header:  &packet.Header{Qos: 1},
 				Topic:   []byte(fmt.Sprintf("%s/$SYS/_audit/events", tenant)),
 				Payload: buf,
