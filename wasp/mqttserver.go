@@ -4,19 +4,17 @@ import (
 	"context"
 
 	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/messages"
 	"google.golang.org/grpc"
 )
 
 type MqttServer struct {
-	localPublishCh  chan *messages.StoredMessage
-	remotePublishCh chan *messages.StoredMessage
-	state           State
-	fsm             FSM
+	storage MessageLog
+	state   State
+	fsm     FSM
 }
 
-func NewMQTTServer(state State, fsm FSM, localPublishCh, remotePublishCh chan *messages.StoredMessage) *MqttServer {
-	return &MqttServer{state: state, fsm: fsm, localPublishCh: localPublishCh, remotePublishCh: remotePublishCh}
+func NewMQTTServer(state State, fsm FSM, storage MessageLog) *MqttServer {
+	return &MqttServer{state: state, fsm: fsm, storage: storage}
 }
 
 func (s *MqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
@@ -45,21 +43,7 @@ func (s *MqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscript
 }
 
 func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
-	if r.ResolveRemoteRecipients {
-		select {
-		case s.localPublishCh <- &messages.StoredMessage{Sender: "_rpc", Publish: r.Message}:
-			return &api.DistributeMessageResponse{}, nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	} else {
-		select {
-		case s.remotePublishCh <- &messages.StoredMessage{Sender: "_rpc", Publish: r.Message}:
-			return &api.DistributeMessageResponse{}, nil
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
+	return &api.DistributeMessageResponse{}, s.storage.Append(r.Message)
 }
 func (s *MqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessionMetadatasRequest) (*api.ListSessionMetadatasResponse, error) {
 	return &api.ListSessionMetadatasResponse{SessionMetadatasList: s.state.ListSessionMetadatas()}, nil

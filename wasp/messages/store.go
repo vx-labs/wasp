@@ -32,8 +32,8 @@ var (
 
 type Log interface {
 	io.Closer
-	Append(payload []*StoredMessage) error
-	Consume(ctx context.Context, consumerName string, f func(string, *packet.Publish) error) error
+	Append(payload *packet.Publish) error
+	Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error
 }
 
 type messageLog struct {
@@ -63,15 +63,15 @@ type Options struct {
 	NoSync bool
 }
 
-func mustEncode(p *StoredMessage) []byte {
+func mustEncode(p *packet.Publish) []byte {
 	buf, err := proto.Marshal(p)
 	if err != nil {
 		panic(err)
 	}
 	return buf
 }
-func mustDecode(b []byte) *StoredMessage {
-	p := &StoredMessage{}
+func mustDecode(b []byte) *packet.Publish {
+	p := &packet.Publish{}
 	err := proto.Unmarshal(b, p)
 	if err != nil {
 		panic(err)
@@ -139,7 +139,7 @@ func (b *messageLog) unsubscribe(id string) {
 	}
 }
 
-func (b *messageLog) Append(payload []*StoredMessage) error {
+func (b *messageLog) Append(payload *packet.Publish) error {
 	tx, err := b.conn.Begin(true)
 	if err != nil {
 		return err
@@ -150,16 +150,15 @@ func (b *messageLog) Append(payload []*StoredMessage) error {
 	if bucket == nil {
 		return ErrBucketNotFound
 	}
-	for idx := range payload {
-		offset, err := bucket.NextSequence()
-		if err != nil {
-			return err
-		}
-		err = bucket.Put(uint64ToBytes(offset), mustEncode(payload[idx]))
-		if err != nil {
-			return err
-		}
+	offset, err := bucket.NextSequence()
+	if err != nil {
+		return err
 	}
+	err = bucket.Put(uint64ToBytes(offset), mustEncode(payload))
+	if err != nil {
+		return err
+	}
+
 	b.trim(bucket)
 	err = tx.Commit()
 	if err == nil {
@@ -187,7 +186,7 @@ func (b *messageLog) advanceOffset(consumer []byte, offset uint64) error {
 		return config.Put(consumer, uint64ToBytes(offset))
 	})
 }
-func (b *messageLog) get(offset uint64, buff []*StoredMessage) (int, uint64, error) {
+func (b *messageLog) get(offset uint64, buff []*packet.Publish) (int, uint64, error) {
 	tx, err := b.conn.Begin(false)
 	if err != nil {
 		return 0, 0, err
@@ -224,9 +223,9 @@ func (b *messageLog) consumerOffset(consumer []byte) uint64 {
 	}
 	return offset
 }
-func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(string, *packet.Publish) error) error {
+func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error {
 	id := uuid.New().String()
-	buf := make([]*StoredMessage, 10)
+	buf := make([]*packet.Publish, 10)
 	notifications := make(chan struct{}, 1)
 	consumer := []byte(consumerName)
 	notifications <- struct{}{}
@@ -244,7 +243,7 @@ func (b *messageLog) Consume(ctx context.Context, consumerName string, f func(st
 				return err
 			}
 			for _, p := range buf[0:count] {
-				err = f(p.Sender, p.Publish)
+				err = f(p)
 				if err != nil {
 					log.Print(err)
 					select {
