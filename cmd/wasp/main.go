@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	pprof "net/http/pprof"
@@ -318,7 +319,9 @@ func run(config *viper.Viper) {
 					return principal.ID, principal.MountPoint, err
 				})
 			if err != nil {
-				wasp.L(ctx).Error("failed to run session", zap.Error(err))
+				if err != io.EOF {
+					wasp.L(ctx).Error("failed to run session", zap.Error(err))
+				}
 			}
 		}()
 		return nil
