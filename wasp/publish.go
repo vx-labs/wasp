@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/vx-labs/wasp/wasp/sessions"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -17,6 +16,7 @@ import (
 type MessageLog interface {
 	io.Closer
 	Append(b *packet.Publish) error
+	Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error
 }
 
 func getLowerQos(a, b int32) int32 {
@@ -26,78 +26,15 @@ func getLowerQos(a, b int32) int32 {
 	return a
 }
 
-type Membership interface {
-	Call(id uint64, f func(*grpc.ClientConn) error) error
-}
-
-func ProcessPublish(ctx context.Context, id uint64, transport Membership, fsm FSM, state ReadState, local bool, p *packet.Publish) error {
-	if p == nil {
-		return nil
-	}
-	start := time.Now()
-	defer func() {
-		if local {
-			stats.Histogram("publishLocalProcessingTime").Observe(stats.MilisecondsElapsed(start))
-		} else {
-			stats.Histogram("publishRemoteProcessingTime").Observe(stats.MilisecondsElapsed(start))
-		}
-	}()
-	if p.Header.Retain {
-		if len(p.Payload) == 0 {
-			err := fsm.DeleteRetainedMessage(ctx, p.Topic)
-			if err != nil {
-				return err
-			}
-		} else {
-			err := fsm.RetainedMessage(ctx, p)
-			if err != nil {
-				return err
-			}
-		}
-		p.Header.Retain = false
-	}
-	peers, recipients, qoss, err := state.Recipients(p.Topic)
-	if err != nil {
-		return err
-	}
-	peersDone := map[uint64]struct{}{}
-	for idx := range recipients {
-		publish := &packet.Publish{
-			Header: &packet.Header{
-				Dup: p.Header.Dup,
-				Qos: getLowerQos(qoss[idx], p.Header.Qos),
-			},
-			Payload: p.Payload,
-			Topic:   p.Topic,
-		}
-		if peers[idx] == id {
-			session := state.GetSession(recipients[idx])
-			if session != nil {
-				session.Send(publish)
-			}
-		} else if local {
-			if _, ok := peersDone[peers[idx]]; !ok {
-				peersDone[peers[idx]] = struct{}{}
-				ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
-				err := transport.Call(peers[idx], func(c *grpc.ClientConn) error {
-					_, err := api.NewMQTTClient(c).DistributeMessage(ctx, &api.DistributeMessageRequest{Message: publish})
-					return err
-				})
-				cancel()
-				if err != nil {
-					L(ctx).Warn("failed to distribute message to remote peer",
-						zap.Error(err), zap.String("hex_remote_peer_id", fmt.Sprintf("%x", peers[idx])))
-				}
-			}
-		}
-	}
-	return nil
+type PublishDistributorState interface {
+	Recipients(topic []byte) ([]uint64, []string, []int32, error)
+	GetSession(id string) *sessions.Session
 }
 
 // PublishDistributor distributes message to local recipients
 type PublishDistributor struct {
 	ID     uint64
-	State  ReadState
+	State  PublishDistributorState
 	logger *zap.Logger
 }
 
@@ -126,11 +63,18 @@ func (pdist *PublishDistributor) Distribute(ctx context.Context, publish *packet
 	return nil
 }
 
+type PublishStorerState interface {
+	Destinations(topic []byte) ([]uint64, error)
+}
+type PublishStorerTransport interface {
+	Call(id uint64, f func(*grpc.ClientConn) error) error
+}
+
 // PublishStorer stores publish messaes in local or remote message logs.
 type PublishStorer struct {
 	ID        uint64
-	Transport Membership
-	State     ReadState
+	Transport PublishStorerTransport
+	State     PublishStorerState
 	Storage   MessageLog
 	logger    *zap.Logger
 }
@@ -164,4 +108,20 @@ func (storer *PublishStorer) Store(ctx context.Context, publish *packet.Publish)
 		return errors.New("delivery failed")
 	}
 	return nil
+}
+
+func DistributePublishes(id uint64, state PublishDistributorState, messageLog MessageLog) func(ctx context.Context) {
+	return func(ctx context.Context) {
+		publishDistributor := &PublishDistributor{
+			ID:    id,
+			State: state,
+		}
+		messageLog.Consume(ctx, "publish_distributor", func(p *packet.Publish) error {
+			err := publishDistributor.Distribute(ctx, p)
+			if err != nil {
+				L(ctx).Info("publish distribution failed", zap.Error(err))
+			}
+			return err
+		})
+	}
 }

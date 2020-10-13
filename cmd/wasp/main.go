@@ -270,19 +270,7 @@ func run(config *viper.Viper) {
 			loadedTaps = append(loadedTaps, tap)
 		})
 	}
-	operations.Run("publish processor", func(ctx context.Context) {
-		publishDistributor := wasp.PublishDistributor{
-			ID:    id,
-			State: state,
-		}
-		messageLog.Consume(ctx, "publish_processor", func(p *packet.Publish) error {
-			err := publishDistributor.Distribute(ctx, p)
-			if err != nil {
-				wasp.L(ctx).Info("publish distribution failed", zap.Error(err))
-			}
-			return err
-		})
-	})
+	operations.Run("publish distributor", wasp.DistributePublishes(id, state, messageLog))
 
 	handler := func(m transport.Metadata) error {
 		go func() {
