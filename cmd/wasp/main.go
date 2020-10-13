@@ -11,10 +11,10 @@ import (
 	pprof "net/http/pprof"
 	"os"
 	"os/signal"
+	"path"
 	"syscall"
 	"time"
 
-	"github.com/boltdb/bolt"
 	"github.com/vx-labs/wasp/cluster"
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
@@ -61,14 +61,7 @@ func run(config *viper.Viper) {
 		}()
 		wasp.L(ctx).Info("started pprof", zap.String("pprof_url", fmt.Sprintf("http://%s/", address)))
 	}
-	messageLog, err := messages.New(messages.Options{
-		Path: config.GetString("data-dir"),
-		BoltOptions: &bolt.Options{
-			Timeout:         0,
-			InitialMmapSize: 5 * 1000 * 1000,
-			ReadOnly:        false,
-		},
-	})
+	messageLog, err := messages.New(path.Join(config.GetString("data-dir"), "published-messages"))
 	if err != nil {
 		panic(err)
 	}
