@@ -57,7 +57,7 @@ type store struct {
 }
 
 func New(datadir string) (Log, error) {
-	log, err := commitlog.Open(path.Join(datadir, "log"), 250)
+	log, err := commitlog.Open(path.Join(datadir, "log"), 500, commitlog.WithMaxSegmentCount(10))
 	if err != nil {
 		return nil, err
 	}
