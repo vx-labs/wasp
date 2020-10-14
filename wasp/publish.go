@@ -56,7 +56,10 @@ func (pdist *PublishDistributor) Distribute(ctx context.Context, publish *packet
 			}
 			session := pdist.State.GetSession(recipients[idx])
 			if session != nil {
-				session.Send(publish)
+				err := session.Send(publish)
+				if err != nil {
+					L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", session.ID))
+				}
 			}
 		}
 	}
