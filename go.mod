@@ -28,7 +28,7 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.6.1
 	github.com/tysontate/gommap v0.0.0-20190103205956-899e1273fb5c
-	github.com/vx-labs/commitlog v1.0.5
+	github.com/vx-labs/commitlog v1.2.1
 	github.com/vx-labs/mqtt-protocol v4.3.5+incompatible
 	go.etcd.io/etcd v0.0.0-20200716221620-18dfb9cca345
 	go.uber.org/zap v1.16.0
