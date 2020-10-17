@@ -13,7 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/vx-labs/wasp/cluster/clusterpb"
+	"github.com/vx-labs/cluster/clusterpb"
 	"go.uber.org/zap"
 )
 

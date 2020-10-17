@@ -15,15 +15,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vx-labs/wasp/cluster"
+	"github.com/vx-labs/cluster"
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 
 	"github.com/spf13/viper"
+	"github.com/vx-labs/cluster/raft"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/async"
-	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/rpc"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"

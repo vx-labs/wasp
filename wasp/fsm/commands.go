@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/vx-labs/cluster/raft"
 	packet "github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/cluster/raft"
 	"github.com/vx-labs/wasp/wasp/audit"
 	"go.etcd.io/etcd/raft/raftpb"
 )
