@@ -4,30 +4,44 @@ import (
 	"bytes"
 	"io"
 	"sync"
+	"time"
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/stats"
 )
 
 type Session struct {
-	ID           string
-	ClientID     string
-	MountPoint   string
-	Lwt          *packet.Publish
-	conn         io.WriteCloser
-	Encoder      *encoder.Encoder
-	Disconnected bool
-	mtx          sync.Mutex
-	topics       [][]byte
+	ID                string
+	ClientID          string
+	MountPoint        string
+	lwt               *packet.Publish
+	keepaliveInterval int32
+	conn              io.Writer
+	Encoder           *encoder.Encoder
+	Disconnected      bool
+	mtx               sync.Mutex
+	topics            [][]byte
 }
 
-func NewSession(c io.WriteCloser, stats encoder.StatRecorder) *Session {
-	return &Session{
-		conn:    c,
-		Encoder: encoder.New(c, encoder.WithStatRecorder(stats)),
+func NewSession(id, mountpoint string, c io.Writer, connect *packet.Connect) (*Session, error) {
+	enc := encoder.New(c,
+		encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
+			"protocol": "mqtt",
+		})),
+	)
+
+	s := &Session{
+		ID:         id,
+		MountPoint: mountpoint,
+		conn:       c,
+		Encoder:    enc,
 	}
+	return s, s.processConnect(connect)
 }
-
+func (s *Session) LWT() *packet.Publish {
+	return s.lwt
+}
 func (s *Session) Send(publish *packet.Publish) error {
 	if len(s.MountPoint) > len(publish.Topic) {
 		return nil
@@ -42,12 +56,13 @@ func (s *Session) Send(publish *packet.Publish) error {
 	return s.Encoder.Publish(outgoing)
 }
 
-func (s *Session) ProcessConnect(connect *packet.Connect) error {
+func (s *Session) processConnect(connect *packet.Connect) error {
 	s.ClientID = string(connect.ClientId)
+	s.keepaliveInterval = connect.KeepaliveTimer
 	if len(connect.WillTopic) > 0 {
-		s.Lwt = &packet.Publish{
+		s.lwt = &packet.Publish{
 			Header:  &packet.Header{Retain: connect.WillRetain, Qos: connect.WillQos},
-			Topic:   connect.WillTopic,
+			Topic:   PrefixMountPoint(s.MountPoint, connect.WillTopic),
 			Payload: connect.WillPayload,
 		}
 	}
@@ -71,6 +86,6 @@ func (s *Session) RemoveTopic(t []byte) {
 func (s *Session) GetTopics() [][]byte {
 	return s.topics
 }
-func (s *Session) Close() error {
-	return s.conn.Close()
+func (s *Session) NextDeadline(t time.Time) time.Time {
+	return t.Add(2 * time.Duration(s.keepaliveInterval) * time.Second)
 }

@@ -23,7 +23,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 	defer cancel()
 	switch p := pkt.(type) {
 	case *packet.Connect:
-		return session.Close()
+		return ErrProtocolViolation
 	case *packet.Publish:
 		p.Topic = sessions.PrefixMountPoint(session.MountPoint, p.Topic)
 		err := publishHander(ctx, session.ID, p)

@@ -3,7 +3,6 @@ package wasp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/decoder"
@@ -23,6 +22,7 @@ var (
 	ErrSessionDisconnected   = errors.New("Session disconnected")
 	ErrUnknownPacketReceived = errors.New("Received unknown packet type")
 	ErrAuthenticationFailed  = errors.New("Authentication failed")
+	ErrProtocolViolation     = errors.New("Protocol violation")
 )
 
 type AuthenticationHandler func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error)
@@ -40,11 +40,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 
 func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler) error {
 	defer c.Close()
-	session := sessions.NewSession(c, stats.GaugeVec("egressBytes").With(map[string]string{
-		"protocol": "mqtt",
-	}))
 	enc := encoder.New(c)
-	keepAlive := int32(30)
 	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
 		"protocol": "mqtt",
 	})))
@@ -58,21 +54,10 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	}
 	connectPkt, ok := firstPkt.(*packet.Connect)
 	if !ok {
-		fmt.Println(firstPkt)
 		return ErrConnectNotDone
 	}
-	err := session.ProcessConnect(connectPkt)
-	if err != nil {
-		return err
-	}
+
 	id, mountPoint, err := doAuth(ctx, connectPkt, authHandler)
-	session.ID = id
-	session.MountPoint = mountPoint
-	ctx = AddFields(ctx,
-		zap.String("session_id", session.ID),
-		zap.Time("connected_at", time.Now()),
-		zap.String("session_username", string(connectPkt.Username)),
-	)
 	if err != nil {
 		L(ctx).Info("authentication failed", zap.Error(err))
 		return enc.ConnAck(&packet.ConnAck{
@@ -80,13 +65,17 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	if session.Lwt != nil {
-		session.Lwt.Topic = sessions.PrefixMountPoint(session.MountPoint, session.Lwt.Topic)
+	session, err := sessions.NewSession(id, mountPoint, c, connectPkt)
+	if err != nil {
+		return err
 	}
-	ctx = AddFields(ctx,
-		zap.String("session_mountpoint", session.MountPoint),
-	)
 
+	ctx = AddFields(ctx,
+		zap.String("session_id", id),
+		zap.String("session_mountpoint", mountPoint),
+		zap.Time("connected_at", time.Now()),
+		zap.String("session_username", string(connectPkt.Username)),
+	)
 	L(ctx).Debug("session connected")
 	if metadata := state.GetSessionMetadatasByClientID(session.ClientID); metadata != nil {
 		err := fsm.DeleteSessionMetadata(ctx, metadata.SessionID, metadata.MountPoint)
@@ -95,37 +84,33 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		}
 		L(ctx).Debug("deleted old session metadata")
 	}
-	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.Lwt, session.MountPoint)
+	err = fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.LWT(), session.MountPoint)
 	if err != nil {
 		return err
 	}
 	L(ctx).Debug("session metadata created")
 	state.SaveSession(session.ID, session)
-	defer state.CloseSession(session.ID)
-	keepAlive = connectPkt.KeepaliveTimer
 	c.SetDeadline(
-		time.Now().Add(2 * time.Duration(keepAlive) * time.Second),
+		session.NextDeadline(time.Now()),
 	)
 	defer func() {
+		state.CloseSession(session.ID)
 		topics := session.GetTopics()
 		for idx := range topics {
 			fsm.Unsubscribe(ctx, session.ID, topics[idx])
 		}
-	}()
-	defer func() {
 		metadata := state.GetSessionMetadatasByClientID(session.ClientID)
 		fsm.DeleteSessionMetadata(ctx, session.ID, session.MountPoint)
 		if metadata == nil || metadata.SessionID != session.ID || session.Disconnected {
 			// Session has reconnected on another peer.
 			return
 		}
-		err = dec.Err()
-		if err != nil {
-			L(ctx).Debug("session lost", zap.String("loss_reason", err.Error()))
-			if session.Lwt != nil {
-				err := publishHandler(ctx, session.ID, session.Lwt)
+		if !session.Disconnected {
+			L(ctx).Debug("session lost")
+			if session.LWT() != nil {
+				err := publishHandler(ctx, session.ID, session.LWT())
 				if err != nil {
-					L(ctx).Error("failed to publish session LWT", zap.Error(err))
+					L(ctx).Warn("failed to publish session LWT", zap.Error(err))
 				}
 			}
 		}
@@ -143,7 +128,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 				zap.String("packet_type", packet.TypeString(pkt)),
 				zap.Int("received_packet_size", pkt.Length()),
 			)
-			return session.Close()
+			return ErrProtocolViolation
 		}
 		start := time.Now()
 		err = processPacket(ctx, peer, fsm, state, publishHandler, session, pkt)
@@ -154,13 +139,17 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		if err == ErrSessionDisconnected {
 			L(ctx).Debug("session closed")
 			session.Disconnected = true
-			return session.Close()
+			return nil
+		}
+		if err == ErrProtocolViolation {
+			L(ctx).Warn("procotol violation")
+			return err
 		}
 		if err != nil {
 			L(ctx).Warn("session packet processing failed", zap.Error(err))
 		}
 		c.SetDeadline(
-			time.Now().Add(2 * time.Duration(keepAlive) * time.Second),
+			session.NextDeadline(time.Now()),
 		)
 	}
 	return err
