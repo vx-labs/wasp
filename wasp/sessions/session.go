@@ -154,6 +154,10 @@ func (s *Session) Send(publish *packet.Publish) error {
 	if len(recipientQos) > 0 {
 		qos = recipientQos[0]
 	}
+	if qos > 1 {
+		// TODO: support QoS2
+		qos = 1
+	}
 
 	outgoing := packet.Publish{
 		Header: &packet.Header{
