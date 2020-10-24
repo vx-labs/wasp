@@ -48,7 +48,8 @@ func mustDecode(b []byte) *packet.Publish {
 type Log interface {
 	io.Closer
 	Append(payload *packet.Publish) error
-	Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error
+	Consume(ctx context.Context, consumerName string, f func(uint64, *packet.Publish) error) error
+	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
 }
 
 type store struct {
@@ -71,12 +72,26 @@ func (s *store) Append(publish *packet.Publish) error {
 	return err
 }
 
+func (s *store) Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error {
+	reader := s.log.Reader()
+	reader.Seek(0, io.SeekEnd)
+	return consumer.Consume(ctx, reader, func(c context.Context, b stream.Batch) error {
+		for _, record := range b.Records {
+			err := f(mustDecode(record))
+			if err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func (s *store) maybeTruncate(currentOffset uint64) {
 	if currentOffset > 1500 && currentOffset%1000 == 0 {
 		s.log.TruncateBefore(currentOffset - 300)
 	}
 }
-func (s *store) Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error {
+func (s *store) Consume(ctx context.Context, consumerName string, f func(uint64, *packet.Publish) error) error {
 
 	statePath := path.Join(s.datadir, fmt.Sprintf("%s.state", consumerName))
 	var fd *os.File
@@ -116,11 +131,13 @@ func (s *store) Consume(ctx context.Context, consumerName string, f func(*packet
 	s.maybeTruncate(offset)
 	return consumer.Consume(ctx, cursor, func(c context.Context, b stream.Batch) error {
 		for idx, record := range b.Records {
-			err := f(mustDecode(record))
+			newOffset := b.FirstOffset + uint64(idx)
+
+			err := f(newOffset, mustDecode(record))
 			if err != nil {
 				return err
 			}
-			offset = b.FirstOffset + uint64(idx)
+			offset = newOffset
 			Encoding.PutUint64(stateOffset, offset)
 			s.maybeTruncate(offset)
 		}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/vx-labs/commitlog/stream"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -16,14 +17,8 @@ import (
 type MessageLog interface {
 	io.Closer
 	Append(b *packet.Publish) error
-	Consume(ctx context.Context, consumerName string, f func(*packet.Publish) error) error
-}
-
-func getLowerQos(a, b int32) int32 {
-	if a > b {
-		return b
-	}
-	return a
+	Consume(ctx context.Context, consumerName string, f func(uint64, *packet.Publish) error) error
+	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
 }
 
 type PublishDistributorState interface {
@@ -39,24 +34,16 @@ type PublishDistributor struct {
 }
 
 // Distribute distributes the message to local subscribers.
-func (pdist *PublishDistributor) Distribute(ctx context.Context, publish *packet.Publish) error {
-	peers, recipients, qoss, err := pdist.State.Recipients(publish.Topic)
+func (pdist *PublishDistributor) Distribute(ctx context.Context, offset uint64, publish *packet.Publish) error {
+	peers, recipients, _, err := pdist.State.Recipients(publish.Topic)
 	if err != nil {
 		return err
 	}
 	for idx := range recipients {
 		if peers[idx] == pdist.ID {
-			publish := &packet.Publish{
-				Header: &packet.Header{
-					Dup: publish.Header.Dup,
-					Qos: getLowerQos(qoss[idx], publish.Header.Qos),
-				},
-				Payload: publish.Payload,
-				Topic:   publish.Topic,
-			}
 			session := pdist.State.GetSession(recipients[idx])
 			if session != nil {
-				err := session.Send(publish)
+				err := session.Schedule(offset)
 				if err != nil {
 					L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", session.ID))
 				}
@@ -119,8 +106,8 @@ func DistributePublishes(id uint64, state PublishDistributorState, messageLog Me
 			ID:    id,
 			State: state,
 		}
-		messageLog.Consume(ctx, "publish_distributor", func(p *packet.Publish) error {
-			err := publishDistributor.Distribute(ctx, p)
+		messageLog.Consume(ctx, "publish_distributor", func(offset uint64, p *packet.Publish) error {
+			err := publishDistributor.Distribute(ctx, offset, p)
 			if err != nil {
 				L(ctx).Info("publish distribution failed", zap.Error(err))
 			}

@@ -298,7 +298,7 @@ func run(config *viper.Viper) {
 						X509Certificate: nil,
 					})
 					return principal.ID, principal.MountPoint, err
-				})
+				}, messageLog)
 			if err != nil {
 				if err != io.EOF {
 					wasp.L(ctx).Error("failed to run session", zap.Error(err))

@@ -46,7 +46,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			if err != nil {
 				return err
 			}
-			session.AddTopic(topics[idx])
+			session.AddTopic(topics[idx], p.Qos[idx])
 		}
 		err := session.Encoder.SubAck(&packet.SubAck{
 			Header:    p.Header,
@@ -84,6 +84,8 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			Header:    p.Header,
 			MessageId: p.MessageId,
 		})
+	case *packet.PubAck:
+		session.PubAck(p.MessageId)
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:

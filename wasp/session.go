@@ -38,7 +38,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 		})
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, messages MessageLog) error {
 	defer c.Close()
 	enc := encoder.New(c)
 	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
@@ -65,7 +65,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session, err := sessions.NewSession(id, mountPoint, c, connectPkt)
+	session, err := sessions.NewSession(id, mountPoint, c, messages, connectPkt)
 	if err != nil {
 		return err
 	}
@@ -122,35 +122,52 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	if err != nil {
 		return err
 	}
-	for pkt := range dec.Packet() {
-		if pkt.Length() > 10*1000*1000 {
-			L(ctx).Warn("received an oversized packet",
-				zap.String("packet_type", packet.TypeString(pkt)),
-				zap.Int("received_packet_size", pkt.Length()),
-			)
-			return ErrProtocolViolation
-		}
-		start := time.Now()
-		err = processPacket(ctx, peer, fsm, state, publishHandler, session, pkt)
-		stats.HistogramVec("sessionPacketHandling").With(map[string]string{
-			"packet_type": packet.TypeString(pkt),
-		}).Observe(stats.MilisecondsElapsed(start))
-
-		if err == ErrSessionDisconnected {
-			L(ctx).Debug("session closed")
-			session.Disconnected = true
-			return nil
-		}
-		if err == ErrProtocolViolation {
-			L(ctx).Warn("procotol violation")
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+	distributorCh := session.RunDistributor(ctx)
+	for {
+		select {
+		case err := <-distributorCh:
+			L(ctx).Error("distributor crashed", zap.Error(err))
 			return err
+		case <-ticker.C:
+			err := session.TickInflights()
+			if err != nil {
+				return err
+			}
+		case pkt, ok := <-dec.Packet():
+			if !ok {
+				return nil
+			}
+			if pkt.Length() > 10*1000*1000 {
+				L(ctx).Warn("received an oversized packet",
+					zap.String("packet_type", packet.TypeString(pkt)),
+					zap.Int("received_packet_size", pkt.Length()),
+				)
+				return ErrProtocolViolation
+			}
+			start := time.Now()
+			err = processPacket(ctx, peer, fsm, state, publishHandler, session, pkt)
+			stats.HistogramVec("sessionPacketHandling").With(map[string]string{
+				"packet_type": packet.TypeString(pkt),
+			}).Observe(stats.MilisecondsElapsed(start))
+
+			if err != nil {
+				if err == ErrSessionDisconnected {
+					L(ctx).Debug("session closed")
+					session.Disconnected = true
+					return nil
+				}
+				if err == ErrProtocolViolation {
+					L(ctx).Warn("procotol violation")
+					return err
+				}
+				L(ctx).Warn("session packet processing failed", zap.Error(err))
+				return err
+			}
+			c.SetDeadline(
+				session.NextDeadline(time.Now()),
+			)
 		}
-		if err != nil {
-			L(ctx).Warn("session packet processing failed", zap.Error(err))
-		}
-		c.SetDeadline(
-			session.NextDeadline(time.Now()),
-		)
 	}
-	return err
 }
