@@ -128,7 +128,9 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	for {
 		select {
 		case err := <-distributorCh:
-			L(ctx).Error("distributor crashed", zap.Error(err))
+			if err != nil {
+				L(ctx).Error("distributor crashed", zap.Error(err))
+			}
 			return err
 		case <-ticker.C:
 			err := session.TickInflights()

@@ -152,7 +152,7 @@ func (s *Session) Send(publish *packet.Publish) error {
 	}
 	qos := publish.Header.Qos
 	if len(recipientQos) > 0 {
-		qos = getLowerQos(recipientQos[0], qos)
+		qos = recipientQos[0]
 	}
 
 	outgoing := packet.Publish{
