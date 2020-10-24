@@ -14,27 +14,27 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MessageLog interface {
+type messageLog interface {
 	io.Closer
 	Append(b *packet.Publish) error
 	Consume(ctx context.Context, consumerName string, f func(uint64, *packet.Publish) error) error
 	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
 }
 
-type PublishDistributorState interface {
+type schedulerState interface {
 	Recipients(topic []byte) ([]uint64, []string, []int32, error)
 	GetSession(id string) *sessions.Session
 }
 
-// PublishDistributor distributes message to local recipients
-type PublishDistributor struct {
+// Scheduler schedules message to local recipients
+type Scheduler struct {
 	ID     uint64
-	State  PublishDistributorState
+	State  schedulerState
 	logger *zap.Logger
 }
 
-// Distribute distributes the message to local subscribers.
-func (pdist *PublishDistributor) Distribute(ctx context.Context, offset uint64, publish *packet.Publish) error {
+// Schedule distributes the message to local subscribers.
+func (pdist *Scheduler) Schedule(ctx context.Context, offset uint64, publish *packet.Publish) error {
 	peers, recipients, _, err := pdist.State.Recipients(publish.Topic)
 	if err != nil {
 		return err
@@ -53,24 +53,24 @@ func (pdist *PublishDistributor) Distribute(ctx context.Context, offset uint64, 
 	return nil
 }
 
-type PublishStorerState interface {
+type publishDistributorState interface {
 	Destinations(topic []byte) ([]uint64, error)
 }
-type PublishStorerTransport interface {
+type publishDistributorTransport interface {
 	Call(id uint64, f func(*grpc.ClientConn) error) error
 }
 
-// PublishStorer stores publish messaes in local or remote message logs.
-type PublishStorer struct {
+// PublishDistributor stores publish messaes in local or remote message logs.
+type PublishDistributor struct {
 	ID        uint64
-	Transport PublishStorerTransport
-	State     PublishStorerState
-	Storage   MessageLog
+	Transport publishDistributorTransport
+	State     publishDistributorState
+	Storage   messageLog
 	logger    *zap.Logger
 }
 
-// Store resolves message destinations, and use them to write message on disk.
-func (storer *PublishStorer) Store(ctx context.Context, publish *packet.Publish) error {
+// Distribute resolves message destinations, and use them to write message on disk.
+func (storer *PublishDistributor) Distribute(ctx context.Context, publish *packet.Publish) error {
 	destinations, err := storer.State.Destinations(publish.Topic)
 	if err != nil {
 		return err
@@ -100,14 +100,14 @@ func (storer *PublishStorer) Store(ctx context.Context, publish *packet.Publish)
 	return nil
 }
 
-func DistributePublishes(id uint64, state PublishDistributorState, messageLog MessageLog) func(ctx context.Context) {
+func SchedulePublishes(id uint64, state schedulerState, messageLog messageLog) func(ctx context.Context) {
 	return func(ctx context.Context) {
-		publishDistributor := &PublishDistributor{
+		publishDistributor := &Scheduler{
 			ID:    id,
 			State: state,
 		}
 		messageLog.Consume(ctx, "publish_distributor", func(offset uint64, p *packet.Publish) error {
-			err := publishDistributor.Distribute(ctx, offset, p)
+			err := publishDistributor.Schedule(ctx, offset, p)
 			if err != nil {
 				L(ctx).Info("publish distribution failed", zap.Error(err))
 			}

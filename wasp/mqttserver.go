@@ -8,12 +8,12 @@ import (
 )
 
 type MqttServer struct {
-	storage MessageLog
+	storage messageLog
 	state   State
 	fsm     FSM
 }
 
-func NewMQTTServer(state State, fsm FSM, storage MessageLog) *MqttServer {
+func NewMQTTServer(state State, fsm FSM, storage messageLog) *MqttServer {
 	return &MqttServer{state: state, fsm: fsm, storage: storage}
 }
 

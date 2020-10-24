@@ -121,7 +121,7 @@ func run(config *viper.Viper) {
 		joinList = append(joinList, consulJoinList...)
 	}
 
-	publishStorer := wasp.PublishStorer{
+	publishStorer := wasp.PublishDistributor{
 		ID:      id,
 		State:   state,
 		Storage: messageLog,
@@ -157,7 +157,7 @@ func run(config *viper.Viper) {
 				sessions := state.ListSessionMetadatas()
 				for _, session := range sessions {
 					if session.Peer == id && session.LWT != nil {
-						publishStorer.Store(ctx, session.LWT)
+						publishStorer.Distribute(ctx, session.LWT)
 					}
 				}
 			}
@@ -263,7 +263,7 @@ func run(config *viper.Viper) {
 			loadedTaps = append(loadedTaps, tap)
 		})
 	}
-	operations.Run("publish distributor", wasp.DistributePublishes(id, state, messageLog))
+	operations.Run("publish distributor", wasp.SchedulePublishes(id, state, messageLog))
 
 	handler := func(m transport.Metadata) error {
 		go func() {
@@ -289,7 +289,7 @@ func run(config *viper.Viper) {
 						}
 						publish.Header.Retain = false
 					}
-					return publishStorer.Store(ctx, publish)
+					return publishStorer.Distribute(ctx, publish)
 				},
 				func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error) {
 					principal, err := authHandler.Authenticate(ctx, mqtt, auth.TransportContext{

@@ -38,7 +38,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 		})
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, messages MessageLog) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, messages messageLog) error {
 	defer c.Close()
 	enc := encoder.New(c)
 	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
