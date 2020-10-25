@@ -422,6 +422,8 @@ github.com/vx-labs/commitlog v1.2.2 h1:wM/w189AyZ1uZr4PlydeaVwfQGY0XxAYhjBXwkVLF
 github.com/vx-labs/commitlog v1.2.2/go.mod h1:oD9S7H5eUBFcEg7ZyAxJomwac+B0vulxvEbqQGDhHF0=
 github.com/vx-labs/commitlog v1.2.3 h1:hWyz/TFTeHXwr9cMd/+pX/mUhQC2uzzQP9AFGd1I56c=
 github.com/vx-labs/commitlog v1.2.3/go.mod h1:oD9S7H5eUBFcEg7ZyAxJomwac+B0vulxvEbqQGDhHF0=
+github.com/vx-labs/commitlog v1.2.4 h1:5FEhCUVI4kBl//5lIUUcr5k2mgDjyP5YBzU7sWk/ulg=
+github.com/vx-labs/commitlog v1.2.4/go.mod h1:oD9S7H5eUBFcEg7ZyAxJomwac+B0vulxvEbqQGDhHF0=
 github.com/vx-labs/mqtt-protocol v4.3.5+incompatible h1:Oy6G1b8dVjtnWdiYtAhe7oFyv56c9WYnf8ErXddN7fQ=
 github.com/vx-labs/mqtt-protocol v4.3.5+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=

@@ -28,7 +28,7 @@ require (
 	github.com/stretchr/testify v1.6.1
 	github.com/tysontate/gommap v0.0.0-20190103205956-899e1273fb5c
 	github.com/vx-labs/cluster v1.0.0
-	github.com/vx-labs/commitlog v1.2.3
+	github.com/vx-labs/commitlog v1.2.4
 	github.com/vx-labs/mqtt-protocol v4.3.5+incompatible
 	go.etcd.io/etcd v0.0.0-20200716221620-18dfb9cca345
 	go.uber.org/zap v1.16.0

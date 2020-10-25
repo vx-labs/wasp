@@ -1,18 +1,17 @@
 package sessions
 
 import (
-	"io"
 	"sync"
 )
 
 type queueIterator struct {
-	mtx  sync.Mutex
+	c    *sync.Cond
 	data []uint64
 }
 
 func (t *queueIterator) AdvanceTo(v uint64) {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
+	t.c.L.Lock()
+	defer t.c.L.Unlock()
 	for idx := range t.data {
 		if t.data[idx] == v {
 			t.data = t.data[idx:]
@@ -22,15 +21,16 @@ func (t *queueIterator) AdvanceTo(v uint64) {
 	t.data = []uint64{}
 }
 func (t *queueIterator) Push(id uint64) {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
+	t.c.L.Lock()
+	defer t.c.L.Unlock()
 	t.data = append(t.data, id)
+	t.c.Broadcast()
 }
 func (t *queueIterator) Next() (uint64, error) {
-	t.mtx.Lock()
-	defer t.mtx.Unlock()
-	if len(t.data) == 0 {
-		return 0, io.EOF
+	t.c.L.Lock()
+	defer t.c.L.Unlock()
+	for len(t.data) == 0 {
+		t.c.Wait()
 	}
 	value := t.data[0]
 	t.data = t.data[1:]

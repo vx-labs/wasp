@@ -63,26 +63,30 @@ func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, message
 			"protocol": "mqtt",
 		})),
 	)
-
+	mtx := sync.Mutex{}
 	s := &Session{
-		ID:            id,
-		MountPoint:    mountpoint,
-		conn:          c,
-		Encoder:       enc,
-		inflight:      make(map[int32]func(), maxInflightSize),
-		messages:      messages,
-		queueIterator: &queueIterator{},
-		topics:        subscriptions.NewTree(),
-		writer:        writer,
+		ID:         id,
+		MountPoint: mountpoint,
+		conn:       c,
+		Encoder:    enc,
+		inflight:   make(map[int32]func(), maxInflightSize),
+		messages:   messages,
+		queueIterator: &queueIterator{
+			c: sync.NewCond(&mtx),
+		},
+		topics: subscriptions.NewTree(),
+		writer: writer,
 	}
 	return s, s.processConnect(connect)
 }
+
 func (s *Session) RunDistributor(ctx context.Context) chan error {
 	ch := make(chan error)
 	go func() {
 		defer close(ch)
 		consumer := stream.NewConsumer(
 			stream.WithEOFBehaviour(stream.EOFBehaviourPoll),
+			stream.WithMinBatchSize(0), // We use sync.Cond to wait for messages, no need to batch.
 			stream.WithOffsetIterator(s.queueIterator))
 
 		ch <- s.messages.Stream(ctx, consumer, s.Send)
