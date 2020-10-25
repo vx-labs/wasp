@@ -16,6 +16,18 @@ import (
 	"google.golang.org/grpc"
 )
 
+/*
+	Message processing follows a simple workflow:
+
+	Distribution -> Scheduling -> Write
+
+	Distribution attempt to resolve Wasp peers hosting a Session subscribed to the message's topic, and write the message in their message log.
+
+	Scheduling process all the messages written in the Log, resolve local recipients, and schedule the distribution by putting the message Log offset in their queue
+
+	Writting process all the message offsets in each session queue, and write them on the wire.
+*/
+
 type messageLog interface {
 	io.Closer
 	Append(b *packet.Publish) error
