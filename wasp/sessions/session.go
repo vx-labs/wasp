@@ -23,10 +23,6 @@ const (
 	maxInflightSize = 500
 )
 
-type inflightMessage struct {
-	deadLine time.Time
-	publish  packet.Publish
-}
 type Log interface {
 	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
 }
@@ -49,7 +45,7 @@ type Session struct {
 	Disconnected      bool
 	mtx               sync.Mutex
 	inflightMtx       sync.RWMutex
-	inflight          map[int32]*inflightMessage
+	inflight          map[int32]func()
 	topics            subscriptions.Tree
 	messages          Log
 	queueIterator     *queueIterator
@@ -67,7 +63,7 @@ func NewSession(id, mountpoint string, c io.Writer, messages Log, connect *packe
 		MountPoint:    mountpoint,
 		conn:          c,
 		Encoder:       enc,
-		inflight:      make(map[int32]*inflightMessage, 20),
+		inflight:      make(map[int32]func(), 20),
 		messages:      messages,
 		queueIterator: &queueIterator{},
 		topics:        subscriptions.NewTree(),
@@ -104,6 +100,7 @@ func (s *Session) PubAck(msgID int32) {
 	s.inflightMtx.Lock()
 	defer s.inflightMtx.Unlock()
 	if _, ok := s.inflight[msgID]; ok {
+		s.inflight[msgID]()
 		delete(s.inflight, msgID)
 	}
 }
@@ -112,33 +109,38 @@ func (s *Session) sendQos0(publish packet.Publish) error {
 	return s.Encoder.Publish(&publish)
 }
 func (s *Session) sendQos1(publish packet.Publish) error {
-	s.inflight[publish.MessageId] = &inflightMessage{
-		deadLine: time.Now().Add(3 * time.Second),
-		publish:  publish,
-	}
-	return s.Encoder.Publish(&publish)
-}
+	ch := make(chan struct{})
+	ticker := time.NewTicker(3 * time.Second)
 
-func (s *Session) TickInflights() error {
 	s.inflightMtx.Lock()
-	defer s.inflightMtx.Unlock()
-	now := time.Now()
-	for _, message := range s.inflight {
-		if now.After(message.deadLine) {
-			message.publish.Header.Dup = true
-			err := s.sendQos1(message.publish)
-			if err != nil {
-				return err
+	publish.MessageId = s.freeMsgID()
+	s.inflight[publish.MessageId] = func() {
+		close(ch)
+	}
+	s.inflightMtx.Unlock()
+
+	for {
+		err := s.Encoder.Publish(&publish)
+		if err != nil {
+			return err
+		}
+		select {
+		case <-ticker.C:
+			if !publish.Header.Dup {
+				publish.Header.Dup = true
 			}
+		case <-ch:
+			return nil
 		}
 	}
-	return nil
 }
+
 func (s *Session) Schedule(id uint64) error {
 	s.queueIterator.Push(id)
 	return nil
 }
 
+// Send write the publish packet into the sesson connection, and wait for an ACK if qos > 0
 func (s *Session) Send(publish *packet.Publish) error {
 	if len(s.MountPoint) > len(publish.Topic) {
 		return nil
@@ -174,13 +176,6 @@ func (s *Session) Send(publish *packet.Publish) error {
 	case 0:
 		return s.sendQos0(outgoing)
 	case 1:
-		s.inflightMtx.Lock()
-		defer s.inflightMtx.Unlock()
-		mid := s.freeMsgID()
-		if mid == 0 {
-			return ErrInflightQueueFull
-		}
-		outgoing.MessageId = mid
 		return s.sendQos1(outgoing)
 	default:
 		return ErrUnsupportedQoS

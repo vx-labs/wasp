@@ -122,8 +122,6 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	if err != nil {
 		return err
 	}
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
 	distributorCh := session.RunDistributor(ctx)
 	for {
 		select {
@@ -132,11 +130,6 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 				L(ctx).Error("distributor crashed", zap.Error(err))
 			}
 			return err
-		case <-ticker.C:
-			err := session.TickInflights()
-			if err != nil {
-				return err
-			}
 		case pkt, ok := <-dec.Packet():
 			if !ok {
 				return nil
