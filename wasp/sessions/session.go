@@ -69,7 +69,7 @@ func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, message
 		MountPoint:    mountpoint,
 		conn:          c,
 		Encoder:       enc,
-		inflight:      make(map[int32]func(), 20),
+		inflight:      make(map[int32]func(), maxInflightSize),
 		messages:      messages,
 		queueIterator: &queueIterator{},
 		topics:        subscriptions.NewTree(),
