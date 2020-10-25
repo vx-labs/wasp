@@ -38,7 +38,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 		})
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, messages messageLog) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, messages messageLog, writer WriterScheduler) error {
 	defer c.Close()
 	enc := encoder.New(c)
 	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
@@ -65,7 +65,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session, err := sessions.NewSession(id, mountPoint, c, messages, connectPkt)
+	session, err := sessions.NewSession(ctx, id, mountPoint, c, messages, connectPkt, writer)
 	if err != nil {
 		return err
 	}

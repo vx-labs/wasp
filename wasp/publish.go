@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/vx-labs/commitlog/stream"
+	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -113,5 +115,93 @@ func SchedulePublishes(id uint64, state schedulerState, messageLog messageLog) f
 			}
 			return err
 		})
+	}
+}
+
+//WriteJob represents an intent to write a packet to a session
+type WriteJob struct {
+	W       *encoder.Encoder
+	Publish *packet.Publish
+	Cancel  chan struct{}
+	Err     chan error
+}
+
+func (job WriteJob) Write(ctx context.Context) {
+	ticker := time.NewTicker(3 * time.Second)
+	defer ticker.Stop()
+	retries := 5
+	for retries > 0 {
+		retries--
+		err := job.W.Publish(job.Publish)
+		if err != nil {
+			job.Err <- err
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if !job.Publish.Header.Dup {
+				job.Publish.Header.Dup = true
+			}
+		case <-job.Cancel:
+			return
+		}
+	}
+}
+
+// runWriters start a given number of goroutine that will write publish to io.Writer, and wait for an ack.
+func runWriters(ctx context.Context, count int) chan chan WriteJob {
+	jobs := make(chan chan WriteJob)
+	for i := 0; i < count; i++ {
+		go func() {
+			ch := make(chan WriteJob)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case jobs <- ch:
+				case job := <-ch:
+					job.Write(ctx)
+				}
+			}
+		}()
+	}
+	return jobs
+}
+
+type writerScheduler struct {
+	jobs chan chan WriteJob
+}
+
+func (w *writerScheduler) Write(enc *encoder.Encoder, publish *packet.Publish, cancel chan struct{}) error {
+	payload := WriteJob{
+		W: enc, Publish: publish, Cancel: cancel, Err: make(chan error),
+	}
+	select {
+	case <-cancel:
+		return nil
+	case runner := <-w.jobs:
+		select {
+		case runner <- payload:
+			break
+		case <-cancel:
+			return nil
+		}
+		select {
+		case <-cancel:
+			return nil
+		case err := <-payload.Err:
+			return err
+		}
+	}
+}
+
+type WriterScheduler interface {
+	Write(w *encoder.Encoder, publish *packet.Publish, cancel chan struct{}) error
+}
+
+func NewWriterScheduler(ctx context.Context) WriterScheduler {
+	return &writerScheduler{
+		jobs: runWriters(ctx, 20),
 	}
 }

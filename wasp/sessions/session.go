@@ -21,8 +21,12 @@ var (
 )
 
 const (
-	maxInflightSize = 500
+	maxInflightSize = 5
 )
+
+type WriterScheduler interface {
+	Write(w *encoder.Encoder, publish *packet.Publish, cancel chan struct{}) error
+}
 
 type Log interface {
 	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
@@ -50,9 +54,10 @@ type Session struct {
 	topics            subscriptions.Tree
 	messages          Log
 	queueIterator     *queueIterator
+	writer            WriterScheduler
 }
 
-func NewSession(id, mountpoint string, c io.Writer, messages Log, connect *packet.Connect) (*Session, error) {
+func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, messages Log, connect *packet.Connect, writer WriterScheduler) (*Session, error) {
 	enc := encoder.New(c,
 		encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
 			"protocol": "mqtt",
@@ -68,6 +73,7 @@ func NewSession(id, mountpoint string, c io.Writer, messages Log, connect *packe
 		messages:      messages,
 		queueIterator: &queueIterator{},
 		topics:        subscriptions.NewTree(),
+		writer:        writer,
 	}
 	return s, s.processConnect(connect)
 }
@@ -112,7 +118,6 @@ func (s *Session) sendQos0(publish packet.Publish) error {
 }
 func (s *Session) sendQos1(publish packet.Publish) error {
 	ch := make(chan struct{})
-	ticker := time.NewTicker(3 * time.Second)
 
 	s.inflightMtx.Lock()
 	publish.MessageId = s.freeMsgID()
@@ -120,23 +125,7 @@ func (s *Session) sendQos1(publish packet.Publish) error {
 		close(ch)
 	}
 	s.inflightMtx.Unlock()
-	retries := 5
-	for retries > 0 {
-		retries--
-		err := s.Encoder.Publish(&publish)
-		if err != nil {
-			return err
-		}
-		select {
-		case <-ticker.C:
-			if !publish.Header.Dup {
-				publish.Header.Dup = true
-			}
-		case <-ch:
-			return nil
-		}
-	}
-	return ErrDeliveryNeverAcked
+	return s.writer.Write(s.Encoder, &publish, ch)
 }
 
 func (s *Session) Schedule(id uint64) error {
@@ -178,12 +167,13 @@ func (s *Session) Send(publish *packet.Publish) error {
 
 	switch outgoing.Header.Qos {
 	case 0:
-		return s.sendQos0(outgoing)
+		s.sendQos0(outgoing)
 	case 1:
-		return s.sendQos1(outgoing)
+		s.sendQos1(outgoing)
 	default:
 		return ErrUnsupportedQoS
 	}
+	return nil
 }
 
 func (s *Session) processConnect(connect *packet.Connect) error {
