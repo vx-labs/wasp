@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	ErrInflightQueueFull = errors.New("inflight queue is full")
-	ErrUnsupportedQoS    = errors.New("unsupported QoS")
+	ErrInflightQueueFull  = errors.New("inflight queue is full")
+	ErrUnsupportedQoS     = errors.New("unsupported QoS")
+	ErrDeliveryNeverAcked = errors.New("delivery never acked by session")
 )
 
 const (
@@ -96,6 +97,7 @@ func (s *Session) freeMsgID() int32 {
 	return 0
 }
 
+// PubAck informs inflight queue that a puback has been received
 func (s *Session) PubAck(msgID int32) {
 	s.inflightMtx.Lock()
 	defer s.inflightMtx.Unlock()
@@ -118,8 +120,9 @@ func (s *Session) sendQos1(publish packet.Publish) error {
 		close(ch)
 	}
 	s.inflightMtx.Unlock()
-
-	for {
+	retries := 5
+	for retries > 0 {
+		retries--
 		err := s.Encoder.Publish(&publish)
 		if err != nil {
 			return err
@@ -133,6 +136,7 @@ func (s *Session) sendQos1(publish packet.Publish) error {
 			return nil
 		}
 	}
+	return ErrDeliveryNeverAcked
 }
 
 func (s *Session) Schedule(id uint64) error {
