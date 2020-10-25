@@ -56,18 +56,21 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		if err != nil {
 			return err
 		}
-		for idx := range topics {
-			messages, err := state.RetainedMessages(topics[idx])
-			if err != nil {
-				return err
-			}
-			for _, message := range messages {
-				err = session.Send(message)
+		go func() {
+			//TODO: remove need for a goroutine ?
+			for idx := range topics {
+				messages, err := state.RetainedMessages(topics[idx])
 				if err != nil {
-					return err
+					return
+				}
+				for _, message := range messages {
+					err = session.Send(message)
+					if err != nil {
+						return
+					}
 				}
 			}
-		}
+		}()
 	case *packet.Unsubscribe:
 		topics := make([][]byte, len(p.Topic))
 		for idx := range p.Topic {
