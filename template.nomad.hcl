@@ -11,6 +11,10 @@ job "wasp" {
   }
 
   group "broker" {
+    constraint {
+      operator  = "distinct_hosts"
+      value     = "true"
+    }
     vault {
       policies      = ["nomad-tls-storer"]
       change_mode   = "signal"
