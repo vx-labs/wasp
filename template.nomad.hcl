@@ -28,7 +28,7 @@ job "wasp" {
     }
 
     ephemeral_disk {
-      size = 2000
+      size = 500
     }
 
     task "tcp-listener" {
