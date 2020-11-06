@@ -2,42 +2,14 @@ package sessions
 
 import (
 	"context"
-	"errors"
 	"io"
-	"sync"
 	"time"
 
-	"github.com/vx-labs/commitlog/stream"
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
 )
-
-var (
-	ErrInflightQueueFull  = errors.New("inflight queue is full")
-	ErrUnsupportedQoS     = errors.New("unsupported QoS")
-	ErrDeliveryNeverAcked = errors.New("delivery never acked by session")
-)
-
-const (
-	maxInflightSize = 5
-)
-
-type WriterScheduler interface {
-	Write(w *encoder.Encoder, publish *packet.Publish, cancel chan struct{}) error
-}
-
-type Log interface {
-	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
-}
-
-func getLowerQos(a, b int32) int32 {
-	if a > b {
-		return b
-	}
-	return a
-}
 
 type Session struct {
 	ID                string
@@ -48,136 +20,27 @@ type Session struct {
 	conn              io.Writer
 	Encoder           *encoder.Encoder
 	Disconnected      bool
-	mtx               sync.Mutex
-	inflightMtx       sync.RWMutex
-	inflight          map[int32]func()
 	topics            subscriptions.Tree
-	messages          Log
-	queueIterator     *queueIterator
-	writer            WriterScheduler
 }
 
-func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, messages Log, connect *packet.Connect, writer WriterScheduler) (*Session, error) {
+func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, connect *packet.Connect) (*Session, error) {
 	enc := encoder.New(c,
 		encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
 			"protocol": "mqtt",
 		})),
 	)
-	mtx := sync.Mutex{}
 	s := &Session{
 		ID:         id,
 		MountPoint: mountpoint,
 		conn:       c,
 		Encoder:    enc,
-		inflight:   make(map[int32]func(), maxInflightSize),
-		messages:   messages,
-		queueIterator: &queueIterator{
-			c: sync.NewCond(&mtx),
-		},
-		topics: subscriptions.NewTree(),
-		writer: writer,
+		topics:     subscriptions.NewTree(),
 	}
 	return s, s.processConnect(connect)
 }
 
-func (s *Session) RunDistributor(ctx context.Context) chan error {
-	ch := make(chan error)
-	go func() {
-		defer close(ch)
-		consumer := stream.NewConsumer(
-			stream.WithEOFBehaviour(stream.EOFBehaviourPoll),
-			stream.WithMinBatchSize(0), // We use sync.Cond to wait for messages, no need to batch.
-			stream.WithOffsetIterator(s.queueIterator))
-
-		ch <- s.messages.Stream(ctx, consumer, s.Send)
-	}()
-	return ch
-}
 func (s *Session) LWT() *packet.Publish {
 	return s.lwt
-}
-
-func (s *Session) freeMsgID() int32 {
-	var i int32
-	for i = 1; i < maxInflightSize; i++ {
-		if _, ok := s.inflight[i]; !ok {
-			return i
-		}
-	}
-	return 0
-}
-
-// PubAck informs inflight queue that a puback has been received
-func (s *Session) PubAck(msgID int32) {
-	s.inflightMtx.Lock()
-	defer s.inflightMtx.Unlock()
-	if _, ok := s.inflight[msgID]; ok {
-		s.inflight[msgID]()
-		delete(s.inflight, msgID)
-	}
-}
-
-func (s *Session) sendQos0(publish packet.Publish) error {
-	return s.Encoder.Publish(&publish)
-}
-func (s *Session) sendQos1(publish packet.Publish) error {
-	ch := make(chan struct{})
-
-	s.inflightMtx.Lock()
-	publish.MessageId = s.freeMsgID()
-	s.inflight[publish.MessageId] = func() {
-		close(ch)
-	}
-	s.inflightMtx.Unlock()
-	return s.writer.Write(s.Encoder, &publish, ch)
-}
-
-func (s *Session) Schedule(id uint64) error {
-	s.queueIterator.Push(id)
-	return nil
-}
-
-// Send write the publish packet into the sesson connection, and wait for an ACK if qos > 0
-func (s *Session) Send(publish *packet.Publish) error {
-	if len(s.MountPoint) > len(publish.Topic) {
-		return nil
-	}
-	recipients := []string{}
-	recipientQos := []int32{}
-	recipientPeer := []uint64{}
-	err := s.topics.Match(publish.Topic, &recipientPeer, &recipients, &recipientQos)
-	if err != nil {
-		return err
-	}
-	qos := publish.Header.Qos
-	if len(recipientQos) > 0 {
-		qos = recipientQos[0]
-	}
-	if qos > 1 {
-		// TODO: support QoS2
-		qos = 1
-	}
-
-	outgoing := packet.Publish{
-		Header: &packet.Header{
-			Dup:    publish.Header.Dup,
-			Qos:    qos,
-			Retain: publish.Header.Retain,
-		},
-		Topic:     TrimMountPoint(s.MountPoint, publish.Topic),
-		MessageId: 1,
-		Payload:   publish.Payload,
-	}
-
-	switch outgoing.Header.Qos {
-	case 0:
-		s.sendQos0(outgoing)
-	case 1:
-		s.sendQos1(outgoing)
-	default:
-		return ErrUnsupportedQoS
-	}
-	return nil
 }
 
 func (s *Session) processConnect(connect *packet.Connect) error {

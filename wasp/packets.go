@@ -18,7 +18,7 @@ type FSM interface {
 	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 
-func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishHander PublishHandler, session *sessions.Session, pkt interface{}) error {
+func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishHander PublishHandler, writer Writer, session *sessions.Session, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -56,21 +56,15 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 		if err != nil {
 			return err
 		}
-		go func() {
-			//TODO: remove need for a goroutine ?
-			for idx := range topics {
-				messages, err := state.RetainedMessages(topics[idx])
-				if err != nil {
-					return
-				}
-				for _, message := range messages {
-					err = session.Send(message)
-					if err != nil {
-						return
-					}
-				}
+		for idx := range topics {
+			messages, err := state.RetainedMessages(topics[idx])
+			if err != nil {
+				return err
 			}
-		}()
+			for _, message := range messages {
+				writer.Send(ctx, []string{session.ID}, []int32{p.Qos[idx]}, message)
+			}
+		}
 	case *packet.Unsubscribe:
 		topics := make([][]byte, len(p.Topic))
 		for idx := range p.Topic {
@@ -88,7 +82,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			MessageId: p.MessageId,
 		})
 	case *packet.PubAck:
-		session.PubAck(p.MessageId)
+		writer.Ack(p.MessageId)
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:

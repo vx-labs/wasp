@@ -38,7 +38,7 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 		})
 }
 
-func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, messages messageLog, writer WriterScheduler) error {
+func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, writer Writer) error {
 	defer c.Close()
 	enc := encoder.New(c)
 	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
@@ -65,7 +65,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session, err := sessions.NewSession(ctx, id, mountPoint, c, messages, connectPkt, writer)
+	session, err := sessions.NewSession(ctx, id, mountPoint, c, connectPkt)
 	if err != nil {
 		return err
 	}
@@ -94,6 +94,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 		session.NextDeadline(time.Now()),
 	)
 	defer func() {
+		writer.Unregister(session.ID)
 		state.CloseSession(session.ID)
 		topics := session.GetTopics()
 		for idx := range topics {
@@ -115,6 +116,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			}
 		}
 	}()
+	writer.Register(session.ID, session.Encoder)
 	err = enc.ConnAck(&packet.ConnAck{
 		Header:     connectPkt.Header,
 		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
@@ -122,14 +124,8 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	if err != nil {
 		return err
 	}
-	distributorCh := session.RunDistributor(ctx)
 	for {
 		select {
-		case err := <-distributorCh:
-			if err != nil {
-				L(ctx).Error("distributor crashed", zap.Error(err))
-			}
-			return err
 		case pkt, ok := <-dec.Packet():
 			if !ok {
 				return nil
@@ -142,7 +138,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 				return ErrProtocolViolation
 			}
 			start := time.Now()
-			err = processPacket(ctx, peer, fsm, state, publishHandler, session, pkt)
+			err = processPacket(ctx, peer, fsm, state, publishHandler, writer, session, pkt)
 			stats.HistogramVec("sessionPacketHandling").With(map[string]string{
 				"packet_type": packet.TypeString(pkt),
 			}).Observe(stats.MilisecondsElapsed(start))

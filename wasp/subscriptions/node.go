@@ -26,6 +26,7 @@ type Tree interface {
 	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
 	Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
+	MatchForPeer(peer uint64, topic []byte, subs *[]string, qoss *[]int32) error
 	MatchPeers(topic []byte, peers *[]uint64) error
 	List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error
 	RemovePeer(peer uint64) int
@@ -104,6 +105,15 @@ func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]i
 	*peers = (*peers)[0:0]
 
 	return this.root.match(topic, peers, subs, qoss)
+}
+func (this *tree) MatchForPeer(peer uint64, topic []byte, subs *[]string, qoss *[]int32) error {
+	this.mtx.RLock()
+	defer this.mtx.RUnlock()
+
+	*subs = (*subs)[0:0]
+	*qoss = (*qoss)[0:0]
+
+	return this.root.matchForPeer(peer, topic, subs, qoss)
 }
 func (this *tree) List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
@@ -252,6 +262,14 @@ func (this *Node) appendRecipents(peers *[]uint64, subs *[]string, qoss *[]int32
 		*peers = append(*peers, this.Peer[i])
 	}
 }
+func (this *Node) appendIfPeer(peer uint64, subs *[]string, qoss *[]int32) {
+	for i, sub := range this.Recipients {
+		if this.Peer[i] == peer {
+			*subs = append(*subs, sub)
+			*qoss = append(*qoss, this.Qos[i])
+		}
+	}
+}
 func (this *Node) appendUniquePeers(peers *[]uint64) {
 	for i := range this.Recipients {
 		found := false
@@ -280,6 +298,27 @@ func (this *Node) match(topic format.Topic, peers *[]uint64, subs *[]string, qos
 			n.appendRecipents(peers, subs, qoss)
 		} else if k == SWC || k == token {
 			if err := n.match(topic, peers, subs, qoss); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+func (this *Node) matchForPeer(peer uint64, topic format.Topic, subs *[]string, qoss *[]int32) error {
+	topic, token := topic.Next()
+
+	if token == "" {
+		this.appendIfPeer(peer, subs, qoss)
+		return nil
+	}
+
+	for k, n := range this.Children {
+		// If the key is "#", then these subscribers are added to the result set
+		if k == MWC {
+			n.appendIfPeer(peer, subs, qoss)
+		} else if k == SWC || k == token {
+			if err := n.matchForPeer(peer, topic, subs, qoss); err != nil {
 				return err
 			}
 		}

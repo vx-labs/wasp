@@ -48,6 +48,7 @@ func mustDecode(b []byte) *packet.Publish {
 type Log interface {
 	io.Closer
 	Append(payload *packet.Publish) error
+	Get(offset uint64) (*packet.Publish, error)
 	Consume(ctx context.Context, consumerName string, f func(uint64, *packet.Publish) error) error
 	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
 }
@@ -66,6 +67,15 @@ func New(datadir string) (Log, error) {
 }
 
 func (s *store) Close() error { return s.log.Close() }
+func (s *store) Get(offset uint64) (*packet.Publish, error) {
+	reader := s.log.Reader()
+	reader.Seek(int64(offset), io.SeekStart)
+	entry, err := commitlog.NewDecoder(reader).Decode()
+	if err != nil {
+		return nil, err
+	}
+	return mustDecode(entry.Payload()), nil
+}
 
 func (s *store) Append(publish *packet.Publish) error {
 	_, err := s.log.WriteEntry(uint64(time.Now().UnixNano()), mustEncode(publish))

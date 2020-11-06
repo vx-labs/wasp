@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"time"
 
 	"github.com/vx-labs/commitlog/stream"
-	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -31,39 +29,27 @@ import (
 type messageLog interface {
 	io.Closer
 	Append(b *packet.Publish) error
+	Get(offset uint64) (*packet.Publish, error)
 	Consume(ctx context.Context, consumerName string, f func(uint64, *packet.Publish) error) error
 	Stream(ctx context.Context, consumer stream.Consumer, f func(*packet.Publish) error) error
 }
 
 type schedulerState interface {
 	Recipients(topic []byte) ([]uint64, []string, []int32, error)
+	RecipientsForPeer(peer uint64, topic []byte) ([]string, []int32, error)
 	GetSession(id string) *sessions.Session
 }
 
 // Scheduler schedules message to local recipients
 type Scheduler struct {
 	ID     uint64
-	State  schedulerState
+	writer Writer
 	logger *zap.Logger
 }
 
 // Schedule distributes the message to local subscribers.
 func (pdist *Scheduler) Schedule(ctx context.Context, offset uint64, publish *packet.Publish) error {
-	peers, recipients, _, err := pdist.State.Recipients(publish.Topic)
-	if err != nil {
-		return err
-	}
-	for idx := range recipients {
-		if peers[idx] == pdist.ID {
-			session := pdist.State.GetSession(recipients[idx])
-			if session != nil {
-				err := session.Schedule(offset)
-				if err != nil {
-					L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", session.ID))
-				}
-			}
-		}
-	}
+	pdist.writer.Schedule(ctx, offset)
 	return nil
 }
 
@@ -114,11 +100,11 @@ func (storer *PublishDistributor) Distribute(ctx context.Context, publish *packe
 	return nil
 }
 
-func SchedulePublishes(id uint64, state schedulerState, messageLog messageLog) func(ctx context.Context) {
+func SchedulePublishes(id uint64, writer Writer, messageLog messageLog) func(ctx context.Context) {
 	return func(ctx context.Context) {
 		publishDistributor := &Scheduler{
-			ID:    id,
-			State: state,
+			ID:     id,
+			writer: writer,
 		}
 		messageLog.Consume(ctx, "publish_distributor", func(offset uint64, p *packet.Publish) error {
 			err := publishDistributor.Schedule(ctx, offset, p)
@@ -127,93 +113,5 @@ func SchedulePublishes(id uint64, state schedulerState, messageLog messageLog) f
 			}
 			return err
 		})
-	}
-}
-
-//WriteJob represents an intent to write a packet to a session
-type WriteJob struct {
-	W       *encoder.Encoder
-	Publish *packet.Publish
-	Cancel  chan struct{}
-	Err     chan error
-}
-
-func (job WriteJob) Write(ctx context.Context) {
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-	retries := 5
-	for retries > 0 {
-		retries--
-		err := job.W.Publish(job.Publish)
-		if err != nil {
-			job.Err <- err
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if !job.Publish.Header.Dup {
-				job.Publish.Header.Dup = true
-			}
-		case <-job.Cancel:
-			return
-		}
-	}
-}
-
-// runWriters start a given number of goroutine that will write publish to io.Writer, and wait for an ack.
-func runWriters(ctx context.Context, count int) chan chan WriteJob {
-	jobs := make(chan chan WriteJob)
-	for i := 0; i < count; i++ {
-		go func() {
-			ch := make(chan WriteJob)
-			for {
-				select {
-				case <-ctx.Done():
-					return
-				case jobs <- ch:
-				case job := <-ch:
-					job.Write(ctx)
-				}
-			}
-		}()
-	}
-	return jobs
-}
-
-type writerScheduler struct {
-	jobs chan chan WriteJob
-}
-
-func (w *writerScheduler) Write(enc *encoder.Encoder, publish *packet.Publish, cancel chan struct{}) error {
-	payload := WriteJob{
-		W: enc, Publish: publish, Cancel: cancel, Err: make(chan error),
-	}
-	select {
-	case <-cancel:
-		return nil
-	case runner := <-w.jobs:
-		select {
-		case runner <- payload:
-			break
-		case <-cancel:
-			return nil
-		}
-		select {
-		case <-cancel:
-			return nil
-		case err := <-payload.Err:
-			return err
-		}
-	}
-}
-
-type WriterScheduler interface {
-	Write(w *encoder.Encoder, publish *packet.Publish, cancel chan struct{}) error
-}
-
-func NewWriterScheduler(ctx context.Context) WriterScheduler {
-	return &writerScheduler{
-		jobs: runWriters(ctx, 20),
 	}
 }
