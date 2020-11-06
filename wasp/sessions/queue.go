@@ -4,12 +4,19 @@ import (
 	"sync"
 )
 
-type queueIterator struct {
+type QueueIterator struct {
 	c    *sync.Cond
 	data []uint64
 }
 
-func (t *queueIterator) AdvanceTo(v uint64) {
+func NewQueueIterator() *QueueIterator {
+	mtx := sync.Mutex{}
+	return &QueueIterator{
+		c: sync.NewCond(&mtx),
+	}
+}
+
+func (t *QueueIterator) AdvanceTo(v uint64) {
 	t.c.L.Lock()
 	defer t.c.L.Unlock()
 	for idx := range t.data {
@@ -20,13 +27,7 @@ func (t *queueIterator) AdvanceTo(v uint64) {
 	}
 	t.data = []uint64{}
 }
-func (t *queueIterator) Push(id uint64) {
-	t.c.L.Lock()
-	defer t.c.L.Unlock()
-	t.data = append(t.data, id)
-	t.c.Broadcast()
-}
-func (t *queueIterator) Next() (uint64, error) {
+func (t *QueueIterator) Next() (uint64, error) {
 	t.c.L.Lock()
 	defer t.c.L.Unlock()
 	for len(t.data) == 0 {

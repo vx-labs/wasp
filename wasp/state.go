@@ -16,6 +16,7 @@ import (
 
 type ReadState interface {
 	Recipients(topic []byte) ([]uint64, []string, []int32, error)
+	RecipientsForPeer(peer uint64, topic []byte) ([]string, []int32, error)
 	ListSubscriptions() ([][]byte, []uint64, []string, []int32, error)
 	Destinations(topic []byte) ([]uint64, error)
 	GetSession(id string) *sessions.Session
@@ -232,6 +233,11 @@ func (s *state) CreateSessionMetadata(id string, peer uint64, clientID string, c
 	return nil
 }
 
+func (s *state) RecipientsForPeer(peer uint64, topic []byte) ([]string, []int32, error) {
+	recipients := []string{}
+	recipientQos := []int32{}
+	return recipients, recipientQos, s.subscriptions.MatchForPeer(peer, topic, &recipients, &recipientQos)
+}
 func (s *state) Recipients(topic []byte) ([]uint64, []string, []int32, error) {
 	recipients := []string{}
 	recipientQos := []int32{}

@@ -263,8 +263,15 @@ func run(config *viper.Viper) {
 			loadedTaps = append(loadedTaps, tap)
 		})
 	}
-	operations.Run("publish distributor", wasp.SchedulePublishes(id, state, messageLog))
-	writerScheduler := wasp.NewWriterScheduler(ctx)
+	writer := wasp.NewWriter(id, state)
+
+	operations.Run("publish distributor", wasp.SchedulePublishes(id, writer, messageLog))
+	operations.Run("publish writer", func(ctx context.Context) {
+		err := writer.Run(ctx, messageLog)
+		if err != nil {
+			panic(err)
+		}
+	})
 
 	handler := func(m transport.Metadata) error {
 		go func() {
@@ -299,7 +306,7 @@ func run(config *viper.Viper) {
 						X509Certificate: nil,
 					})
 					return principal.ID, principal.MountPoint, err
-				}, messageLog, writerScheduler)
+				}, writer)
 			if err != nil {
 				if err != io.EOF {
 					wasp.L(ctx).Error("failed to run session", zap.Error(err))
