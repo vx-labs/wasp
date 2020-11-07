@@ -259,8 +259,11 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.Session) er
 		c.Conn.Close()
 		return nil
 	}
-	pkt, err := s.decoder.Decode(c.Conn)
+	err := s.processSession(ctx, session, c)
 	if err != nil {
+		if err == ErrSessionDisconnected {
+			session.Disconnected = true
+		}
 		s.writer.Unregister(session.ID)
 		s.state.CloseSession(session.ID)
 		topics := session.GetTopics()
@@ -282,6 +285,14 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.Session) er
 				}
 			}
 		}
+	} else {
+		c.Conn.SetDeadline(session.NextDeadline(time.Now()))
+	}
+	return err
+}
+func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.Session) error {
+	pkt, err := s.decoder.Decode(c.Conn)
+	if err != nil {
 		return err
 	}
 	return processPacket(ctx, s.fsm, s.state, s.publishHandler, s.writer, session, s.encoder, c.Conn, pkt)
