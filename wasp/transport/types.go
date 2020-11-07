@@ -18,4 +18,5 @@ type Metadata struct {
 	RemoteAddress   string
 	Channel         TimeoutReadWriteCloser
 	Endpoint        string
+	FD              int
 }
