@@ -2,9 +2,7 @@ package transport
 
 import (
 	"fmt"
-	"log"
 	"net"
-	"time"
 
 	proxyproto "github.com/armon/go-proxyproto"
 )
@@ -21,37 +19,10 @@ func NewTCPTransport(port int, handler func(Metadata) error) (net.Listener, erro
 	}
 	proxyListener := &proxyproto.Listener{Listener: tcp}
 	listener.listener = proxyListener
-	go listener.acceptLoop(handler)
+	go runAccept(proxyListener, func(c net.Conn) {
+		listener.queueSession(c, handler)
+	})
 	return proxyListener, nil
-}
-
-func (t *tcp) acceptLoop(handler func(Metadata) error) {
-	var tempDelay time.Duration
-	for {
-		c, err := t.listener.Accept()
-		if err != nil {
-			if err.Error() == fmt.Sprintf("accept tcp %v: use of closed network connection", t.listener.Addr()) {
-				return
-			}
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				if tempDelay == 0 {
-					tempDelay = 5 * time.Millisecond
-				} else {
-					tempDelay *= 2
-				}
-				if max := 1 * time.Second; tempDelay > max {
-					tempDelay = max
-				}
-				log.Printf("accept error: %v; retrying in %v", err, tempDelay)
-				time.Sleep(tempDelay)
-				continue
-			}
-			log.Printf("connection handling failed: %v", err)
-			t.listener.Close()
-			return
-		}
-		t.queueSession(c, handler)
-	}
 }
 
 func (t *tcp) queueSession(c net.Conn, handler func(Metadata) error) {

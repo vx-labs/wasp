@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"time"
 
 	"github.com/armon/go-proxyproto"
 )
@@ -25,49 +24,21 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 
 	l := tls.NewListener(proxyList, tlsConfig)
 	listener.listener = l
-	go listener.acceptLoop(handler)
-	return l, nil
-}
-
-func (t *tlsListener) acceptLoop(handler func(Metadata) error) {
-	var tempDelay time.Duration
-	for {
-		rawConn, err := t.listener.Accept()
-
-		if err != nil {
-			if err.Error() == fmt.Sprintf("accept tcp %v: use of closed network connection", t.listener.Addr()) {
-				return
-			}
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
-				if tempDelay == 0 {
-					tempDelay = 5 * time.Millisecond
-				} else {
-					tempDelay *= 2
-				}
-				if max := 1 * time.Second; tempDelay > max {
-					tempDelay = max
-				}
-				log.Printf("WARN: accept error: %v; retrying in %v", err, tempDelay)
-				time.Sleep(tempDelay)
-				continue
-			}
-			log.Printf("ERROR: connection handling failed: %v", err)
-			t.listener.Close()
-			return
-		}
+	go runAccept(l, func(rawConn net.Conn) {
 		c, ok := rawConn.(*tls.Conn)
 		if !ok {
 			c.Close()
-			continue
+			return
 		}
-		err = c.Handshake()
+		err := c.Handshake()
 		if err != nil {
 			log.Printf("ERROR: tls handshake failed: %v", err)
 			c.Close()
-			continue
+			return
 		}
-		t.queueSession(c, handler)
-	}
+		listener.queueSession(c, handler)
+	})
+	return l, nil
 }
 
 func (t *tlsListener) queueSession(c *tls.Conn, handler func(Metadata) error) {
