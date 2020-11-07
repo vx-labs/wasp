@@ -40,7 +40,11 @@ func doAuth(ctx context.Context, connectPkt *packet.Connect, handler Authenticat
 
 func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c transport.TimeoutReadWriteCloser, publishHandler PublishHandler, authHandler AuthenticationHandler, writer Writer) error {
 	defer c.Close()
-	enc := encoder.New(c)
+	enc := encoder.New(
+		encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
+			"protocol": "mqtt",
+		})),
+	)
 	dec := decoder.Async(c, decoder.WithStatRecorder(stats.GaugeVec("ingressBytes").With(map[string]string{
 		"protocol": "mqtt",
 	})))
@@ -60,7 +64,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 	id, mountPoint, err := doAuth(ctx, connectPkt, authHandler)
 	if err != nil {
 		L(ctx).Info("authentication failed", zap.Error(err))
-		return enc.ConnAck(&packet.ConnAck{
+		return enc.ConnAck(c, &packet.ConnAck{
 			Header:     connectPkt.Header,
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
@@ -116,8 +120,8 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 			}
 		}
 	}()
-	writer.Register(session.ID, session.Encoder)
-	err = enc.ConnAck(&packet.ConnAck{
+	writer.Register(session.ID, c)
+	err = enc.ConnAck(c, &packet.ConnAck{
 		Header:     connectPkt.Header,
 		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
 	})
@@ -138,7 +142,7 @@ func RunSession(ctx context.Context, peer uint64, fsm FSM, state ReadState, c tr
 				return ErrProtocolViolation
 			}
 			start := time.Now()
-			err = processPacket(ctx, peer, fsm, state, publishHandler, writer, session, pkt)
+			err = processPacket(ctx, fsm, state, publishHandler, writer, session, enc, c, pkt)
 			stats.HistogramVec("sessionPacketHandling").With(map[string]string{
 				"packet_type": packet.TypeString(pkt),
 			}).Observe(stats.MilisecondsElapsed(start))

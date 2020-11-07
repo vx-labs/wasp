@@ -5,9 +5,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/subscriptions"
 )
 
@@ -18,22 +16,15 @@ type Session struct {
 	lwt               *packet.Publish
 	keepaliveInterval int32
 	conn              io.Writer
-	Encoder           *encoder.Encoder
 	Disconnected      bool
 	topics            subscriptions.Tree
 }
 
 func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, connect *packet.Connect) (*Session, error) {
-	enc := encoder.New(c,
-		encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
-			"protocol": "mqtt",
-		})),
-	)
 	s := &Session{
 		ID:         id,
 		MountPoint: mountpoint,
 		conn:       c,
-		Encoder:    enc,
 		topics:     subscriptions.NewTree(),
 	}
 	return s, s.processConnect(connect)

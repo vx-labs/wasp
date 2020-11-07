@@ -2,8 +2,10 @@ package wasp
 
 import (
 	"context"
+	"io"
 	"time"
 
+	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
 )
@@ -18,7 +20,7 @@ type FSM interface {
 	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 
-func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, publishHander PublishHandler, writer Writer, session *sessions.Session, pkt interface{}) error {
+func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander PublishHandler, writer Writer, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -31,7 +33,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			return err
 		}
 		if p.Header.Qos == 1 {
-			return session.Encoder.PubAck(&packet.PubAck{
+			return encoder.PubAck(c, &packet.PubAck{
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			})
@@ -48,7 +50,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			}
 			session.AddTopic(topics[idx], p.Qos[idx])
 		}
-		err := session.Encoder.SubAck(&packet.SubAck{
+		err := encoder.SubAck(c, &packet.SubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 			Qos:       p.Qos,
@@ -77,7 +79,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			}
 			session.RemoveTopic(topics[idx])
 		}
-		return session.Encoder.UnsubAck(&packet.UnsubAck{
+		return encoder.UnsubAck(c, &packet.UnsubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 		})
@@ -91,7 +93,7 @@ func processPacket(ctx context.Context, peer uint64, fsm FSM, state ReadState, p
 			// Session has reconnected on another peer.
 			return ErrSessionDisconnected
 		}
-		return session.Encoder.PingResp(&packet.PingResp{
+		return encoder.PingResp(c, &packet.PingResp{
 			Header: p.Header,
 		})
 	}
