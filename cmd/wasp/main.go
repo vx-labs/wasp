@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	pprof "net/http/pprof"
@@ -16,7 +15,6 @@ import (
 	"time"
 
 	"github.com/vx-labs/cluster"
-	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/messages"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 
@@ -272,47 +270,29 @@ func run(config *viper.Viper) {
 			panic(err)
 		}
 	})
+	connManager := wasp.NewConnectionManager(ctx, authHandler, stateMachine, state, writer, func(ctx context.Context, sender string, publish *packet.Publish) error {
+		for _, tap := range loadedTaps {
+			err := tap(ctx, sender, publish)
+			if err != nil {
+				wasp.L(ctx).Warn("failed to run tap", zap.Error(err))
+			}
+		}
+		if publish.Header.Retain {
+			if publish.Payload == nil {
+				err = stateMachine.DeleteRetainedMessage(ctx, publish.Topic)
+			} else {
+				err = stateMachine.RetainedMessage(ctx, publish)
+			}
+			if err != nil {
+				wasp.L(ctx).Warn("failed to retain message", zap.Error(err))
+			}
+			publish.Header.Retain = false
+		}
+		return publishStorer.Distribute(ctx, publish)
+	})
 
 	handler := func(m transport.Metadata) error {
-		go func() {
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
-			ctx = wasp.AddFields(ctx, zap.String("transport", m.Name), zap.String("remote_address", m.RemoteAddress))
-			err := wasp.RunSession(ctx, id, stateMachine, state, m.Channel,
-				func(ctx context.Context, sender string, publish *packet.Publish) error {
-					for _, tap := range loadedTaps {
-						err := tap(ctx, sender, publish)
-						if err != nil {
-							wasp.L(ctx).Warn("failed to run tap", zap.Error(err))
-						}
-					}
-					if publish.Header.Retain {
-						if publish.Payload == nil {
-							err = stateMachine.DeleteRetainedMessage(ctx, publish.Topic)
-						} else {
-							err = stateMachine.RetainedMessage(ctx, publish)
-						}
-						if err != nil {
-							wasp.L(ctx).Warn("failed to retain message", zap.Error(err))
-						}
-						publish.Header.Retain = false
-					}
-					return publishStorer.Distribute(ctx, publish)
-				},
-				func(ctx context.Context, mqtt auth.ApplicationContext) (id string, mountpoint string, err error) {
-					principal, err := authHandler.Authenticate(ctx, mqtt, auth.TransportContext{
-						Encrypted:       m.Encrypted,
-						RemoteAddress:   m.RemoteAddress,
-						X509Certificate: nil,
-					})
-					return principal.ID, principal.MountPoint, err
-				}, writer)
-			if err != nil {
-				if err != io.EOF {
-					wasp.L(ctx).Error("failed to run session", zap.Error(err))
-				}
-			}
-		}()
+		connManager.Setup(ctx, m)
 		return nil
 	}
 	<-clusterNode.Ready()

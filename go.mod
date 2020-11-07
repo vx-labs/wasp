@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/armon/go-metrics v0.0.0-20190430140413-ec5e00d3c878 // indirect
-	github.com/armon/go-proxyproto v0.0.0-20200108142055-f0b8253b1507
+	github.com/armon/go-proxyproto v0.0.0-20200108142055-f0b8253b1507 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gogo/protobuf v1.2.1
@@ -33,6 +33,7 @@ require (
 	go.etcd.io/etcd v0.0.0-20200716221620-18dfb9cca345
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/sys v0.0.0-20201015000850-e3ed0017c211
 	google.golang.org/grpc v1.33.0
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 )
