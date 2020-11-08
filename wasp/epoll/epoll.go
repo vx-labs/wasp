@@ -57,7 +57,9 @@ func (e *Epoll) Expire(now time.Time) {
 	e.timeouts.AscendLessThan(&expirationSet{deadline: now}, func(i btree.Item) bool {
 		set := i.(*expirationSet)
 		for fd := range set.data {
-			e.connections[fd].Conn.Close()
+			if e.connections[fd] != nil && e.connections[fd].Conn != nil {
+				e.connections[fd].Conn.Close()
+			}
 		}
 		return true
 	})
