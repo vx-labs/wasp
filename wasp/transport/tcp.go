@@ -18,17 +18,12 @@ func NewTCPTransport(port int, handler func(Metadata) error) (net.Listener, erro
 	listener.listener = l
 	go runAccept(l, func(rawConn net.Conn) {
 		tcpConn := rawConn.(*net.TCPConn)
-		fd, err := tcpConn.File()
-		if err != nil {
-			rawConn.Close()
-			return
-		}
 		go handler(Metadata{
-			Channel:         fd,
+			Channel:         tcpConn,
 			Encrypted:       false,
 			EncryptionState: nil,
 			Name:            "tcp",
-			FD:              int(fd.Fd()),
+			FD:              socketFD(tcpConn),
 		})
 	})
 	return l, nil

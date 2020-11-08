@@ -22,11 +22,6 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 	listener.listener = l
 	go runAccept(l, func(rawConn net.Conn) {
 		tcpConn := rawConn.(*net.TCPConn)
-		fd, err := tcpConn.File()
-		if err != nil {
-			rawConn.Close()
-			return
-		}
 		c := tls.Server(tcpConn, tlsConfig)
 		err = c.Handshake()
 		if err != nil {
@@ -40,7 +35,7 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 			Encrypted:       true,
 			EncryptionState: &state,
 			Name:            "tls",
-			FD:              int(fd.Fd()),
+			FD:              socketFD(tcpConn),
 		})
 	})
 	return l, nil

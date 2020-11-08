@@ -2,7 +2,6 @@ package wasp
 
 import (
 	"context"
-	"errors"
 	"log"
 	"time"
 
@@ -264,31 +263,34 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.Session) er
 		if err == ErrSessionDisconnected {
 			session.Disconnected = true
 		}
-		s.writer.Unregister(session.ID)
-		s.state.CloseSession(session.ID)
-		topics := session.GetTopics()
-		for idx := range topics {
-			s.fsm.Unsubscribe(ctx, session.ID, topics[idx])
-		}
-		metadata := s.state.GetSessionMetadatasByClientID(session.ClientID)
-		s.fsm.DeleteSessionMetadata(ctx, session.ID, session.MountPoint)
-		if metadata == nil || metadata.SessionID != session.ID || session.Disconnected {
-			// Session has reconnected on another peer.
-			return errors.New("session reconnected on anoher host")
-		}
-		if !session.Disconnected {
-			L(ctx).Debug("session lost")
-			if session.LWT() != nil {
-				err := s.publishHandler(ctx, session.ID, session.LWT())
-				if err != nil {
-					L(ctx).Warn("failed to publish session LWT", zap.Error(err))
-				}
-			}
-		}
+		s.shutdownSession(ctx, session)
 	} else {
 		c.Conn.SetDeadline(session.NextDeadline(time.Now()))
 	}
 	return err
+}
+func (s *connectionWorker) shutdownSession(ctx context.Context, session *sessions.Session) {
+	s.writer.Unregister(session.ID)
+	s.state.CloseSession(session.ID)
+	topics := session.GetTopics()
+	for idx := range topics {
+		s.fsm.Unsubscribe(ctx, session.ID, topics[idx])
+	}
+	metadata := s.state.GetSessionMetadatasByClientID(session.ClientID)
+	s.fsm.DeleteSessionMetadata(ctx, session.ID, session.MountPoint)
+	if metadata == nil || metadata.SessionID != session.ID || session.Disconnected {
+		// Session has reconnected on another peer.
+		return
+	}
+	if !session.Disconnected {
+		L(ctx).Debug("session lost")
+		if session.LWT() != nil {
+			err := s.publishHandler(ctx, session.ID, session.LWT())
+			if err != nil {
+				L(ctx).Warn("failed to publish session LWT", zap.Error(err))
+			}
+		}
+	}
 }
 func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.Session) error {
 	pkt, err := s.decoder.Decode(c.Conn)

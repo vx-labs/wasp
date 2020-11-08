@@ -29,11 +29,7 @@ func NewWSSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 		Handler: mux,
 		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
 			tcpConn := c.(*wsConn)
-			fd, err := tcpConn.initial.(*net.TCPConn).File()
-			if err != nil {
-				panic(err)
-			}
-			return context.WithValue(ctx, connFD, int(fd.Fd()))
+			return context.WithValue(ctx, connFD, socketFD(tcpConn.initial))
 		},
 	}
 	go srv.Serve(&wsTLSListener{l: ln, config: tlsConfig})
