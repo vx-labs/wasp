@@ -23,7 +23,7 @@ type manager struct {
 	state           ReadState
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
-	connectionsJobs chan chan *epoll.Session
+	connectionsJobs chan chan *epoll.ClientConn
 	epoll           *epoll.Epoll
 	publishHandler  PublishHandler
 }
@@ -52,11 +52,14 @@ const (
 	connectTimeout time.Duration = 3 * time.Second
 )
 
-func NewConnectionManager(ctx context.Context, authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler) *manager {
-	setuppers := 20
-	connWorkers := 50
+var (
+	setuppers   int = 20
+	connWorkers int = 50
+)
 
-	epoller, err := epoll.New()
+func NewConnectionManager(ctx context.Context, authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler) *manager {
+
+	epoller, err := epoll.New(connWorkers)
 	if err != nil {
 		panic(err)
 	}
@@ -66,7 +69,7 @@ func NewConnectionManager(ctx context.Context, authHandler AuthenticationHandler
 		fsm:             fsm,
 		state:           state,
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
-		connectionsJobs: make(chan chan *epoll.Session, connWorkers),
+		connectionsJobs: make(chan chan *epoll.ClientConn, connWorkers),
 		writer:          writer,
 		publishHandler:  publishHandler,
 		epoll:           epoller,
@@ -96,13 +99,14 @@ func (s *manager) Setup(ctx context.Context, c transport.Metadata) {
 	}
 }
 func (s *manager) runDispatcher(ctx context.Context) {
+	connections := make([]*epoll.ClientConn, connWorkers)
 	for {
-		connections, err := s.epoll.Wait()
+		n, err := s.epoll.Wait(connections)
 		if err != nil && err != unix.EINTR {
 			log.Printf("Failed to epoll wait %v", err)
 			continue
 		}
-		for _, c := range connections {
+		for _, c := range connections[:n] {
 			if c != nil {
 				select {
 				case <-ctx.Done():
@@ -161,7 +165,7 @@ func (s *manager) runConnWorker(ctx context.Context) {
 		publishHandler: s.publishHandler,
 	}
 	go func() {
-		ch := make(chan *epoll.Session)
+		ch := make(chan *epoll.ClientConn)
 		defer close(ch)
 		for {
 			select {
@@ -249,7 +253,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	})
 }
 
-func (s *connectionWorker) processConn(ctx context.Context, c *epoll.Session) error {
+func (s *connectionWorker) processConn(ctx context.Context, c *epoll.ClientConn) error {
 	session := s.state.GetSession(c.ID)
 	if session == nil {
 		c.Conn.Close()
@@ -290,7 +294,7 @@ func (s *connectionWorker) shutdownSession(ctx context.Context, session *session
 		}
 	}
 }
-func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.Session) error {
+func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.ClientConn) error {
 	err := c.Conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
 	if err != nil {
 		return err

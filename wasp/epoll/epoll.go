@@ -8,7 +8,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type Session struct {
+type ClientConn struct {
 	ID   string
 	FD   int
 	Conn transport.TimeoutReadWriteCloser
@@ -16,11 +16,12 @@ type Session struct {
 
 type Epoll struct {
 	fd          int
-	connections map[int]*Session
+	connections map[int]*ClientConn
 	lock        *sync.RWMutex
+	events      []unix.EpollEvent
 }
 
-func New() (*Epoll, error) {
+func New(maxEvents int) (*Epoll, error) {
 	fd, err := unix.EpollCreate1(0)
 	if err != nil {
 		return nil, err
@@ -28,7 +29,8 @@ func New() (*Epoll, error) {
 	return &Epoll{
 		fd:          fd,
 		lock:        &sync.RWMutex{},
-		connections: make(map[int]*Session),
+		connections: make(map[int]*ClientConn),
+		events:      make([]unix.EpollEvent, maxEvents),
 	}, nil
 }
 
@@ -41,7 +43,7 @@ func (e *Epoll) Add(id string, fd int, t transport.TimeoutReadWriteCloser) error
 	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
-	e.connections[fd] = &Session{ID: id, FD: fd, Conn: t}
+	e.connections[fd] = &ClientConn{ID: id, FD: fd, Conn: t}
 	return nil
 }
 
@@ -59,18 +61,16 @@ func (e *Epoll) Rearm(fd int) error {
 	return unix.EpollCtl(e.fd, syscall.EPOLL_CTL_MOD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
 }
 
-func (e *Epoll) Wait() ([]*Session, error) {
-	events := make([]unix.EpollEvent, 100)
-	n, err := unix.EpollWait(e.fd, events, 100)
+func (e *Epoll) Wait(connections []*ClientConn) (int, error) {
+	n, err := unix.EpollWait(e.fd, e.events, 100)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	e.lock.RLock()
 	defer e.lock.RUnlock()
-	var connections []*Session
 	for i := 0; i < n; i++ {
-		conn := e.connections[int(events[i].Fd)]
-		connections = append(connections, conn)
+		conn := e.connections[int(e.events[i].Fd)]
+		connections[i] = conn
 	}
-	return connections, nil
+	return n, nil
 }
