@@ -54,6 +54,7 @@ var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 func (e *Epoll) Expire(now time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
+	deleted := []time.Time{}
 	e.timeouts.AscendLessThan(&expirationSet{deadline: now}, func(i btree.Item) bool {
 		set := i.(*expirationSet)
 		for fd := range set.data {
@@ -61,8 +62,12 @@ func (e *Epoll) Expire(now time.Time) {
 				e.connections[fd].Conn.Close()
 			}
 		}
+		deleted = append(deleted, set.deadline)
 		return true
 	})
+	for _, t := range deleted {
+		e.timeouts.Delete(&expirationSet{deadline: t})
+	}
 }
 func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
 	e.lock.Lock()
@@ -72,6 +77,9 @@ func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
 	if !conn.Deadline.IsZero() {
 		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
 		delete(set.(*expirationSet).data, conn.FD)
+		if len(set.(*expirationSet).data) == 0 {
+			e.timeouts.Delete(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
+		}
 	}
 	conn.Deadline = deadline
 	set := e.timeouts.Get(&expirationSet{deadline: deadline.Round(time.Second)})
