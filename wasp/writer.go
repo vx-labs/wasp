@@ -3,7 +3,6 @@ package wasp
 import (
 	"context"
 	"errors"
-	"io"
 	"sync"
 	"time"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/vx-labs/wasp/wasp/transport"
 	"go.uber.org/zap"
 )
 
@@ -136,7 +136,7 @@ func (q inflightQueue) Count() int {
 type writer struct {
 	mtx       sync.Mutex
 	peerID    uint64
-	sessions  map[string]io.Writer
+	sessions  map[string]transport.TimeoutReadWriteCloser
 	queue     chan RoutedMessage
 	state     schedulerState
 	inflights inflightQueue
@@ -145,7 +145,7 @@ type writer struct {
 
 type Writer interface {
 	Ack(mid int32)
-	Register(sessionID string, enc io.Writer)
+	Register(sessionID string, enc transport.TimeoutReadWriteCloser)
 	Unregister(sessionID string)
 	Run(ctx context.Context, log messageLog) error
 	Schedule(ctx context.Context, offset uint64)
@@ -161,7 +161,7 @@ func NewWriter(peerID uint64, subscriptions schedulerState) *writer {
 			data: make([]*inflightMessage, 250),
 			mtx:  sync.NewCond(&mtx),
 		},
-		sessions: make(map[string]io.Writer),
+		sessions: make(map[string]transport.TimeoutReadWriteCloser),
 		encoder: encoder.New(
 			encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
 				"protocol": "mqtt",
@@ -192,7 +192,7 @@ func (w *writer) Send(ctx context.Context, recipients []string, qosses []int32, 
 func (w *writer) Ack(mid int32) {
 	w.inflights.Trigger(int(mid))
 }
-func (w *writer) Register(sessionID string, enc io.Writer) {
+func (w *writer) Register(sessionID string, enc transport.TimeoutReadWriteCloser) {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
 	w.sessions[sessionID] = enc
@@ -226,6 +226,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				Payload:   p.Payload,
 				Topic:     sessions.TrimMountPoint(metadata.MountPoint, p.Topic),
 			}
+			session.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 			err := w.encoder.Publish(session, publish)
 			if err != nil {
 				L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", sessionID))
@@ -242,6 +243,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 							Payload:   p.Payload,
 							Topic:     sessions.TrimMountPoint(metadata.MountPoint, p.Topic),
 						}
+						session.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 						return w.encoder.Publish(session, publish)
 					})
 				}

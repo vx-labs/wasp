@@ -3,6 +3,7 @@ package wasp
 import (
 	"context"
 	"log"
+	"net"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/decoder"
@@ -186,7 +187,7 @@ func (s *manager) runConnWorker(ctx context.Context) {
 
 func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	c := m.Channel
-	c.SetDeadline(
+	c.SetReadDeadline(
 		time.Now().Add(connectTimeout),
 	)
 	firstPkt, err := s.decoder.Decode(c)
@@ -241,9 +242,6 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	}
 	L(ctx).Debug("session metadata created")
 	s.state.SaveSession(session.ID, session)
-	c.SetDeadline(
-		session.NextDeadline(time.Now()),
-	)
 	s.writer.Register(session.ID, c)
 	s.epoll.Add(id, m.FD, c)
 	return s.encoder.ConnAck(c, &packet.ConnAck{
@@ -258,16 +256,16 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.Session) er
 		c.Conn.Close()
 		return nil
 	}
-	err := s.processSession(ctx, session, c)
-	if err != nil {
-		if err == ErrSessionDisconnected {
-			session.Disconnected = true
+	for {
+		err := s.processSession(ctx, session, c)
+		if err != nil {
+			if err == ErrSessionDisconnected {
+				session.Disconnected = true
+			}
+			s.shutdownSession(ctx, session)
+			return err
 		}
-		s.shutdownSession(ctx, session)
-	} else {
-		c.Conn.SetDeadline(session.NextDeadline(time.Now()))
 	}
-	return err
 }
 func (s *connectionWorker) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID)
@@ -293,8 +291,15 @@ func (s *connectionWorker) shutdownSession(ctx context.Context, session *session
 	}
 }
 func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.Session) error {
+	err := c.Conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
+	if err != nil {
+		return err
+	}
 	pkt, err := s.decoder.Decode(c.Conn)
 	if err != nil {
+		if ne, ok := err.(net.Error); ok && ne.Timeout() {
+			return nil
+		}
 		return err
 	}
 	return processPacket(ctx, s.fsm, s.state, s.publishHandler, s.writer, session, s.encoder, c.Conn, pkt)

@@ -8,6 +8,8 @@ import (
 
 type TimeoutReadWriteCloser interface {
 	SetDeadline(time.Time) error
+	SetReadDeadline(time.Time) error
+	SetWriteDeadline(time.Time) error
 	io.ReadWriteCloser
 }
 
