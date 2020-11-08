@@ -32,8 +32,10 @@ func New() (*Epoll, error) {
 	}, nil
 }
 
+var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
+
 func (e *Epoll) Add(id string, fd int, t transport.TimeoutReadWriteCloser) error {
-	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Events: unix.POLLIN | unix.POLLHUP, Fd: int32(fd)})
+	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
 	if err != nil {
 		return err
 	}
@@ -52,6 +54,9 @@ func (e *Epoll) Remove(fd int) error {
 	defer e.lock.Unlock()
 	delete(e.connections, fd)
 	return nil
+}
+func (e *Epoll) Rearm(fd int) error {
+	return unix.EpollCtl(e.fd, syscall.EPOLL_CTL_MOD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
 }
 
 func (e *Epoll) Wait() ([]*Session, error) {

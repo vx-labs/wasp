@@ -104,7 +104,6 @@ func (s *manager) runDispatcher(ctx context.Context) {
 		}
 		for _, c := range connections {
 			if c != nil {
-				s.epoll.Remove(c.FD)
 				select {
 				case <-ctx.Done():
 					return
@@ -178,7 +177,7 @@ func (s *manager) runConnWorker(ctx context.Context) {
 				if err != nil {
 					job.Conn.Close()
 				} else {
-					s.epoll.Add(job.ID, job.FD, job.Conn)
+					s.epoll.Rearm(job.FD)
 				}
 			}
 		}
@@ -263,6 +262,7 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.Session) er
 				session.Disconnected = true
 			}
 			s.shutdownSession(ctx, session)
+			s.epoll.Remove(c.FD)
 			return err
 		}
 	}
