@@ -17,6 +17,7 @@ func TrimMountPoint(mountPoint string, t []byte) []byte {
 
 type Store interface {
 	Get(id string) *Session
+	All() []*Session
 	Save(id string, session *Session)
 	Delete(id string)
 }
@@ -50,4 +51,15 @@ func (s *store) Delete(id string) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	delete(s.data, id)
+}
+func (s *store) All() []*Session {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+	out := make([]*Session, len(s.data))
+	idx := 0
+	for _, s := range s.data {
+		out[idx] = s
+		idx++
+	}
+	return out
 }

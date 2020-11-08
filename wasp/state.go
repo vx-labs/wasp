@@ -20,6 +20,7 @@ type ReadState interface {
 	ListSubscriptions() ([][]byte, []uint64, []string, []int32, error)
 	Destinations(topic []byte) ([]uint64, error)
 	GetSession(id string) *sessions.Session
+	ListSessions() []*sessions.Session
 	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
 	RetainedMessages(topic []byte) ([]*packet.Publish, error)
@@ -260,6 +261,9 @@ func (s *state) ListSubscriptions() ([][]byte, []uint64, []string, []int32, erro
 
 func (s *state) GetSession(id string) *sessions.Session {
 	return s.sessions.Get(id)
+}
+func (s *state) ListSessions() []*sessions.Session {
+	return s.sessions.All()
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
 	stats.Gauge("sessionsCount").Inc()

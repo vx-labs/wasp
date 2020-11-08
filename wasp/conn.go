@@ -2,8 +2,8 @@ package wasp
 
 import (
 	"context"
-	"log"
 	"net"
+	"sync"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/decoder"
@@ -26,6 +26,7 @@ type manager struct {
 	connectionsJobs chan chan *epoll.ClientConn
 	epoll           *epoll.Epoll
 	publishHandler  PublishHandler
+	wg              *sync.WaitGroup
 }
 
 type setupWorker struct {
@@ -39,13 +40,9 @@ type setupWorker struct {
 }
 
 type connectionWorker struct {
-	decoder        *decoder.Sync
-	encoder        *encoder.Encoder
-	fsm            FSM
-	state          ReadState
-	writer         Writer
-	epoll          *epoll.Epoll
-	publishHandler PublishHandler
+	decoder *decoder.Sync
+	encoder *encoder.Encoder
+	manager *manager
 }
 
 const (
@@ -57,7 +54,7 @@ var (
 	connWorkers int = 50
 )
 
-func NewConnectionManager(ctx context.Context, authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler) *manager {
+func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler) *manager {
 
 	epoller, err := epoll.New(connWorkers)
 	if err != nil {
@@ -73,17 +70,25 @@ func NewConnectionManager(ctx context.Context, authHandler AuthenticationHandler
 		writer:          writer,
 		publishHandler:  publishHandler,
 		epoll:           epoller,
+		wg:              &sync.WaitGroup{},
 	}
-
+	return s
+}
+func (s *manager) Run(ctx context.Context) {
 	for i := 0; i < setuppers; i++ {
 		s.runSetupper(ctx)
+		s.wg.Add(1)
 	}
 	for i := 0; i < connWorkers; i++ {
 		s.runConnWorker(ctx)
+		s.wg.Add(1)
 	}
 	go s.runTimeouter(ctx)
 	go s.runDispatcher(ctx)
-	return s
+	s.wg.Add(2)
+	<-ctx.Done()
+	s.epoll.Shutdown()
+	s.wg.Wait()
 }
 
 func (s *manager) Setup(ctx context.Context, c transport.Metadata) {
@@ -100,6 +105,7 @@ func (s *manager) Setup(ctx context.Context, c transport.Metadata) {
 	}
 }
 func (s *manager) runTimeouter(ctx context.Context) {
+	defer s.wg.Done()
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
@@ -113,12 +119,12 @@ func (s *manager) runTimeouter(ctx context.Context) {
 }
 
 func (s *manager) runDispatcher(ctx context.Context) {
+	defer s.wg.Done()
 	connections := make([]*epoll.ClientConn, connWorkers)
 	for {
 		n, err := s.epoll.Wait(connections)
 		if err != nil && err != unix.EINTR {
-			log.Printf("Failed to epoll wait %v", err)
-			continue
+			return
 		}
 		for _, c := range connections[:n] {
 			if c != nil {
@@ -147,6 +153,7 @@ func (s *manager) runSetupper(ctx context.Context) {
 		epoll:       s.epoll,
 	}
 	go func() {
+		defer s.wg.Done()
 		ch := make(chan transport.Metadata)
 		defer close(ch)
 		for {
@@ -168,17 +175,19 @@ func (s *manager) runSetupper(ctx context.Context) {
 	}()
 }
 
+func (s *manager) DisconnectClients(ctx context.Context) {
+	for _, session := range s.state.ListSessions() {
+		s.shutdownSession(ctx, session)
+	}
+}
 func (s *manager) runConnWorker(ctx context.Context) {
 	worker := &connectionWorker{
-		decoder:        decoder.New(),
-		encoder:        encoder.New(),
-		fsm:            s.fsm,
-		state:          s.state,
-		writer:         s.writer,
-		epoll:          s.epoll,
-		publishHandler: s.publishHandler,
+		decoder: decoder.New(),
+		encoder: encoder.New(),
+		manager: s,
 	}
 	go func() {
+		defer s.wg.Done()
 		ch := make(chan *epoll.ClientConn)
 		defer close(ch)
 		for {
@@ -268,7 +277,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 }
 
 func (s *connectionWorker) processConn(ctx context.Context, c *epoll.ClientConn) error {
-	session := s.state.GetSession(c.ID)
+	session := s.manager.state.GetSession(c.ID)
 	if session == nil {
 		c.Conn.Close()
 		return nil
@@ -279,13 +288,13 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.ClientConn)
 			if err == ErrSessionDisconnected {
 				session.Disconnected = true
 			}
-			s.shutdownSession(ctx, session)
-			s.epoll.Remove(c.FD)
+			s.manager.shutdownSession(ctx, session)
+			s.manager.epoll.Remove(c.FD)
 			return err
 		}
 	}
 }
-func (s *connectionWorker) shutdownSession(ctx context.Context, session *sessions.Session) {
+func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID)
 	s.state.CloseSession(session.ID)
 	topics := session.GetTopics()
@@ -320,9 +329,9 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 		}
 		return err
 	}
-	err = processPacket(ctx, s.fsm, s.state, s.publishHandler, s.writer, session, s.encoder, c.Conn, pkt)
+	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, session, s.encoder, c.Conn, pkt)
 	if err == nil {
-		s.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
+		s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
 	}
 	return err
 }

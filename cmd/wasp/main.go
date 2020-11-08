@@ -270,7 +270,7 @@ func run(config *viper.Viper) {
 			panic(err)
 		}
 	})
-	connManager := wasp.NewConnectionManager(ctx, authHandler, stateMachine, state, writer, func(ctx context.Context, sender string, publish *packet.Publish) error {
+	connManager := wasp.NewConnectionManager(authHandler, stateMachine, state, writer, func(ctx context.Context, sender string, publish *packet.Publish) error {
 		for _, tap := range loadedTaps {
 			err := tap(ctx, sender, publish)
 			if err != nil {
@@ -290,6 +290,7 @@ func run(config *viper.Viper) {
 		}
 		return publishStorer.Distribute(ctx, publish)
 	})
+	operations.Run("connection manager", connManager.Run)
 
 	handler := func(m transport.Metadata) error {
 		connManager.Setup(ctx, m)
@@ -388,6 +389,8 @@ func run(config *viper.Viper) {
 		listener.listener.Close()
 	}
 	wasp.L(ctx).Debug("mqtt listeners stopped")
+	connManager.DisconnectClients(ctx)
+	wasp.L(ctx).Debug("client connections closed")
 	err = clusterNode.Shutdown()
 	if err != nil {
 		wasp.L(ctx).Error("failed to leave cluster", zap.Error(err))

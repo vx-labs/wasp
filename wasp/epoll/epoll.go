@@ -133,3 +133,14 @@ func (e *Epoll) Wait(connections []*ClientConn) (int, error) {
 	}
 	return n, nil
 }
+
+func (e *Epoll) Shutdown() {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	unix.Close(e.fd)
+	for fd, conn := range e.connections {
+		delete(e.connections, fd)
+		conn.Conn.Close()
+	}
+	e.timeouts.Clear(false)
+}
