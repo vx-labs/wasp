@@ -81,6 +81,7 @@ func NewConnectionManager(ctx context.Context, authHandler AuthenticationHandler
 	for i := 0; i < connWorkers; i++ {
 		s.runConnWorker(ctx)
 	}
+	go s.runTimeouter(ctx)
 	go s.runDispatcher(ctx)
 	return s
 }
@@ -98,6 +99,19 @@ func (s *manager) Setup(ctx context.Context, c transport.Metadata) {
 		}
 	}
 }
+func (s *manager) runTimeouter(ctx context.Context) {
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case t := <-ticker.C:
+			s.epoll.Expire(t)
+		}
+	}
+}
+
 func (s *manager) runDispatcher(ctx context.Context) {
 	connections := make([]*epoll.ClientConn, connWorkers)
 	for {
@@ -246,7 +260,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	L(ctx).Debug("session metadata created")
 	s.state.SaveSession(session.ID, session)
 	s.writer.Register(session.ID, c)
-	s.epoll.Add(id, m.FD, c)
+	s.epoll.Add(&epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
 	return s.encoder.ConnAck(c, &packet.ConnAck{
 		Header:     connectPkt.Header,
 		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
@@ -306,5 +320,9 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 		}
 		return err
 	}
-	return processPacket(ctx, s.fsm, s.state, s.publishHandler, s.writer, session, s.encoder, c.Conn, pkt)
+	err = processPacket(ctx, s.fsm, s.state, s.publishHandler, s.writer, session, s.encoder, c.Conn, pkt)
+	if err == nil {
+		s.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
+	}
+	return err
 }

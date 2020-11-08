@@ -3,15 +3,28 @@ package epoll
 import (
 	"sync"
 	"syscall"
+	"time"
+
+	"github.com/google/btree"
 
 	"github.com/vx-labs/wasp/wasp/transport"
 	"golang.org/x/sys/unix"
 )
 
 type ClientConn struct {
-	ID   string
-	FD   int
-	Conn transport.TimeoutReadWriteCloser
+	ID       string
+	FD       int
+	Conn     transport.TimeoutReadWriteCloser
+	Deadline time.Time
+}
+
+type expirationSet struct {
+	data     map[int]struct{}
+	deadline time.Time
+}
+
+func (e *expirationSet) Less(b btree.Item) bool {
+	return e.deadline.Before(b.(*expirationSet).deadline)
 }
 
 type Epoll struct {
@@ -19,6 +32,7 @@ type Epoll struct {
 	connections map[int]*ClientConn
 	lock        *sync.RWMutex
 	events      []unix.EpollEvent
+	timeouts    *btree.BTree
 }
 
 func New(maxEvents int) (*Epoll, error) {
@@ -31,19 +45,57 @@ func New(maxEvents int) (*Epoll, error) {
 		lock:        &sync.RWMutex{},
 		connections: make(map[int]*ClientConn),
 		events:      make([]unix.EpollEvent, maxEvents),
+		timeouts:    btree.New(2),
 	}, nil
 }
 
 var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 
-func (e *Epoll) Add(id string, fd int, t transport.TimeoutReadWriteCloser) error {
-	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
+func (e *Epoll) Expire(now time.Time) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	e.timeouts.AscendLessThan(&expirationSet{deadline: now}, func(i btree.Item) bool {
+		set := i.(*expirationSet)
+		for fd := range set.data {
+			e.connections[fd].Conn.Close()
+		}
+		return true
+	})
+}
+func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
+	e.lock.Lock()
+	defer e.lock.Unlock()
+	conn := e.connections[fd]
+
+	if !conn.Deadline.IsZero() {
+		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
+		delete(set.(*expirationSet).data, conn.FD)
+	}
+	conn.Deadline = deadline
+	set := e.timeouts.Get(&expirationSet{deadline: deadline.Round(time.Second)})
+	if set == nil {
+		set = &expirationSet{data: make(map[int]struct{}), deadline: deadline.Round(time.Second)}
+	}
+	set.(*expirationSet).data[conn.FD] = struct{}{}
+	e.timeouts.ReplaceOrInsert(set)
+}
+
+func (e *Epoll) Add(conn *ClientConn) error {
+	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, conn.FD, &unix.EpollEvent{Events: epollEvents, Fd: int32(conn.FD)})
 	if err != nil {
 		return err
 	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
-	e.connections[fd] = &ClientConn{ID: id, FD: fd, Conn: t}
+	e.connections[conn.FD] = conn
+	if !conn.Deadline.IsZero() {
+		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
+		if set == nil {
+			set = &expirationSet{data: make(map[int]struct{}), deadline: conn.Deadline.Round(time.Second)}
+		}
+		set.(*expirationSet).data[conn.FD] = struct{}{}
+		e.timeouts.ReplaceOrInsert(set)
+	}
 	return nil
 }
 
@@ -54,6 +106,13 @@ func (e *Epoll) Remove(fd int) error {
 	}
 	e.lock.Lock()
 	defer e.lock.Unlock()
+	conn := e.connections[fd]
+	if !conn.Deadline.IsZero() {
+		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
+		if set != nil {
+			delete(set.(*expirationSet).data, fd)
+		}
+	}
 	delete(e.connections, fd)
 	return nil
 }
