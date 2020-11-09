@@ -432,6 +432,8 @@ github.com/vx-labs/mqtt-protocol v5.0.0+incompatible h1:NWYit3Xnojnd2b3TgOoOrdCZ
 github.com/vx-labs/mqtt-protocol v5.0.0+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
 github.com/vx-labs/mqtt-protocol v5.0.1+incompatible h1:qdgzt6GJRBoWVZq1lgQwxbOYHJP8CuwXhcY1VfBbKWs=
 github.com/vx-labs/mqtt-protocol v5.0.1+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
+github.com/vx-labs/mqtt-protocol v5.0.5+incompatible h1:bFCXJI/NheX4kqnt8iuqkyIYx90ZU9MQFL750thf07Q=
+github.com/vx-labs/mqtt-protocol v5.0.5+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 go.etcd.io/bbolt v1.3.2/go.mod h1:IbVyRI1SCnLcuJnV2u8VeU0CEYM7e686BmAb1XKL+uU=

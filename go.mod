@@ -7,9 +7,10 @@ require (
 	github.com/armon/go-proxyproto v0.0.0-20200108142055-f0b8253b1507 // indirect
 	github.com/coreos/go-systemd v0.0.0-20191104093116-d3cd4ed1dbcf // indirect
 	github.com/dustin/go-humanize v1.0.0
-	github.com/emirpasic/gods v1.12.0
+	github.com/emirpasic/gods v1.12.0 // indirect
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.4.3
+	github.com/google/btree v1.0.0
 	github.com/google/uuid v1.1.2
 	github.com/gorilla/websocket v1.4.1
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
@@ -30,7 +31,7 @@ require (
 	github.com/tysontate/gommap v0.0.0-20190103205956-899e1273fb5c
 	github.com/vx-labs/cluster v1.0.0
 	github.com/vx-labs/commitlog v1.2.4
-	github.com/vx-labs/mqtt-protocol v5.0.0+incompatible
+	github.com/vx-labs/mqtt-protocol v5.0.5+incompatible
 	go.etcd.io/etcd v0.0.0-20200716221620-18dfb9cca345
 	go.uber.org/zap v1.16.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
