@@ -183,5 +183,6 @@ func (t *wsListener) queueSession(c net.Conn, fd int, handler func(Metadata) err
 		EncryptionState: nil,
 		Name:            "ws",
 		RemoteAddress:   c.RemoteAddr().String(),
+		FD:              fd,
 	})
 }

@@ -2,7 +2,6 @@ package wasp
 
 import (
 	"context"
-	"net"
 	"sync"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/epoll"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/transport"
+
 	"go.uber.org/zap"
 	"golang.org/x/sys/unix"
 )
@@ -203,8 +203,6 @@ func (s *manager) runConnWorker(ctx context.Context) {
 				err := worker.processConn(ctx, job)
 				if err != nil {
 					job.Conn.Close()
-				} else {
-					s.epoll.Rearm(job.FD)
 				}
 			}
 		}
@@ -217,8 +215,11 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 		time.Now().Add(connectTimeout),
 	)
 	firstPkt, err := s.decoder.Decode(c)
-	if err != nil || firstPkt == nil {
+	if err != nil {
 		return err
+	}
+	if firstPkt == nil {
+		return ErrConnectNotDone
 	}
 	connectPkt, ok := firstPkt.(*packet.Connect)
 	if !ok {
@@ -264,12 +265,20 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	}
 	err = s.fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.LWT(), session.MountPoint)
 	if err != nil {
+		L(ctx).Error("failed to create session metadata", zap.Error(err))
 		return err
 	}
 	L(ctx).Debug("session metadata created")
 	s.state.SaveSession(session.ID, session)
 	s.writer.Register(session.ID, c)
-	s.epoll.Add(&epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
+	err = s.epoll.Add(&epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
+	if err != nil {
+		L(ctx).Error("failed to register epoll session", zap.Error(err))
+		return err
+	}
+	c.SetReadDeadline(
+		time.Time{},
+	)
 	return s.encoder.ConnAck(c, &packet.ConnAck{
 		Header:     connectPkt.Header,
 		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
@@ -282,17 +291,16 @@ func (s *connectionWorker) processConn(ctx context.Context, c *epoll.ClientConn)
 		c.Conn.Close()
 		return nil
 	}
-	for {
-		err := s.processSession(ctx, session, c)
-		if err != nil {
-			if err == ErrSessionDisconnected {
-				session.Disconnected = true
-			}
-			s.manager.shutdownSession(ctx, session)
-			s.manager.epoll.Remove(c.FD)
-			return err
+	err := s.processSession(ctx, session, c)
+	if err != nil {
+		if err == ErrSessionDisconnected {
+			session.Disconnected = true
 		}
+		s.manager.shutdownSession(ctx, session)
+		s.manager.epoll.Remove(c.FD)
+		return err
 	}
+	return err
 }
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID)
@@ -317,21 +325,21 @@ func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session
 		}
 	}
 }
+
+type timeoutError interface {
+	Timeout() bool
+}
+
 func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.ClientConn) error {
-	err := c.Conn.SetDeadline(time.Now().Add(100 * time.Millisecond))
-	if err != nil {
-		return err
-	}
 	pkt, err := s.decoder.Decode(c.Conn)
 	if err != nil {
-		if ne, ok := err.(net.Error); ok && ne.Timeout() {
-			return nil
-		}
 		return err
 	}
+	s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
+	s.manager.epoll.Rearm(c.FD)
 	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, session, s.encoder, c.Conn, pkt)
-	if err == nil {
-		s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
+	if err != nil {
+		return err
 	}
-	return err
+	return nil
 }

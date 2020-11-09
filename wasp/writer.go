@@ -109,11 +109,11 @@ func (q inflightQueue) Delete(i int) {
 }
 
 func (q inflightQueue) Trigger(i int) {
+	q.mtx.L.Lock()
+	defer q.mtx.L.Unlock()
 	if i >= len(q.data) {
 		return
 	}
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
 	if q.data[i-1] != nil {
 		q.data[i-1].cb()
 		q.data[i-1] = nil
@@ -190,6 +190,9 @@ func (w *writer) Send(ctx context.Context, recipients []string, qosses []int32, 
 	}
 }
 func (w *writer) Ack(mid int32) {
+	if mid == 0 {
+		return
+	}
 	w.inflights.Trigger(int(mid))
 }
 func (w *writer) Register(sessionID string, enc transport.TimeoutReadWriteCloser) {
@@ -226,7 +229,6 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				Payload:   p.Payload,
 				Topic:     sessions.TrimMountPoint(metadata.MountPoint, p.Topic),
 			}
-			session.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 			err := w.encoder.Publish(session, publish)
 			if err != nil {
 				L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", sessionID))
@@ -243,7 +245,6 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 							Payload:   p.Payload,
 							Topic:     sessions.TrimMountPoint(metadata.MountPoint, p.Topic),
 						}
-						session.SetWriteDeadline(time.Now().Add(100 * time.Millisecond))
 						return w.encoder.Publish(session, publish)
 					})
 				}
