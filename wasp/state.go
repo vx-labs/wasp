@@ -145,16 +145,19 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
+	stats.SessionsCount.Set(float64(len(s.sessionsMetadatas.All())))
+
 	err = s.subscriptions.Load(dump.Subscriptions)
 	if err != nil {
 		return err
 	}
 	stats.SubscriptionsCount.Set(float64(s.subscriptions.Count()))
+
 	err = s.topics.Load(dump.Topics)
 	if err != nil {
 		return err
 	}
-	stats.SubscriptionsCount.Set(float64(s.topics.Count()))
+	stats.RetainedMessagesCount.Set(float64(s.topics.Count()))
 	return nil
 }
 func (s *state) MarshalBinary() ([]byte, error) {
@@ -207,11 +210,14 @@ func (s *state) RemoveSubscriptionsForSession(id string) {
 	}
 }
 func (s *state) DeleteSessionMetadata(id string, peer uint64) error {
-	s.sessionsMetadatas.Delete(id)
+	if old := s.sessionsMetadatas.Delete(id); old != nil {
+		stats.SessionsCount.Dec()
+	}
 	return nil
 }
 func (s *state) DeleteSessionMetadatasByPeer(peer uint64) {
 	s.sessionsMetadatas.DeletePeer(peer)
+	stats.SubscriptionsCount.Set(float64(s.subscriptions.Count()))
 }
 func (s *state) GetSessionMetadatas(id string) *api.SessionMetadatas {
 	return s.sessionsMetadatas.ByID(id)
@@ -231,6 +237,7 @@ func (s *state) CreateSessionMetadata(id string, peer uint64, clientID string, c
 		Peer:        peer,
 		MountPoint:  mountpoint,
 	})
+	stats.SessionsCount.Inc()
 	return nil
 }
 
