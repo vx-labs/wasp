@@ -22,6 +22,8 @@ var (
 	ErrSubscriptionNotFound = errors.New("Subscription not found")
 )
 
+type NodeIterator func(peer uint64, sub string, qos int32)
+
 type Tree interface {
 	Insert(peer uint64, pattern []byte, qos int32, sub string) error
 	Remove(pattern []byte, sub string) error
@@ -34,6 +36,7 @@ type Tree interface {
 	Dump() ([]byte, error)
 	Load([]byte) error
 	Count() int
+	Walk(topic []byte, iterator NodeIterator)
 }
 
 func NewTree() Tree {
@@ -94,7 +97,16 @@ func (this *tree) MatchPeers(topic []byte, peers *[]uint64) error {
 	this.mtx.RLock()
 	defer this.mtx.RUnlock()
 	*peers = (*peers)[0:0]
-	return this.root.matchPeers(topic, peers)
+	this.root.walk(topic, func(peer uint64, sub string, qos int32) {
+		for _, p := range *peers {
+			if p == peer {
+				return
+			}
+		}
+		*peers = append(*peers, peer)
+	})
+
+	return nil
 }
 func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
@@ -104,7 +116,12 @@ func (this *tree) Match(topic []byte, peers *[]uint64, subs *[]string, qoss *[]i
 	*qoss = (*qoss)[0:0]
 	*peers = (*peers)[0:0]
 
-	return this.root.match(topic, peers, subs, qoss)
+	this.root.walk(topic, func(peer uint64, sub string, qos int32) {
+		*subs = append(*subs, sub)
+		*qoss = append(*qoss, qos)
+		*peers = append(*peers, peer)
+	})
+	return nil
 }
 func (this *tree) MatchForPeer(peer uint64, topic []byte, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
@@ -113,7 +130,19 @@ func (this *tree) MatchForPeer(peer uint64, topic []byte, subs *[]string, qoss *
 	*subs = (*subs)[0:0]
 	*qoss = (*qoss)[0:0]
 
-	return this.root.matchForPeer(peer, topic, subs, qoss)
+	this.root.walk(topic, func(peer uint64, sub string, qos int32) {
+		if peer == peer {
+			*subs = append(*subs, sub)
+			*qoss = append(*qoss, qos)
+		}
+	})
+	return nil
+}
+func (this *tree) Walk(topic []byte, iterator NodeIterator) {
+	this.mtx.RLock()
+	defer this.mtx.RUnlock()
+
+	this.root.walk(topic, iterator)
 }
 func (this *tree) List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
@@ -262,91 +291,30 @@ func (this *Node) appendRecipents(peers *[]uint64, subs *[]string, qoss *[]int32
 		*peers = append(*peers, this.Peer[i])
 	}
 }
-func (this *Node) appendIfPeer(peer uint64, subs *[]string, qoss *[]int32) {
-	for i, sub := range this.Recipients {
-		if this.Peer[i] == peer {
-			*subs = append(*subs, sub)
-			*qoss = append(*qoss, this.Qos[i])
-		}
+
+func (this *Node) applyIterator(iterator NodeIterator) {
+	for idx := range this.Recipients {
+		iterator(this.Peer[idx], this.Recipients[idx], this.Qos[idx])
 	}
 }
-func (this *Node) appendUniquePeers(peers *[]uint64) {
-	for i := range this.Recipients {
-		found := false
-		for _, peer := range *peers {
-			if this.Peer[i] == peer {
-				found = true
-				break
-			}
-		}
-		if !found {
-			*peers = append(*peers, this.Peer[i])
-		}
-	}
-}
-func (this *Node) match(topic format.Topic, peers *[]uint64, subs *[]string, qoss *[]int32) error {
+func (this *Node) walk(topic format.Topic, iterator NodeIterator) {
 	topic, token := topic.Next()
 
 	if token == "" {
-		this.appendRecipents(peers, subs, qoss)
-		return nil
+		this.applyIterator(iterator)
+		return
 	}
 
 	for k, n := range this.Children {
 		// If the key is "#", then these subscribers are added to the result set
 		if k == MWC {
-			n.appendRecipents(peers, subs, qoss)
+			n.applyIterator(iterator)
 		} else if k == SWC || k == token {
-			if err := n.match(topic, peers, subs, qoss); err != nil {
-				return err
-			}
+			n.walk(topic, iterator)
 		}
 	}
-
-	return nil
 }
-func (this *Node) matchForPeer(peer uint64, topic format.Topic, subs *[]string, qoss *[]int32) error {
-	topic, token := topic.Next()
 
-	if token == "" {
-		this.appendIfPeer(peer, subs, qoss)
-		return nil
-	}
-
-	for k, n := range this.Children {
-		// If the key is "#", then these subscribers are added to the result set
-		if k == MWC {
-			n.appendIfPeer(peer, subs, qoss)
-		} else if k == SWC || k == token {
-			if err := n.matchForPeer(peer, topic, subs, qoss); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-func (this *Node) matchPeers(topic format.Topic, peers *[]uint64) error {
-	topic, token := topic.Next()
-
-	if token == "" {
-		this.appendUniquePeers(peers)
-		return nil
-	}
-
-	for k, n := range this.Children {
-		// If the key is "#", then these subscribers are added to the result set
-		if k == MWC {
-			n.appendUniquePeers(peers)
-		} else if k == SWC || k == token {
-			if err := n.matchPeers(topic, peers); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
 func (this *Node) list(key []byte, topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.appendRecipents(peers, subs, qoss)
 	for i := 0; i < len(this.Recipients); i++ {

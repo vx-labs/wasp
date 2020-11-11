@@ -145,7 +145,6 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	stats.SessionsCount.Set(float64(len(s.sessionsMetadatas.All())))
 
 	err = s.subscriptions.Load(dump.Subscriptions)
 	if err != nil {

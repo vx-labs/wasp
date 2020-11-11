@@ -29,15 +29,15 @@ var (
 	}, []string{"protocol"})
 
 	SubscriptionsCount = prometheusMetricsFactory.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_subscriptions_count",
+		Name: "wasp_local_subscriptions",
 		Help: "The total number of MQTT subscriptions.",
 	})
 	RetainedMessagesCount = prometheusMetricsFactory.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_retained_messages_count",
+		Name: "wasp_retained_messages",
 		Help: "The total number of MQTT retained messages.",
 	})
 	SessionsCount = prometheusMetricsFactory.NewGauge(prometheus.GaugeOpts{
-		Name: "wasp_sessions_count",
+		Name: "wasp_connected_sessions",
 		Help: "The total number of MQTT sessions connected to this node.",
 	})
 	PublishDistributionTime = prometheusMetricsFactory.NewHistogram(prometheus.HistogramOpts{
