@@ -37,6 +37,7 @@ type Tree interface {
 	Load([]byte) error
 	Count() int
 	Walk(topic []byte, iterator NodeIterator)
+	Iterate(iterator NodeIterator)
 }
 
 func NewTree() Tree {
@@ -141,8 +142,12 @@ func (this *tree) MatchForPeer(peer uint64, topic []byte, subs *[]string, qoss *
 func (this *tree) Walk(topic []byte, iterator NodeIterator) {
 	this.mtx.RLock()
 	defer this.mtx.RUnlock()
-
 	this.root.walk(topic, iterator)
+}
+func (this *tree) Iterate(iterator NodeIterator) {
+	this.mtx.RLock()
+	defer this.mtx.RUnlock()
+	this.root.iterate(iterator)
 }
 func (this *tree) List(topics *[][]byte, peers *[]uint64, subs *[]string, qoss *[]int32) error {
 	this.mtx.RLock()
@@ -295,6 +300,12 @@ func (this *Node) appendRecipents(peers *[]uint64, subs *[]string, qoss *[]int32
 func (this *Node) applyIterator(iterator NodeIterator) {
 	for idx := range this.Recipients {
 		iterator(this.Peer[idx], this.Recipients[idx], this.Qos[idx])
+	}
+}
+func (this *Node) iterate(iterator NodeIterator) {
+	for _, n := range this.Children {
+		n.applyIterator(iterator)
+		n.iterate(iterator)
 	}
 }
 func (this *Node) walk(topic format.Topic, iterator NodeIterator) {

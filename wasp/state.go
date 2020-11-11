@@ -152,7 +152,7 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	stats.SubscriptionsCount.Set(float64(s.subscriptions.Count()))
+	s.syncSubscriptionsStats()
 
 	err = s.topics.Load(dump.Topics)
 	if err != nil {
@@ -184,7 +184,7 @@ func (s *state) MarshalBinary() ([]byte, error) {
 
 func (s *state) syncSubscriptionsStats() {
 	var c float64 = 0
-	s.subscriptions.Walk([]byte{'#'}, func(peer uint64, sub string, qos int32) {
+	s.subscriptions.Iterate(func(peer uint64, sub string, qos int32) {
 		if peer == s.id {
 			c++
 		}
