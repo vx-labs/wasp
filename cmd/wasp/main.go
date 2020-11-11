@@ -69,7 +69,7 @@ func run(config *viper.Viper) {
 	healthServer.Resume()
 	cancelCh := make(chan struct{})
 	commandsCh := make(chan raft.Command)
-	state := wasp.NewState()
+	state := wasp.NewState(id)
 	if config.GetInt("raft-bootstrap-expect") > 1 {
 		if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
 			wasp.L(ctx).Warn("TLS certificate or private key not provided. GRPC transport security will use a self-signed generated certificate.")

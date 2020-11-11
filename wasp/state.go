@@ -114,14 +114,16 @@ func (s *sessionMetadatasStore) Load(buf []byte) error {
 }
 
 type state struct {
+	id                uint64
 	subscriptions     subscriptions.Tree
 	sessions          sessions.Store
 	topics            topics.Store
 	sessionsMetadatas *sessionMetadatasStore
 }
 
-func NewState() State {
+func NewState(id uint64) State {
 	return &state{
+		id:                id,
 		sessions:          sessions.NewStore(),
 		subscriptions:     subscriptions.NewTree(),
 		topics:            topics.NewTree(),
@@ -179,44 +181,51 @@ func (s *state) MarshalBinary() ([]byte, error) {
 	}
 	return json.Marshal(dump)
 }
+
+func (s *state) syncSubscriptionsStats() {
+	var c float64 = 0
+	s.subscriptions.Walk([]byte{'#'}, func(peer uint64, sub string, qos int32) {
+		if peer == s.id {
+			c++
+		}
+	})
+	stats.SubscriptionsCount.Set(c)
+}
 func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) error {
 	if s.sessionsMetadatas.ByID(id) == nil {
 		return errors.New("session not found")
 	}
 	err := s.subscriptions.Insert(peer, pattern, qos, id)
 	if err == nil {
-		stats.SubscriptionsCount.Inc()
+		s.syncSubscriptionsStats()
 	}
 	return err
 }
 func (s *state) Unsubscribe(id string, pattern []byte) error {
 	err := s.subscriptions.Remove(pattern, id)
 	if err == nil {
-		stats.SubscriptionsCount.Dec()
+		s.syncSubscriptionsStats()
 	}
 	return err
 }
 func (s *state) RemoveSubscriptionsForPeer(peer uint64) {
 	count := s.subscriptions.RemovePeer(peer)
 	if count > 0 {
-		stats.SubscriptionsCount.Sub(float64(count))
+		s.syncSubscriptionsStats()
 	}
 }
 func (s *state) RemoveSubscriptionsForSession(id string) {
 	count := s.subscriptions.RemoveSession(id)
 	if count > 0 {
-		stats.SubscriptionsCount.Sub(float64(count))
+		s.syncSubscriptionsStats()
 	}
 }
 func (s *state) DeleteSessionMetadata(id string, peer uint64) error {
-	if old := s.sessionsMetadatas.Delete(id); old != nil {
-		stats.SessionsCount.Dec()
-	}
+	s.sessionsMetadatas.Delete(id)
 	return nil
 }
 func (s *state) DeleteSessionMetadatasByPeer(peer uint64) {
 	s.sessionsMetadatas.DeletePeer(peer)
-	stats.SubscriptionsCount.Set(float64(s.subscriptions.Count()))
 }
 func (s *state) GetSessionMetadatas(id string) *api.SessionMetadatas {
 	return s.sessionsMetadatas.ByID(id)
@@ -236,7 +245,6 @@ func (s *state) CreateSessionMetadata(id string, peer uint64, clientID string, c
 		Peer:        peer,
 		MountPoint:  mountpoint,
 	})
-	stats.SessionsCount.Inc()
 	return nil
 }
 
@@ -273,9 +281,11 @@ func (s *state) ListSessions() []*sessions.Session {
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
 	s.sessions.Save(id, session)
+	stats.SessionsCount.Inc()
 }
 func (s *state) CloseSession(id string) {
 	s.sessions.Delete(id)
+	stats.SessionsCount.Dec()
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
 	if len(msg.Payload) > 0 {
