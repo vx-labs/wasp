@@ -3,6 +3,7 @@ package transport
 import (
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net"
 )
@@ -25,8 +26,11 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 		c := tls.Server(tcpConn, tlsConfig)
 		err = c.Handshake()
 		if err != nil {
-			log.Printf("ERROR: tls handshake failed: %v", err)
 			c.Close()
+			if err == io.EOF {
+				return
+			}
+			log.Printf("ERROR: tls handshake failed: %v", err)
 			return
 		}
 		state := c.ConnectionState()
