@@ -149,12 +149,12 @@ func (s *state) Load(buf []byte) error {
 	if err != nil {
 		return err
 	}
-	stats.Gauge("subscriptionsCount").Set(float64(s.subscriptions.Count()))
+	stats.SubscriptionsCount.Set(float64(s.subscriptions.Count()))
 	err = s.topics.Load(dump.Topics)
 	if err != nil {
 		return err
 	}
-	stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
+	stats.SubscriptionsCount.Set(float64(s.topics.Count()))
 	return nil
 }
 func (s *state) MarshalBinary() ([]byte, error) {
@@ -183,27 +183,27 @@ func (s *state) Subscribe(peer uint64, id string, pattern []byte, qos int32) err
 	}
 	err := s.subscriptions.Insert(peer, pattern, qos, id)
 	if err == nil {
-		stats.Gauge("subscriptionsCount").Inc()
+		stats.SubscriptionsCount.Inc()
 	}
 	return err
 }
 func (s *state) Unsubscribe(id string, pattern []byte) error {
 	err := s.subscriptions.Remove(pattern, id)
 	if err == nil {
-		stats.Gauge("subscriptionsCount").Dec()
+		stats.SubscriptionsCount.Dec()
 	}
 	return err
 }
 func (s *state) RemoveSubscriptionsForPeer(peer uint64) {
 	count := s.subscriptions.RemovePeer(peer)
 	if count > 0 {
-		stats.Gauge("subscriptionsCount").Sub(float64(count))
+		stats.SubscriptionsCount.Sub(float64(count))
 	}
 }
 func (s *state) RemoveSubscriptionsForSession(id string) {
 	count := s.subscriptions.RemoveSession(id)
 	if count > 0 {
-		stats.Gauge("subscriptionsCount").Sub(float64(count))
+		stats.SubscriptionsCount.Sub(float64(count))
 	}
 }
 func (s *state) DeleteSessionMetadata(id string, peer uint64) error {
@@ -266,11 +266,11 @@ func (s *state) ListSessions() []*sessions.Session {
 	return s.sessions.All()
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
-	stats.Gauge("sessionsCount").Inc()
+	stats.SessionsCount.Inc()
 	s.sessions.Save(id, session)
 }
 func (s *state) CloseSession(id string) {
-	stats.Gauge("sessionsCount").Dec()
+	stats.SessionsCount.Dec()
 	s.sessions.Delete(id)
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
@@ -281,20 +281,20 @@ func (s *state) RetainMessage(msg *packet.Publish) error {
 		}
 		err = s.topics.Insert(msg.Topic, payload)
 		if err == nil {
-			stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
+			stats.RetainedMessagesCount.Set(float64(s.topics.Count()))
 		}
 		return err
 	}
 	err := s.topics.Remove(msg.Topic)
 	if err == nil {
-		stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
+		stats.RetainedMessagesCount.Set(float64(s.topics.Count()))
 	}
 	return err
 }
 func (s *state) DeleteRetainedMessage(topic []byte) error {
 	err := s.topics.Remove(topic)
 	if err == nil {
-		stats.Gauge("retainedMessagesCount").Set(float64(s.topics.Count()))
+		stats.RetainedMessagesCount.Set(float64(s.topics.Count()))
 	}
 	return err
 }

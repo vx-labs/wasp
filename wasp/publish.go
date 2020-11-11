@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/vx-labs/commitlog/stream"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
@@ -71,6 +73,8 @@ type PublishDistributor struct {
 
 // Distribute resolves message destinations, and use them to write message on disk.
 func (storer *PublishDistributor) Distribute(ctx context.Context, publish *packet.Publish) error {
+	started := time.Now()
+	defer stats.PublishDistributionTime.Observe(stats.MilisecondsElapsed(started))
 	destinations, err := storer.State.Destinations(publish.Topic)
 	if err != nil {
 		return err

@@ -162,12 +162,8 @@ func NewWriter(peerID uint64, subscriptions schedulerState) *writer {
 			mtx:  sync.NewCond(&mtx),
 		},
 		sessions: make(map[string]transport.TimeoutReadWriteCloser),
-		encoder: encoder.New(
-			encoder.WithStatRecorder(stats.GaugeVec("egressBytes").With(map[string]string{
-				"protocol": "mqtt",
-			})),
-		),
-		queue: make(chan RoutedMessage, 25),
+		encoder:  encoder.New(),
+		queue:    make(chan RoutedMessage, 25),
 	}
 }
 
@@ -207,12 +203,14 @@ func (w *writer) Unregister(sessionID string) {
 }
 
 func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish) {
+	started := time.Now()
+	defer stats.PublishWritingTime.Observe(stats.MilisecondsElapsed(started))
 	for idx := range recipients {
 		sessionID := recipients[idx]
-		session := w.sessions[sessionID]
-		metadata := w.state.GetSession(sessionID)
+		conn := w.sessions[sessionID]
+		session := w.state.GetSession(sessionID)
 
-		if session != nil {
+		if conn != nil {
 			mid := w.inflights.NextMID()
 			if mid == 0 {
 				L(ctx).Error("failed to get free MID")
@@ -227,27 +225,34 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				},
 				MessageId: int32(mid),
 				Payload:   p.Payload,
-				Topic:     sessions.TrimMountPoint(metadata.MountPoint, p.Topic),
+				Topic:     sessions.TrimMountPoint(session.MountPoint, p.Topic),
 			}
-			err := w.encoder.Publish(session, publish)
+
+			if publish.Header.Qos > 0 {
+				w.inflights.Insert(mid, func() {}, func() error {
+					publish := &packet.Publish{
+						Header: &packet.Header{
+							Dup:    true,
+							Qos:    qosses[idx],
+							Retain: p.Header.Retain,
+						},
+						MessageId: int32(mid),
+						Payload:   p.Payload,
+						Topic:     sessions.TrimMountPoint(session.MountPoint, p.Topic),
+					}
+					stats.EgressBytes.With(map[string]string{
+						"protocol": session.Transport(),
+					}).Add(float64(publish.Length()))
+					return w.encoder.Publish(conn, publish)
+				})
+			}
+			err := w.encoder.Publish(conn, publish)
 			if err != nil {
 				L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", sessionID))
 			} else {
-				if publish.Header.Qos > 0 {
-					w.inflights.Insert(mid, func() {}, func() error {
-						publish := &packet.Publish{
-							Header: &packet.Header{
-								Dup:    true,
-								Qos:    qosses[idx],
-								Retain: p.Header.Retain,
-							},
-							MessageId: int32(mid),
-							Payload:   p.Payload,
-							Topic:     sessions.TrimMountPoint(metadata.MountPoint, p.Topic),
-						}
-						return w.encoder.Publish(session, publish)
-					})
-				}
+				stats.EgressBytes.With(map[string]string{
+					"protocol": session.Transport(),
+				}).Add(float64(publish.Length()))
 			}
 		}
 	}
@@ -263,8 +268,8 @@ func (w *writer) Run(ctx context.Context, log messageLog) error {
 		case <-ctx.Done():
 			return nil
 		case routedMessage := <-w.queue:
-
 			if routedMessage.offset != 0 {
+				started := time.Now()
 				p, err := log.Get(routedMessage.offset)
 				if err != nil {
 					L(ctx).Warn("failed to read message from log", zap.Error(err))
@@ -275,6 +280,7 @@ func (w *writer) Run(ctx context.Context, log messageLog) error {
 					L(ctx).Warn("failed to resolve recipients", zap.Error(err))
 					continue
 				}
+				stats.PublishSchedulingTime.Observe(stats.MilisecondsElapsed(started))
 				w.mtx.Lock()
 				w.send(ctx, recipients, qosses, p)
 				w.mtx.Unlock()

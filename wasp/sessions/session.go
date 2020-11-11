@@ -18,18 +18,23 @@ type Session struct {
 	conn              io.Writer
 	Disconnected      bool
 	topics            subscriptions.Tree
+	transport         string
 }
 
-func NewSession(ctx context.Context, id, mountpoint string, c io.Writer, connect *packet.Connect) (*Session, error) {
+func NewSession(ctx context.Context, id, mountpoint, transport string, c io.Writer, connect *packet.Connect) (*Session, error) {
 	s := &Session{
 		ID:         id,
 		MountPoint: mountpoint,
+		transport:  transport,
 		conn:       c,
 		topics:     subscriptions.NewTree(),
 	}
 	return s, s.processConnect(connect)
 }
 
+func (s *Session) Transport() string {
+	return s.transport
+}
 func (s *Session) LWT() *packet.Publish {
 	return s.lwt
 }

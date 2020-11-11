@@ -11,6 +11,7 @@ import (
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/epoll"
 	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
 
 	"go.uber.org/zap"
@@ -244,7 +245,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session, err := sessions.NewSession(ctx, id, mountPoint, c, connectPkt)
+	session, err := sessions.NewSession(ctx, id, mountPoint, m.Name, c, connectPkt)
 	if err != nil {
 		return err
 	}
@@ -335,6 +336,10 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 	if err != nil {
 		return err
 	}
+	stats.IngressBytes.With(map[string]string{
+		"protocol": session.Transport(),
+	}).Add(float64(pkt.Length()))
+
 	s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
 	s.manager.epoll.Rearm(c.FD)
 	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, session, s.encoder, c.Conn, pkt)
