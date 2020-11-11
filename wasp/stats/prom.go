@@ -59,7 +59,7 @@ var (
 	SessionPacketHandling = prometheusMetricsFactory.NewHistogramVec(prometheus.HistogramOpts{
 		Name:    "wasp_packets_processing_time_milliseconds",
 		Help:    "The time elapsed handling session MQTT packets.",
-		Buckets: []float64{0.001, 0.01, 0.1, 1, 50, 5000},
+		Buckets: []float64{0.1, 1, 50, 5000},
 	}, []string{"packet_type"})
 )
 

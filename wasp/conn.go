@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/vx-labs/mqtt-protocol/decoder"
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -332,10 +333,15 @@ type timeoutError interface {
 }
 
 func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.ClientConn) error {
+	started := time.Now()
 	pkt, err := s.decoder.Decode(c.Conn)
 	if err != nil {
 		return err
 	}
+	defer stats.SessionPacketHandling.With(prometheus.Labels{
+		"packet_type": packet.TypeString(pkt),
+	}).Observe(stats.MilisecondsElapsed(started))
+
 	stats.IngressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(pkt.Length()))
