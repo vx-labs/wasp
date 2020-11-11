@@ -35,4 +35,11 @@ func TestList(t *testing.T) {
 		expired := l.Expire(time.Time{}.Add(1 * time.Minute))
 		require.Equal(t, 0, len(expired))
 	})
+	t.Run("should allow set deletion", func(t *testing.T) {
+		l := NewList()
+		l.Insert(1, time.Time{})
+		l.Reset()
+		expired := l.Expire(time.Time{}.Add(1 * time.Minute))
+		require.Equal(t, 0, len(expired))
+	})
 }

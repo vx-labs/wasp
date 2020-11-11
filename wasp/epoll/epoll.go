@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/btree"
 
+	"github.com/vx-labs/wasp/wasp/expiration"
 	"github.com/vx-labs/wasp/wasp/transport"
 	"golang.org/x/sys/unix"
 )
@@ -32,7 +33,7 @@ type Epoll struct {
 	connections map[int]*ClientConn
 	lock        *sync.RWMutex
 	events      []unix.EpollEvent
-	timeouts    *btree.BTree
+	timeouts    expiration.List
 }
 
 func New(maxEvents int) (*Epoll, error) {
@@ -45,49 +46,31 @@ func New(maxEvents int) (*Epoll, error) {
 		lock:        &sync.RWMutex{},
 		connections: make(map[int]*ClientConn),
 		events:      make([]unix.EpollEvent, maxEvents),
-		timeouts:    btree.New(2),
+		timeouts:    expiration.NewList(),
 	}, nil
 }
 
 var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 
-func (e *Epoll) Expire(now time.Time) {
+func (e *Epoll) Expire(now time.Time) []*ClientConn {
 	e.lock.Lock()
 	defer e.lock.Unlock()
-	deleted := []time.Time{}
-	e.timeouts.AscendLessThan(&expirationSet{deadline: now}, func(i btree.Item) bool {
-		set := i.(*expirationSet)
-		for fd := range set.data {
-			if e.connections[fd] != nil && e.connections[fd].Conn != nil {
-				e.connections[fd].Conn.Close()
-			}
+	expired := e.timeouts.Expire(now)
+	out := make([]*ClientConn, 0, len(expired))
+	for _, fd := range expired {
+		if e.connections[fd] != nil && e.connections[fd].Conn != nil {
+			e.connections[fd].Conn.Close()
+			out = append(out, e.connections[fd])
 		}
-		deleted = append(deleted, set.deadline)
-		return true
-	})
-	for _, t := range deleted {
-		e.timeouts.Delete(&expirationSet{deadline: t})
 	}
+	return out
 }
 func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	conn := e.connections[fd]
-
-	if !conn.Deadline.IsZero() {
-		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
-		delete(set.(*expirationSet).data, conn.FD)
-		if len(set.(*expirationSet).data) == 0 {
-			e.timeouts.Delete(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
-		}
-	}
+	e.timeouts.Update(conn.FD, conn.Deadline, deadline)
 	conn.Deadline = deadline
-	set := e.timeouts.Get(&expirationSet{deadline: deadline.Round(time.Second)})
-	if set == nil {
-		set = &expirationSet{data: make(map[int]struct{}), deadline: deadline.Round(time.Second)}
-	}
-	set.(*expirationSet).data[conn.FD] = struct{}{}
-	e.timeouts.ReplaceOrInsert(set)
 }
 
 func (e *Epoll) Add(conn *ClientConn) error {
@@ -99,12 +82,7 @@ func (e *Epoll) Add(conn *ClientConn) error {
 	defer e.lock.Unlock()
 	e.connections[conn.FD] = conn
 	if !conn.Deadline.IsZero() {
-		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
-		if set == nil {
-			set = &expirationSet{data: make(map[int]struct{}), deadline: conn.Deadline.Round(time.Second)}
-		}
-		set.(*expirationSet).data[conn.FD] = struct{}{}
-		e.timeouts.ReplaceOrInsert(set)
+		e.timeouts.Insert(conn.FD, conn.Deadline)
 	}
 	return nil
 }
@@ -118,10 +96,7 @@ func (e *Epoll) Remove(fd int) error {
 	defer e.lock.Unlock()
 	conn := e.connections[fd]
 	if !conn.Deadline.IsZero() {
-		set := e.timeouts.Get(&expirationSet{deadline: conn.Deadline.Round(time.Second)})
-		if set != nil {
-			delete(set.(*expirationSet).data, fd)
-		}
+		e.timeouts.Delete(conn.FD, conn.Deadline)
 	}
 	delete(e.connections, fd)
 	return nil
@@ -152,5 +127,5 @@ func (e *Epoll) Shutdown() {
 		delete(e.connections, fd)
 		conn.Conn.Close()
 	}
-	e.timeouts.Clear(false)
+	e.timeouts.Reset()
 }

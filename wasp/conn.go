@@ -115,7 +115,12 @@ func (s *manager) runTimeouter(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case t := <-ticker.C:
-			s.epoll.Expire(t)
+			for _, conn := range s.epoll.Expire(t) {
+				session := s.state.GetSession(conn.ID)
+				if session != nil {
+					s.shutdownSession(ctx, session)
+				}
+			}
 		}
 	}
 }

@@ -21,6 +21,7 @@ type List interface {
 	Delete(id int, deadline time.Time)
 	Update(id int, old time.Time, new time.Time)
 	Expire(now time.Time) []int
+	Reset()
 }
 
 type list struct {
@@ -38,6 +39,9 @@ func (l *list) Insert(id int, deadline time.Time) {
 	l.insert(id, deadline)
 }
 
+func (l *list) Reset() {
+	l.tree.Clear(false)
+}
 func (l *list) Delete(id int, deadline time.Time) {
 	l.delete(id, deadline)
 }
