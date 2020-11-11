@@ -273,11 +273,9 @@ func (s *state) ListSessions() []*sessions.Session {
 	return s.sessions.All()
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
-	stats.SessionsCount.Inc()
 	s.sessions.Save(id, session)
 }
 func (s *state) CloseSession(id string) {
-	stats.SessionsCount.Dec()
 	s.sessions.Delete(id)
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
