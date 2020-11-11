@@ -1,4 +1,6 @@
 # Wasp
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp?ref=badge_shield)
+
 
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/9cbf68593140426591f86a7c744cc260)](https://app.codacy.com/gh/vx-labs/wasp?utm_source=github.com&utm_medium=referral&utm_content=vx-labs/wasp&utm_campaign=Badge_Grade)
 
@@ -117,3 +119,7 @@ For example, if you use the default Wasp configuration, data is stored in /tmp/w
 ```
 rm -rf /tmp/wasp
 ```
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp?ref=badge_large)
