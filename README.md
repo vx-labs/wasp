@@ -1,7 +1,6 @@
 # Wasp
+
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp?ref=badge_shield)
-
-
 [![Codacy Badge](https://api.codacy.com/project/badge/Grade/9cbf68593140426591f86a7c744cc260)](https://app.codacy.com/gh/vx-labs/wasp?utm_source=github.com&utm_medium=referral&utm_content=vx-labs/wasp&utm_campaign=Badge_Grade)
 
 Distributed MQTT broker, written in Go.
@@ -25,16 +24,17 @@ Wasp is currently released as a built binary file, you just have to download it,
 If you are using Archlinux, an AUR package is available (named `wasp`).
 For other Linux distributions, you can run the following shell one-liner:
 
-```
+```shell
 curl -sLo Downloads/wasp https://github.com/vx-labs/wasp/releases/download/v1.1.2/wasp_linux-amd64 && chmod +x ./Downloads/wasp
 ```
+
 Il will download Wasp, save it in your ./Downloads folder, and make it executable.
 
 ### MacOS
 
 Packaging software for MacOS is traditionnaly done using a .dmg file, or via the MacAppStore, however I do not have the resources nor the knowledge to do it, so we have to stick with the same curl-chmod process we use on Linux.
 
-```
+```shell
 curl -sLo Downloads/wasp https://github.com/vx-labs/wasp/releases/download/v1.1.2/wasp_darwin-amd64 && chmod +x ./Downloads/wasp
 ```
 
@@ -42,14 +42,14 @@ curl -sLo Downloads/wasp https://github.com/vx-labs/wasp/releases/download/v1.1.
 
 Once downloaded, you can run Wasp by simply invoking it in your shell.
 
-```
+```shell
 ./Download/wasp
 ```
 
 Wasp by default runs an MQTT listener on port 1883, and will print on the terminal the IP adfress ip it detected.
 You can connect to it using an MQTT client, like Mosquitto.
 
-```
+```shell
 mosquitto_sub -t 'test' -d -q 1 &
 mosquitto_pub --port 1884 -t 'test' -d -q 1 -m 'hello'
 ```
@@ -68,7 +68,7 @@ You can alter this behaviour by adding the `log-level` flag when invoking Wasp.
 
 For example, if you want to display `info` messages and above, you can type:
 
-```
+```shell
 ./Downloads/wasp --log-level info
 ```
 
@@ -83,10 +83,9 @@ If you want your Wasp data to survive a host reboot, you must change this locati
 
 For example, if you want to save Wasp data in the `wasp-data` folder, you can run the following command.
 
-```
+```shell
 ./Downloads/wasp --data-dir ./wasp-data
 ```
-
 
 ### Troubleshooting common problems
 
@@ -94,16 +93,16 @@ For example, if you want to save Wasp data in the `wasp-data` folder, you can ru
 
 Wasp can refuse to start, only printing the following message.
 
-```
+```shell
 panic: removed all voters
 
 goroutine 32 [running]:
 go.etcd.io/etcd/raft.(*raft).applyConfChange(0xc0002a4000, 0x0, 0xc000132570, 0x1, 0x1, 0x0, 0x0, 0x0, 0x0, 0x0, ...)
-	go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/raft.go:1514 +0x197
+go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/raft.go:1514 +0x197
 go.etcd.io/etcd/raft.(*node).run(0xc0000be7e0)
-	go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:356 +0x78c
+go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:356 +0x78c
 created by go.etcd.io/etcd/raft.RestartNode
-	go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:240 +0x33d
+go.etcd.io/etcd@v0.0.0-20200319002442-e784ba73c229/raft/node.go:240 +0x33d
 ```
 
 This message basically says that Wasp state became corrupted, and could not be recovered at startup.
@@ -116,10 +115,6 @@ You must erase the current Wasp state to allow Wasp to start again (You will loo
 
 For example, if you use the default Wasp configuration, data is stored in /tmp/wasp, and you can erase it using the following command.
 
-```
+```shell
 rm -rf /tmp/wasp
 ```
-
-
-## License
-[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fvx-labs%2Fwasp?ref=badge_large)
