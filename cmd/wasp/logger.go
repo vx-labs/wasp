@@ -29,6 +29,7 @@ func getLogger(config *viper.Viper) *zap.Logger {
 	}
 	fields := []zap.Field{
 		zap.String("version", BuiltVersion),
+		zap.String("application_name", "wasp"),
 		zap.Time("started_at", time.Now()),
 	}
 	if allocID := os.Getenv("NOMAD_ALLOC_ID"); allocID != "" {
