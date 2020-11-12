@@ -20,6 +20,7 @@ type Store interface {
 	All() []*Session
 	Save(id string, session *Session)
 	Delete(id string)
+	Count() int
 }
 
 func NewStore() Store {
@@ -31,6 +32,12 @@ func NewStore() Store {
 type store struct {
 	data map[string]*Session
 	mtx  sync.RWMutex
+}
+
+func (s *store) Count() int {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+	return len(s.data)
 }
 
 func (s *store) Get(id string) *Session {

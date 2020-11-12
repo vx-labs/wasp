@@ -281,11 +281,11 @@ func (s *state) ListSessions() []*sessions.Session {
 }
 func (s *state) SaveSession(id string, session *sessions.Session) {
 	s.sessions.Save(id, session)
-	stats.SessionsCount.Inc()
+	stats.SessionsCount.Set(float64(s.sessions.Count()))
 }
 func (s *state) CloseSession(id string) {
 	s.sessions.Delete(id)
-	stats.SessionsCount.Dec()
+	stats.SessionsCount.Set(float64(s.sessions.Count()))
 }
 func (s *state) RetainMessage(msg *packet.Publish) error {
 	if len(msg.Payload) > 0 {
