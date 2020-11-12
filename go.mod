@@ -3,6 +3,7 @@ module github.com/vx-labs/wasp
 go 1.14
 
 require (
+	github.com/MauriceGit/skiplist v0.0.0-20191117202105-643e379adb62
 	github.com/dustin/go-humanize v1.0.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.4.3
