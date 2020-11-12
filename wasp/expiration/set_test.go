@@ -43,3 +43,25 @@ func TestList(t *testing.T) {
 		require.Equal(t, 0, len(expired))
 	})
 }
+
+func BenchmarkSet(b *testing.B) {
+	b.Run("update", func(b *testing.B) {
+		benchUpdateFunc := func(n int) func(b *testing.B) {
+			return func(b *testing.B) {
+				l := NewList()
+				for i := 0; i < n; i++ {
+					l.Insert(i, time.Time{}.Add(time.Duration(i)*time.Second))
+				}
+				old := time.Time{}.Add(time.Duration(30) * time.Second)
+				new := time.Time{}.Add(time.Duration(50) * time.Second)
+				for i := 0; i < b.N; i++ {
+					l.Update(30, old, new)
+					l.Update(30, new, old)
+				}
+			}
+		}
+		b.Run("100", benchUpdateFunc(100))
+		b.Run("10000", benchUpdateFunc(10000))
+		b.Run("1000000", benchUpdateFunc(1000000))
+	})
+}
