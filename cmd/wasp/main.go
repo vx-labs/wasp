@@ -123,6 +123,7 @@ func run(config *viper.Viper) {
 		ID:      id,
 		State:   state,
 		Storage: messageLog,
+		Logger:  wasp.L(ctx),
 	}
 
 	raftConfig := cluster.RaftConfig{

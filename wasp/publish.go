@@ -68,7 +68,7 @@ type PublishDistributor struct {
 	Transport publishDistributorTransport
 	State     publishDistributorState
 	Storage   messageLog
-	logger    *zap.Logger
+	Logger    *zap.Logger
 }
 
 // Distribute resolves message destinations, and use them to write message on disk.
@@ -95,7 +95,7 @@ func (storer *PublishDistributor) Distribute(ctx context.Context, publish *packe
 		})
 		if err != nil {
 			failed = true
-			storer.logger.Warn("failed to distribute publish", zap.Error(err), zap.String("hex_remote_node_id", fmt.Sprintf("%x", destinations[idx])))
+			storer.Logger.Warn("failed to distribute publish", zap.Error(err), zap.String("hex_remote_node_id", fmt.Sprintf("%x", destinations[idx])))
 		}
 	}
 	if failed {
