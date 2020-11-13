@@ -8,6 +8,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/sessions"
+	"go.uber.org/zap"
 )
 
 type FSM interface {
@@ -84,7 +85,25 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			MessageId: p.MessageId,
 		})
 	case *packet.PubAck:
-		writer.Ack(p.MessageId)
+		err := writer.Ack(p)
+		if err != nil {
+			L(ctx).Error("failed to ack puback", zap.Int32("message_id", p.MessageId), zap.Error(err))
+		}
+	case *packet.PubRec:
+		err := writer.Ack(p)
+		if err != nil {
+			L(ctx).Error("failed to ack pubrec", zap.Int32("message_id", p.MessageId), zap.Error(err))
+		}
+	case *packet.PubRel:
+		err := writer.Ack(p)
+		if err != nil {
+			L(ctx).Error("failed to ack pubrel", zap.Int32("message_id", p.MessageId), zap.Error(err))
+		}
+	case *packet.PubComp:
+		err := writer.Ack(p)
+		if err != nil {
+			L(ctx).Error("failed to ack pubcomp", zap.Int32("message_id", p.MessageId), zap.Error(err))
+		}
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:

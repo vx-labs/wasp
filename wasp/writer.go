@@ -2,15 +2,17 @@ package wasp
 
 import (
 	"context"
-	"errors"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/ack"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
+	"github.com/zond/gotomic"
 	"go.uber.org/zap"
 )
 
@@ -40,111 +42,19 @@ func (t chanIterator) Next() (uint64, error) {
 	return v.offset, nil
 }
 
-type inflightMessage struct {
-	cb       func()
-	retry    func() error
-	deadline time.Time
-	retries  int
-}
-type inflightQueue struct {
-	data []*inflightMessage
-	mtx  *sync.Cond
-}
-
-func (q inflightQueue) NextMID() int {
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
-	for {
-		for i := range q.data {
-			if q.data[i] == nil {
-				return i + 1
-			}
-		}
-		q.mtx.Wait()
-	}
-}
-
-func (q inflightQueue) TickExpired(now time.Time) {
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
-	for i := range q.data {
-		if q.data[i] != nil && q.data[i].deadline.Before(now) {
-			if q.data[i].retries > 0 {
-				q.data[i].retries--
-				err := q.data[i].retry()
-				if err != nil {
-					q.data[i] = nil
-				} else {
-					q.data[i].deadline = now.Add(3 * time.Second)
-				}
-			} else {
-				q.data[i] = nil
-				q.mtx.Broadcast()
-			}
-		}
-	}
-}
-func (q inflightQueue) Insert(i int, cb func(), retry func() error) error {
-	if i >= len(q.data) {
-		return errors.New("queue too small")
-	}
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
-	q.data[i-1] = &inflightMessage{
-		cb:       cb,
-		retry:    retry,
-		retries:  5,
-		deadline: time.Now().Add(3 * time.Second),
-	}
-	return nil
-}
-func (q inflightQueue) Delete(i int) {
-	if i >= len(q.data) {
-		return
-	}
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
-	q.data[i-1] = nil
-	q.mtx.Broadcast()
-}
-
-func (q inflightQueue) Trigger(i int) {
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
-	if i >= len(q.data) {
-		return
-	}
-	if q.data[i-1] != nil {
-		q.data[i-1].cb()
-		q.data[i-1] = nil
-	}
-	q.mtx.Broadcast()
-}
-
-func (q inflightQueue) Count() int {
-	q.mtx.L.Lock()
-	defer q.mtx.L.Unlock()
-	c := 0
-	for _, v := range q.data {
-		if v != nil {
-			c++
-		}
-	}
-	return c
-}
-
 type writer struct {
 	mtx       sync.Mutex
 	peerID    uint64
 	sessions  map[string]transport.TimeoutReadWriteCloser
 	queue     chan RoutedMessage
 	state     schedulerState
-	inflights inflightQueue
+	inflights ack.Queue
+	midPool   *gotomic.List
 	encoder   *encoder.Encoder
 }
 
 type Writer interface {
-	Ack(mid int32)
+	Ack(packet.Packet) error
 	Register(sessionID string, enc transport.TimeoutReadWriteCloser)
 	Unregister(sessionID string)
 	Run(ctx context.Context, log messageLog) error
@@ -153,17 +63,19 @@ type Writer interface {
 }
 
 func NewWriter(peerID uint64, subscriptions schedulerState) *writer {
-	mtx := sync.Mutex{}
+	midPool := gotomic.NewList()
+	var i int32
+	for i = 65535; i > 0; i-- {
+		midPool.Push(i)
+	}
 	return &writer{
-		peerID: peerID,
-		state:  subscriptions,
-		inflights: inflightQueue{
-			data: make([]*inflightMessage, 250),
-			mtx:  sync.NewCond(&mtx),
-		},
-		sessions: make(map[string]transport.TimeoutReadWriteCloser),
-		encoder:  encoder.New(),
-		queue:    make(chan RoutedMessage, 25),
+		peerID:    peerID,
+		state:     subscriptions,
+		inflights: ack.NewQueue(),
+		sessions:  make(map[string]transport.TimeoutReadWriteCloser),
+		encoder:   encoder.New(),
+		queue:     make(chan RoutedMessage, 25),
+		midPool:   midPool,
 	}
 }
 
@@ -185,11 +97,8 @@ func (w *writer) Send(ctx context.Context, recipients []string, qosses []int32, 
 	case <-ctx.Done():
 	}
 }
-func (w *writer) Ack(mid int32) {
-	if mid == 0 {
-		return
-	}
-	w.inflights.Trigger(int(mid))
+func (w *writer) Ack(pkt packet.Packet) error {
+	return w.inflights.Ack(pkt)
 }
 func (w *writer) Register(sessionID string, enc transport.TimeoutReadWriteCloser) {
 	w.mtx.Lock()
@@ -201,7 +110,64 @@ func (w *writer) Unregister(sessionID string) {
 	defer w.mtx.Unlock()
 	delete(w.sessions, sessionID)
 }
+func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, conn io.Writer) error {
 
+	stats.EgressBytes.With(map[string]string{
+		"protocol": session.Transport(),
+	}).Add(float64(publish.Length()))
+
+	err := w.inflights.Insert(publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+		if expired && w.state.GetSession(session.ID) != nil {
+			w.sendQoS1(publish, session, conn)
+		} else {
+			w.midPool.Push(stored.(*packet.Publish).MessageId)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	// do not return encoder error to avoid freeing message id
+	w.encoder.Publish(conn, publish)
+	return nil
+}
+func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, conn io.Writer) {
+	stats.EgressBytes.With(map[string]string{
+		"protocol": session.Transport(),
+	}).Add(float64(pubRel.Length()))
+
+	w.inflights.Insert(pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+		if expired && w.state.GetSession(session.ID) != nil {
+			w.completeQoS2(pubRel, session, conn)
+		} else {
+			w.midPool.Push(stored.(*packet.PubRel).MessageId)
+		}
+	})
+	w.encoder.Encode(conn, pubRel)
+}
+func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, conn io.Writer) error {
+
+	stats.EgressBytes.With(map[string]string{
+		"protocol": session.Transport(),
+	}).Add(float64(publish.Length()))
+
+	err := w.inflights.Insert(publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+		if expired && w.state.GetSession(session.ID) != nil {
+			w.sendQoS2(publish, session, conn)
+		} else {
+			pubRel := &packet.PubRel{
+				Header:    &packet.Header{},
+				MessageId: publish.MessageId,
+			}
+			w.completeQoS2(pubRel, session, conn)
+		}
+	})
+	if err != nil {
+		return err
+	}
+	// do not return encoder error to avoid freeing message id
+	w.encoder.Publish(conn, publish)
+	return nil
+}
 func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish) {
 	started := time.Now()
 	defer stats.PublishWritingTime.Observe(stats.MilisecondsElapsed(started))
@@ -211,60 +177,63 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 		session := w.state.GetSession(sessionID)
 
 		if conn != nil {
-			mid := w.inflights.NextMID()
-			if mid == 0 {
-				L(ctx).Error("failed to get free MID")
-				break
-			}
-
 			publish := &packet.Publish{
 				Header: &packet.Header{
 					Dup:    p.Header.Dup,
 					Qos:    qosses[idx],
 					Retain: p.Header.Retain,
 				},
-				MessageId: int32(mid),
+				MessageId: 0,
 				Payload:   p.Payload,
 				Topic:     sessions.TrimMountPoint(session.MountPoint, p.Topic),
 			}
 
-			if publish.Header.Qos > 0 {
-				w.inflights.Insert(mid, func() {}, func() error {
-					publish := &packet.Publish{
-						Header: &packet.Header{
-							Dup:    true,
-							Qos:    qosses[idx],
-							Retain: p.Header.Retain,
-						},
-						MessageId: int32(mid),
-						Payload:   p.Payload,
-						Topic:     sessions.TrimMountPoint(session.MountPoint, p.Topic),
-					}
-					stats.EgressBytes.With(map[string]string{
-						"protocol": session.Transport(),
-					}).Add(float64(publish.Length()))
-					return w.encoder.Publish(conn, publish)
-				})
-			}
-			err := w.encoder.Publish(conn, publish)
-			if err != nil {
-				L(ctx).Warn("failed to distribute publish to session", zap.Error(err), zap.String("session_id", sessionID))
-			} else {
-				stats.EgressBytes.With(map[string]string{
-					"protocol": session.Transport(),
-				}).Add(float64(publish.Length()))
+			switch publish.Header.Qos {
+			case 0:
+				err := w.encoder.Publish(conn, publish)
+				if err != nil {
+					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 0), zap.Error(err), zap.String("session_id", sessionID))
+				}
+			case 1:
+				mid, ok := w.midPool.Pop()
+				if mid == 0 || !ok {
+					L(ctx).Error("failed to get free message id")
+				}
+				publish.MessageId = mid.(int32)
+				err := w.sendQoS1(publish, session, conn)
+				if err != nil {
+					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
+				}
+			case 2:
+				mid, ok := w.midPool.Pop()
+				if mid == 0 || !ok {
+					L(ctx).Error("failed to get free message id")
+				}
+				publish.MessageId = mid.(int32)
+				err := w.sendQoS2(publish, session, conn)
+				if err != nil {
+					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
+				}
 			}
 		}
 	}
 }
 func (w *writer) Run(ctx context.Context, log messageLog) error {
-	ticker := time.NewTicker(800 * time.Millisecond)
-	defer ticker.Stop()
+	ticker := time.NewTicker(time.Second)
 	defer close(w.queue)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case tick := <-ticker.C:
+				w.inflights.Expire(tick)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 	for {
 		select {
-		case tick := <-ticker.C:
-			w.inflights.TickExpired(tick)
 		case <-ctx.Done():
 			return nil
 		case routedMessage := <-w.queue:
