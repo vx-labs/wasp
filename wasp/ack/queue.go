@@ -2,6 +2,7 @@ package ack
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -29,8 +30,8 @@ var (
 
 type Callback func(expired bool, stored, received packet.Packet)
 type Queue interface {
-	Insert(pkt packet.Packet, deadline time.Time, callback Callback) error
-	Ack(pkt packet.Packet) error
+	Insert(prefix string, pkt packet.Packet, deadline time.Time, callback Callback) error
+	Ack(prefix string, pkt packet.Packet) error
 	Expire(now time.Time)
 }
 
@@ -53,30 +54,25 @@ func NewQueue() Queue {
 	}
 }
 
-type key int32
-
-func (k key) HashCode() uint32 {
-	return uint32(k)
-}
-func (self key) Equals(t gotomic.Thing) bool {
-	return t.(key) == self
-}
-
 type Ackers interface {
 	GetMessageId() int32
 }
 
-func (q *queue) Ack(pkt packet.Packet) error {
+func hashKey(prefix string, id int32) gotomic.Hashable {
+	return gotomic.StringKey(fmt.Sprintf("%s/%d", prefix, id))
+}
+
+func (q *queue) Ack(prefix string, pkt packet.Packet) error {
 	switch p := pkt.(type) {
 	case Ackers:
-		v, ok := q.msg.Delete(key(p.GetMessageId()))
+		k := hashKey(prefix, p.GetMessageId())
+		v, ok := q.msg.Delete(k)
 		if !ok {
 			return ErrWrongMID
 		}
 		msg := v.(message)
-		q.timeouts.Delete(key(p.GetMessageId()), msg.deadline)
+		q.timeouts.Delete(k, msg.deadline)
 		if msg.state != pkt.Type() {
-			msg.callback(true, msg.pkt, pkt)
 			return ErrUnexpectedPacketType
 		}
 		msg.callback(false, msg.pkt, pkt)
@@ -87,23 +83,22 @@ func (q *queue) Ack(pkt packet.Packet) error {
 }
 func (q *queue) Expire(now time.Time) {
 	for _, v := range q.timeouts.Expire(now) {
-		token := int32(v.(key))
-		v, ok := q.msg.Delete(key(token))
+		key := v.(gotomic.StringKey)
+		m, ok := q.msg.Delete(key)
 		if ok {
-			msg := v.(message)
+			msg := m.(message)
 			msg.callback(true, msg.pkt, nil)
 		}
 	}
 }
-func (q *queue) push(mid int32, deadline time.Time, msg message) error {
-	ok := q.msg.PutIfMissing(key(mid), msg)
-	if !ok {
+func (q *queue) push(k gotomic.Hashable, msg message) error {
+	if !q.msg.PutIfMissing(k, msg) {
 		return ErrDupMID
 	}
-	q.timeouts.Insert(key(mid), deadline)
+	q.timeouts.Insert(k, msg.deadline)
 	return nil
 }
-func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback) error {
+func (q *queue) Insert(prefix string, pkt packet.Packet, deadline time.Time, callback Callback) error {
 	switch p := pkt.(type) {
 	case *packet.PubRec:
 		mid := p.MessageId
@@ -117,7 +112,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 			pid:      mid,
 			deadline: deadline,
 		}
-		return q.push(mid, deadline, msg)
+		return q.push(hashKey(prefix, mid), msg)
 	case *packet.PubRel:
 		mid := p.MessageId
 		if mid == 0 {
@@ -130,7 +125,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 			pid:      mid,
 			deadline: deadline,
 		}
-		return q.push(mid, deadline, msg)
+		return q.push(hashKey(prefix, mid), msg)
 	case *packet.Publish:
 		mid := p.MessageId
 		if mid == 0 {
@@ -145,7 +140,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 				pid:      mid,
 				deadline: deadline,
 			}
-			return q.push(mid, deadline, msg)
+			return q.push(hashKey(prefix, mid), msg)
 		case 2:
 			msg := message{
 				state:    packet.PUBREC,
@@ -154,7 +149,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 				pid:      mid,
 				deadline: deadline,
 			}
-			return q.push(mid, deadline, msg)
+			return q.push(hashKey(prefix, mid), msg)
 		default:
 			return ErrInvalidQos
 		}

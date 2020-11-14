@@ -13,7 +13,7 @@ func TestQueue(t *testing.T) {
 		t.Run("qos 0", func(t *testing.T) {
 			queue := NewQueue()
 			p := &packet.Publish{Header: &packet.Header{Qos: 0}, MessageId: 1}
-			require.Error(t, queue.Insert(p, time.Time{}, func(expired bool, stored, received packet.Packet) {}))
+			require.Error(t, queue.Insert("0", p, time.Time{}, func(expired bool, stored, received packet.Packet) {}))
 		})
 		t.Run("qos 1", func(t *testing.T) {
 			p := &packet.Publish{Header: &packet.Header{Qos: 1}, MessageId: 1}
@@ -21,13 +21,13 @@ func TestQueue(t *testing.T) {
 				queue := NewQueue()
 				triggerd := false
 				timeout := false
-				require.NoError(t, queue.Insert(p,
+				require.NoError(t, queue.Insert("0", p,
 					time.Time{},
 					func(expired bool, store, recieved packet.Packet) {
 						timeout = expired
 						triggerd = true
 					}))
-				require.NoError(t, queue.Ack(&packet.PubAck{
+				require.NoError(t, queue.Ack("0", &packet.PubAck{
 					Header:    &packet.Header{},
 					MessageId: 1,
 				}))
@@ -38,14 +38,14 @@ func TestQueue(t *testing.T) {
 				queue := NewQueue()
 				triggerd := false
 				timeout := false
-				require.NoError(t, queue.Insert(p,
+				require.NoError(t, queue.Insert("0", p,
 					time.Time{},
-					func(expired bool, store, recieved packet.Packet) {
+					func(expired bool, store, received packet.Packet) {
 						triggerd = true
 						timeout = expired
 					}))
 				queue.Expire(time.Time{}.Add(1 * time.Second))
-				require.Error(t, queue.Ack(&packet.PubAck{
+				require.Error(t, queue.Ack("0", &packet.PubAck{
 					Header:    &packet.Header{},
 					MessageId: 1,
 				}))
@@ -59,21 +59,21 @@ func TestQueue(t *testing.T) {
 				queue := NewQueue()
 				triggerd := false
 				timeout := false
-				require.NoError(t, queue.Insert(p,
+				require.NoError(t, queue.Insert("0", p,
 					time.Time{},
 					func(expired bool, store, recieved packet.Packet) {
-						queue.Insert(&packet.PubRel{Header: &packet.Header{}, MessageId: 1},
+						queue.Insert("0", &packet.PubRel{Header: &packet.Header{}, MessageId: 1},
 							time.Time{},
 							func(expired bool, stored, received packet.Packet) {
 								triggerd = true
 								timeout = expired
 							})
 					}))
-				require.NoError(t, queue.Ack(&packet.PubRec{
+				require.NoError(t, queue.Ack("0", &packet.PubRec{
 					Header:    &packet.Header{},
 					MessageId: 1,
 				}))
-				require.NoError(t, queue.Ack(&packet.PubComp{
+				require.NoError(t, queue.Ack("0", &packet.PubComp{
 					Header:    &packet.Header{},
 					MessageId: 1,
 				}))

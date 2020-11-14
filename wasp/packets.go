@@ -7,6 +7,7 @@ import (
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/ack"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"go.uber.org/zap"
 )
@@ -21,7 +22,7 @@ type FSM interface {
 	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
 }
 
-func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander PublishHandler, writer Writer, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
+func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander PublishHandler, writer Writer, inflights ack.Queue, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -29,9 +30,35 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 		return ErrProtocolViolation
 	case *packet.Publish:
 		p.Topic = sessions.PrefixMountPoint(session.MountPoint, p.Topic)
-		err := publishHander(ctx, session.ID, p)
-		if err != nil {
-			return err
+		switch p.Header.Qos {
+		case 0, 1:
+			err := publishHander(ctx, session.ID, p)
+			if err != nil {
+				return err
+			}
+		case 2:
+			pubrec := &packet.PubRec{
+				Header:    &packet.Header{},
+				MessageId: p.MessageId,
+			}
+			err := inflights.Insert(session.ID, pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+				if expired {
+					return
+				}
+				err := publishHander(ctx, session.ID, p)
+				if err == nil {
+					pubcomp := &packet.PubComp{
+						Header:    &packet.Header{},
+						MessageId: received.(*packet.PubRel).MessageId,
+					}
+					encoder.Encode(c, pubcomp)
+					return
+				}
+			})
+			if err != nil {
+				return err
+			}
+			return encoder.Encode(c, pubrec)
 		}
 		if p.Header.Qos == 1 {
 			return encoder.PubAck(c, &packet.PubAck{
@@ -85,22 +112,22 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			MessageId: p.MessageId,
 		})
 	case *packet.PubAck:
-		err := writer.Ack(p)
+		err := inflights.Ack(session.ID, p)
 		if err != nil {
 			L(ctx).Error("failed to ack puback", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubRec:
-		err := writer.Ack(p)
+		err := inflights.Ack(session.ID, p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubrec", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubRel:
-		err := writer.Ack(p)
+		err := inflights.Ack(session.ID, p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubrel", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubComp:
-		err := writer.Ack(p)
+		err := inflights.Ack(session.ID, p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubcomp", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}

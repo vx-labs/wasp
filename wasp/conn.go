@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/decoder"
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/ack"
 	"github.com/vx-labs/wasp/wasp/auth"
 	"github.com/vx-labs/wasp/wasp/epoll"
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -28,6 +29,7 @@ type manager struct {
 	connectionsJobs chan chan *epoll.ClientConn
 	epoll           *epoll.Epoll
 	publishHandler  PublishHandler
+	inflights       ack.Queue
 	wg              *sync.WaitGroup
 }
 
@@ -56,7 +58,7 @@ var (
 	connWorkers int = 50
 )
 
-func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler) *manager {
+func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) *manager {
 
 	epoller, err := epoll.New(connWorkers)
 	if err != nil {
@@ -65,6 +67,7 @@ func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state Read
 
 	s := &manager{
 		authHandler:     authHandler,
+		inflights:       ackQueue,
 		fsm:             fsm,
 		state:           state,
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
@@ -353,7 +356,7 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 
 	s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
 	s.manager.epoll.Rearm(c.FD)
-	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, session, s.encoder, c.Conn, pkt)
+	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c.Conn, pkt)
 	if err != nil {
 		return err
 	}

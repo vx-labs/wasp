@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/vx-labs/cluster"
+	"github.com/vx-labs/wasp/wasp/ack"
 	"github.com/vx-labs/wasp/wasp/messages"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 
@@ -262,7 +263,8 @@ func run(config *viper.Viper) {
 			loadedTaps = append(loadedTaps, tap)
 		})
 	}
-	writer := wasp.NewWriter(id, state)
+	inflights := ack.NewQueue()
+	writer := wasp.NewWriter(id, state, inflights)
 
 	operations.Run("publish distributor", wasp.SchedulePublishes(id, writer, messageLog))
 	operations.Run("publish writer", func(ctx context.Context) {
@@ -290,7 +292,7 @@ func run(config *viper.Viper) {
 			publish.Header.Retain = false
 		}
 		return publishStorer.Distribute(ctx, publish)
-	})
+	}, inflights)
 	operations.Run("connection manager", connManager.Run)
 
 	handler := func(m transport.Metadata) error {

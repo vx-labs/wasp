@@ -54,7 +54,6 @@ type writer struct {
 }
 
 type Writer interface {
-	Ack(packet.Packet) error
 	Register(sessionID string, enc transport.TimeoutReadWriteCloser)
 	Unregister(sessionID string)
 	Run(ctx context.Context, log messageLog) error
@@ -62,7 +61,7 @@ type Writer interface {
 	Send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish)
 }
 
-func NewWriter(peerID uint64, subscriptions schedulerState) *writer {
+func NewWriter(peerID uint64, subscriptions schedulerState, ackQueue ack.Queue) *writer {
 	midPool := gotomic.NewList()
 	var i int32
 	for i = 500; i > 0; i-- {
@@ -71,7 +70,7 @@ func NewWriter(peerID uint64, subscriptions schedulerState) *writer {
 	return &writer{
 		peerID:    peerID,
 		state:     subscriptions,
-		inflights: ack.NewQueue(),
+		inflights: ackQueue,
 		sessions:  make(map[string]transport.TimeoutReadWriteCloser),
 		encoder:   encoder.New(),
 		queue:     make(chan RoutedMessage, 25),
@@ -97,9 +96,6 @@ func (w *writer) Send(ctx context.Context, recipients []string, qosses []int32, 
 	case <-ctx.Done():
 	}
 }
-func (w *writer) Ack(pkt packet.Packet) error {
-	return w.inflights.Ack(pkt)
-}
 func (w *writer) Register(sessionID string, enc transport.TimeoutReadWriteCloser) {
 	w.mtx.Lock()
 	defer w.mtx.Unlock()
@@ -116,7 +112,7 @@ func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, co
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
 
-	err := w.inflights.Insert(publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+	err := w.inflights.Insert(session.ID, publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 		if expired && w.state.GetSession(session.ID) != nil {
 			w.sendQoS1(publish, session, conn)
 		} else {
@@ -135,7 +131,7 @@ func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, 
 		"protocol": session.Transport(),
 	}).Add(float64(pubRel.Length()))
 
-	w.inflights.Insert(pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+	w.inflights.Insert(session.ID, pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 		if expired && w.state.GetSession(session.ID) != nil {
 			w.completeQoS2(pubRel, session, conn)
 		} else {
@@ -150,7 +146,7 @@ func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, co
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
 
-	err := w.inflights.Insert(publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+	err := w.inflights.Insert(session.ID, publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 		if expired && w.state.GetSession(session.ID) != nil {
 			w.sendQoS2(publish, session, conn)
 		} else {
