@@ -39,6 +39,7 @@ type message struct {
 	pkt      packet.Packet
 	pid      int32
 	callback Callback
+	deadline time.Time
 }
 type queue struct {
 	msg      *gotomic.Hash
@@ -73,6 +74,7 @@ func (q *queue) Ack(pkt packet.Packet) error {
 			return ErrWrongMID
 		}
 		msg := v.(message)
+		q.timeouts.Delete(p.GetMessageId(), msg.deadline)
 		if msg.state != pkt.Type() {
 			msg.callback(true, msg.pkt, pkt)
 			return ErrUnexpectedPacketType
@@ -84,8 +86,9 @@ func (q *queue) Ack(pkt packet.Packet) error {
 	}
 }
 func (q *queue) Expire(now time.Time) {
-	for _, id := range q.timeouts.Expire(now) {
-		v, ok := q.msg.Delete(key(int32(id)))
+	for _, v := range q.timeouts.Expire(now) {
+		token := v.(int32)
+		v, ok := q.msg.Delete(key(token))
 		if ok {
 			msg := v.(message)
 			msg.callback(true, msg.pkt, nil)
@@ -97,7 +100,7 @@ func (q *queue) push(mid int32, deadline time.Time, msg message) error {
 	if !ok {
 		return ErrDupMID
 	}
-	q.timeouts.Insert(int(mid), deadline)
+	q.timeouts.Insert(mid, deadline)
 	return nil
 }
 func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback) error {
@@ -112,6 +115,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 			callback: callback,
 			pkt:      pkt,
 			pid:      mid,
+			deadline: deadline,
 		}
 		return q.push(mid, deadline, msg)
 	case *packet.PubRel:

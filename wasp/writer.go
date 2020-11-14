@@ -198,21 +198,26 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				mid, ok := w.midPool.Pop()
 				if mid == 0 || !ok {
 					L(ctx).Error("failed to get free message id")
-				}
-				publish.MessageId = mid.(int32)
-				err := w.sendQoS1(publish, session, conn)
-				if err != nil {
-					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
+					continue
+				} else {
+					publish.MessageId = mid.(int32)
+					err := w.sendQoS1(publish, session, conn)
+					if err != nil {
+						w.midPool.Push(mid)
+						L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
+					}
 				}
 			case 2:
 				mid, ok := w.midPool.Pop()
 				if mid == 0 || !ok {
 					L(ctx).Error("failed to get free message id")
-				}
-				publish.MessageId = mid.(int32)
-				err := w.sendQoS2(publish, session, conn)
-				if err != nil {
-					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
+				} else {
+					publish.MessageId = mid.(int32)
+					err := w.sendQoS2(publish, session, conn)
+					if err != nil {
+						w.midPool.Push(mid)
+						L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
+					}
 				}
 			}
 		}

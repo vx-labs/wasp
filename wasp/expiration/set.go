@@ -9,7 +9,7 @@ import (
 )
 
 type bucket struct {
-	data     map[int]struct{}
+	data     map[interface{}]struct{}
 	deadline time.Time
 }
 
@@ -24,10 +24,10 @@ func (e *bucket) String() string {
 }
 
 type List interface {
-	Insert(id int, deadline time.Time)
-	Delete(id int, deadline time.Time)
-	Update(id int, old time.Time, new time.Time)
-	Expire(now time.Time) []int
+	Insert(id interface{}, deadline time.Time)
+	Delete(id interface{}, deadline time.Time)
+	Update(id interface{}, old time.Time, new time.Time)
+	Expire(now time.Time) []interface{}
 	Reset()
 }
 
@@ -36,11 +36,11 @@ type list struct {
 	tree skiplist.SkipList
 }
 
-func NewList() *list {
+func NewList() List {
 	return &list{tree: skiplist.New()}
 }
 
-func (l *list) Insert(id int, deadline time.Time) {
+func (l *list) Insert(id interface{}, deadline time.Time) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.insert(id, deadline)
@@ -49,10 +49,10 @@ func (l *list) Insert(id int, deadline time.Time) {
 func (l *list) Reset() {
 	l.tree = skiplist.New()
 }
-func (l *list) Delete(id int, deadline time.Time) {
+func (l *list) Delete(id interface{}, deadline time.Time) {
 	l.delete(id, deadline)
 }
-func (l *list) delete(id int, deadline time.Time) {
+func (l *list) delete(id interface{}, deadline time.Time) {
 	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
 	if ok {
 		delete(set.GetValue().(*bucket).data, id)
@@ -61,11 +61,11 @@ func (l *list) delete(id int, deadline time.Time) {
 		}
 	}
 }
-func (l *list) insert(id int, deadline time.Time) {
+func (l *list) insert(id interface{}, deadline time.Time) {
 	var b *bucket
 	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
 	if !ok {
-		b = &bucket{data: make(map[int]struct{}), deadline: deadline.Round(time.Second)}
+		b = &bucket{data: make(map[interface{}]struct{}), deadline: deadline.Round(time.Second)}
 	} else {
 		b = set.GetValue().(*bucket)
 	}
@@ -73,18 +73,18 @@ func (l *list) insert(id int, deadline time.Time) {
 	l.tree.Insert(b)
 }
 
-func (l *list) Update(id int, old time.Time, new time.Time) {
+func (l *list) Update(id interface{}, old time.Time, new time.Time) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.delete(id, old)
 	l.insert(id, new)
 }
 
-func (l *list) Expire(now time.Time) []int {
+func (l *list) Expire(now time.Time) []interface{} {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	deleted := []time.Time{}
-	out := []int{}
+	out := []interface{}{}
 	elt := l.tree.GetSmallestNode()
 	first := elt
 	for elt != nil && elt.GetValue().(*bucket).deadline.Before(now) {

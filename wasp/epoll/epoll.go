@@ -57,7 +57,8 @@ func (e *Epoll) Expire(now time.Time) []*ClientConn {
 	defer e.lock.Unlock()
 	expired := e.timeouts.Expire(now)
 	out := make([]*ClientConn, 0, len(expired))
-	for _, fd := range expired {
+	for _, v := range expired {
+		fd := v.(int)
 		if e.connections[fd] != nil && e.connections[fd].Conn != nil {
 			e.connections[fd].Conn.Close()
 			out = append(out, e.connections[fd])
