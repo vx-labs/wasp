@@ -6,10 +6,11 @@ import (
 
 	"github.com/MauriceGit/skiplist"
 	"github.com/google/btree"
+	"github.com/zond/gotomic"
 )
 
 type bucket struct {
-	data     map[interface{}]struct{}
+	data     *gotomic.Hash
 	deadline time.Time
 }
 
@@ -24,9 +25,9 @@ func (e *bucket) String() string {
 }
 
 type List interface {
-	Insert(id interface{}, deadline time.Time)
-	Delete(id interface{}, deadline time.Time)
-	Update(id interface{}, old time.Time, new time.Time)
+	Insert(id gotomic.Hashable, deadline time.Time)
+	Delete(id gotomic.Hashable, deadline time.Time) bool
+	Update(id gotomic.Hashable, old time.Time, new time.Time)
 	Expire(now time.Time) []interface{}
 	Reset()
 }
@@ -40,40 +41,41 @@ func NewList() List {
 	return &list{tree: skiplist.New()}
 }
 
-func (l *list) Insert(id interface{}, deadline time.Time) {
+func (l *list) Insert(id gotomic.Hashable, deadline time.Time) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
-	l.insert(id, deadline)
+	l.insert(id, deadline.Round(time.Second))
 }
 
 func (l *list) Reset() {
 	l.tree = skiplist.New()
 }
-func (l *list) Delete(id interface{}, deadline time.Time) {
-	l.delete(id, deadline)
+func (l *list) Delete(id gotomic.Hashable, deadline time.Time) bool {
+	l.mtx.Lock()
+	defer l.mtx.Unlock()
+	return l.delete(id, deadline)
 }
-func (l *list) delete(id interface{}, deadline time.Time) {
+func (l *list) delete(id gotomic.Hashable, deadline time.Time) bool {
 	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
 	if ok {
-		delete(set.GetValue().(*bucket).data, id)
-		if len(set.GetValue().(*bucket).data) == 0 {
-			l.tree.Delete(&bucket{deadline: deadline.Round(time.Second)})
-		}
+		bucket := set.GetValue().(*bucket)
+		bucket.data.Delete(id)
 	}
+	return ok
 }
-func (l *list) insert(id interface{}, deadline time.Time) {
+func (l *list) insert(id gotomic.Hashable, deadline time.Time) {
 	var b *bucket
 	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
 	if !ok {
-		b = &bucket{data: make(map[interface{}]struct{}), deadline: deadline.Round(time.Second)}
+		b = &bucket{data: gotomic.NewHash(), deadline: deadline.Round(time.Second)}
+		l.tree.Insert(b)
 	} else {
 		b = set.GetValue().(*bucket)
 	}
-	b.data[id] = struct{}{}
-	l.tree.Insert(b)
+	b.data.PutIfMissing(id, nil)
 }
 
-func (l *list) Update(id interface{}, old time.Time, new time.Time) {
+func (l *list) Update(id gotomic.Hashable, old time.Time, new time.Time) {
 	l.mtx.Lock()
 	defer l.mtx.Unlock()
 	l.delete(id, old)
@@ -89,7 +91,7 @@ func (l *list) Expire(now time.Time) []interface{} {
 	first := elt
 	for elt != nil && elt.GetValue().(*bucket).deadline.Before(now) {
 		set := elt.GetValue().(*bucket)
-		for id := range set.data {
+		for id := range set.data.ToMap() {
 			out = append(out, id)
 		}
 		deleted = append(deleted, set.deadline)

@@ -74,7 +74,7 @@ func (q *queue) Ack(pkt packet.Packet) error {
 			return ErrWrongMID
 		}
 		msg := v.(message)
-		q.timeouts.Delete(p.GetMessageId(), msg.deadline)
+		q.timeouts.Delete(key(p.GetMessageId()), msg.deadline)
 		if msg.state != pkt.Type() {
 			msg.callback(true, msg.pkt, pkt)
 			return ErrUnexpectedPacketType
@@ -87,7 +87,7 @@ func (q *queue) Ack(pkt packet.Packet) error {
 }
 func (q *queue) Expire(now time.Time) {
 	for _, v := range q.timeouts.Expire(now) {
-		token := v.(int32)
+		token := int32(v.(key))
 		v, ok := q.msg.Delete(key(token))
 		if ok {
 			msg := v.(message)
@@ -100,7 +100,7 @@ func (q *queue) push(mid int32, deadline time.Time, msg message) error {
 	if !ok {
 		return ErrDupMID
 	}
-	q.timeouts.Insert(mid, deadline)
+	q.timeouts.Insert(key(mid), deadline)
 	return nil
 }
 func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback) error {
@@ -128,6 +128,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 			callback: callback,
 			pkt:      pkt,
 			pid:      mid,
+			deadline: deadline,
 		}
 		return q.push(mid, deadline, msg)
 	case *packet.Publish:
@@ -142,6 +143,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 				callback: callback,
 				pkt:      pkt,
 				pid:      mid,
+				deadline: deadline,
 			}
 			return q.push(mid, deadline, msg)
 		case 2:
@@ -150,6 +152,7 @@ func (q *queue) Insert(pkt packet.Packet, deadline time.Time, callback Callback)
 				callback: callback,
 				pkt:      pkt,
 				pid:      mid,
+				deadline: deadline,
 			}
 			return q.push(mid, deadline, msg)
 		default:
