@@ -23,32 +23,36 @@ func newTopicState(bcast *memberlist.TransmitLimitedQueue) TopicsState {
 		bcast: bcast,
 	}
 }
-func (t *topicsState) mergeMessage(msg *api.RetainedMessage) error {
-	if msg.Publish == nil || len(msg.Publish.Topic) == 0 {
-		return ErrInvalidPayload
-	}
+func (t *topicsState) mergeMessages(messages []*api.RetainedMessage) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, msg := range messages {
+		if msg.Publish == nil || len(msg.Publish.Topic) == 0 {
+			return ErrInvalidPayload
+		}
 
-	localList, err := t.get(msg.Publish.Topic)
-	if err != nil {
-		return err
-	}
-	if len(localList) > 1 {
-		return ErrInvalidPayload
-	}
-	outdated := true
-	if len(localList) == 1 {
-		outdated = crdt.IsEntryOutdated(localList[1], msg)
-	}
-	if outdated {
-		if crdt.IsEntryAdded(msg) {
-			err = t.set(msg.Publish.Topic, msg)
-			if err != nil {
-				return err
-			}
-		} else if crdt.IsEntryRemoved(msg) {
-			err = t.delete(msg.Publish.Topic, msg)
-			if err != nil {
-				return err
+		localList, err := t.get(msg.Publish.Topic)
+		if err != nil {
+			return err
+		}
+		if len(localList) > 1 {
+			return ErrInvalidPayload
+		}
+		outdated := true
+		if len(localList) == 1 {
+			outdated = crdt.IsEntryOutdated(localList[1], msg)
+		}
+		if outdated {
+			if crdt.IsEntryAdded(msg) {
+				err = t.set(msg.Publish.Topic, msg)
+				if err != nil {
+					return err
+				}
+			} else if crdt.IsEntryRemoved(msg) {
+				err = t.delete(msg.Publish.Topic, msg)
+				if err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -59,20 +63,12 @@ func (t *topicsState) GetBroadcasts(overhead, limit int) [][]byte {
 }
 
 func (t *topicsState) Merge(buf []byte) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
 	payload := &api.StateBroadcastEvent{}
 	err := proto.Unmarshal(buf, payload)
 	if err != nil {
 		return err
 	}
-	for _, msg := range payload.RetainedMessages {
-		err := t.mergeMessage(msg)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return t.mergeMessages(payload.RetainedMessages)
 }
 
 func (t *topicsState) Set(message *packet.Publish) error {

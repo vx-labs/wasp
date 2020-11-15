@@ -30,6 +30,10 @@ message Subscription {
   int64 LastDeleted = 6;
 }
 
+message SubscriptionList {
+  repeated Subscription Subscriptions = 1;
+}
+
 message StateBroadcastEvent {
   repeated Subscription Subscriptions = 1;
   repeated SessionMetadatas SessionMetadatas = 2;

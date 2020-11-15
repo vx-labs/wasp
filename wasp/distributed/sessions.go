@@ -29,16 +29,21 @@ func newSessionMetadatasState(peer uint64, bcast *memberlist.TransmitLimitedQueu
 		bcast:    bcast,
 	}
 }
-func (s *sessionMetadatasState) mergeSession(session *api.SessionMetadatas) error {
-	if session.SessionID == "" {
-		return ErrInvalidPayload
-	}
+func (s *sessionMetadatasState) mergeSessions(sessions []*api.SessionMetadatas) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
-	local, ok := s.sessions[session.SessionID]
-	outdated := !ok || crdt.IsEntryOutdated(&local, session)
+	for _, session := range sessions {
+		if session.SessionID == "" {
+			return ErrInvalidPayload
+		}
 
-	if outdated {
-		s.sessions[session.SessionID] = *session
+		local, ok := s.sessions[session.SessionID]
+		outdated := !ok || crdt.IsEntryOutdated(&local, session)
+
+		if outdated {
+			s.sessions[session.SessionID] = *session
+		}
 	}
 	return nil
 }
@@ -48,20 +53,12 @@ func (s *sessionMetadatasState) GetBroadcasts(overhead, limit int) [][]byte {
 }
 
 func (s *sessionMetadatasState) Merge(buf []byte) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	payload := &api.StateBroadcastEvent{}
 	err := proto.Unmarshal(buf, payload)
 	if err != nil {
 		return err
 	}
-	for _, msg := range payload.SessionMetadatas {
-		err := s.mergeSession(msg)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+	return s.mergeSessions(payload.SessionMetadatas)
 }
 
 func (s *sessionMetadatasState) Create(id string, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error {

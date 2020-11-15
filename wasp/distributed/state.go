@@ -26,9 +26,9 @@ type Channel interface {
 
 type SubscriptionsState interface {
 	Create(sessionID string, pattern []byte, qos int32) error
-	All() []*api.Subscription
-	ByPattern(pattern []byte) []*api.Subscription
-	ByPeer(peer uint64) []*api.Subscription
+	All() []api.Subscription
+	ByPattern(pattern []byte) []api.Subscription
+	ByPeer(peer uint64) []api.Subscription
 	Delete(sessionID string, pattern []byte) error
 	DeletePeer(peer uint64)
 	DeleteSession(sessionID string)
