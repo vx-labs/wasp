@@ -35,11 +35,11 @@ type SubscriptionsState interface {
 }
 type SessionMetadatasState interface {
 	Create(id string, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error
-	Get(id string) *api.SessionMetadatas
-	ByClientID(clientID string) *api.SessionMetadatas
-	All() []*api.SessionMetadatas
+	Get(id string) (api.SessionMetadatas, error)
+	ByClientID(clientID string) (api.SessionMetadatas, error)
+	All() []api.SessionMetadatas
 	Delete(id string) error
-	DeletePeer(peer uint64)
+	DeletePeer(peer uint64) error
 }
 type TopicsState interface {
 	Set(message *packet.Publish) error
