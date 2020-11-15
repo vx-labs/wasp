@@ -8,21 +8,12 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/ack"
+	"github.com/vx-labs/wasp/wasp/distributed"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"go.uber.org/zap"
 )
 
-type FSM interface {
-	RetainedMessage(ctx context.Context, publish *packet.Publish) error
-	DeleteRetainedMessage(ctx context.Context, topic []byte) error
-	Subscribe(ctx context.Context, id string, pattern []byte, qos int32) error
-	SubscribeFrom(ctx context.Context, id string, peer uint64, pattern []byte, qos int32) error
-	Unsubscribe(ctx context.Context, id string, pattern []byte) error
-	DeleteSessionMetadata(ctx context.Context, id string) error
-	CreateSessionMetadata(ctx context.Context, id, clientID string, lwt *packet.Publish, mountpoint string) error
-}
-
-func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander PublishHandler, writer Writer, inflights ack.Queue, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
+func processPacket(ctx context.Context, local ReadState, state distributed.State, publishHander PublishHandler, writer Writer, inflights ack.Queue, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -77,7 +68,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			topics[idx] = session.PrefixMountPoint(p.Topic[idx])
 		}
 		for idx := range topics {
-			err := fsm.Subscribe(ctx, session.ID(), topics[idx], p.Qos[idx])
+			err := state.Subscriptions().Create(session.ID(), topics[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
@@ -92,7 +83,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			return err
 		}
 		for idx := range topics {
-			messages, err := state.RetainedMessages(topics[idx])
+			messages, err := state.Topics().Get(topics[idx])
 			if err != nil {
 				return err
 			}
@@ -106,7 +97,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			topics[idx] = session.PrefixMountPoint(p.Topic[idx])
 		}
 		for idx := range topics {
-			err := fsm.Unsubscribe(ctx, session.ID(), topics[idx])
+			err := state.Subscriptions().Delete(session.ID(), topics[idx])
 			if err != nil {
 				return err
 			}
@@ -139,8 +130,8 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:
-		metadata := state.GetSessionMetadatasByClientID(session.ClientID())
-		if metadata == nil || metadata.SessionID != session.ID() {
+		metadata, err := state.SessionMetadatas().ByClientID(session.ClientID())
+		if err != nil || metadata.SessionID != session.ID() {
 			// Session has reconnected on another peer.
 			return ErrSessionDisconnected
 		}

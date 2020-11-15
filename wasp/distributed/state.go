@@ -39,6 +39,7 @@ type SessionMetadatasState interface {
 	Create(id string, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error
 	Get(id string) (api.SessionMetadatas, error)
 	ByClientID(clientID string) (api.SessionMetadatas, error)
+	ByPeer(peer uint64) []api.SessionMetadatas
 	All() []api.SessionMetadatas
 	Delete(id string) error
 	DeletePeer(peer uint64) error
@@ -65,6 +66,7 @@ type state struct {
 
 func NewState(peer uint64, bcast *memberlist.TransmitLimitedQueue) State {
 	return &state{
+		bcast:            bcast,
 		topics:           newTopicState(bcast),
 		sessionMetadatas: newSessionMetadatasState(peer, bcast),
 		subscriptions:    newSubscriptionState(peer, bcast),
@@ -88,7 +90,9 @@ func (s *state) MergeRemoteState(buf []byte, join bool) {
 	s.subscriptions.mergeSubscriptions(payload.Subscriptions)
 	s.topics.mergeMessages(payload.RetainedMessages)
 }
-func (s *state) NotifyMsg([]byte)          {}
+func (s *state) NotifyMsg(b []byte) {
+	s.MergeRemoteState(b, false)
+}
 func (s *state) NodeMeta(limit int) []byte { return nil }
 func (s *state) LocalState(join bool) []byte {
 	payload := &api.StateBroadcastEvent{}

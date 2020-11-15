@@ -19,16 +19,13 @@ import (
 	"github.com/vx-labs/wasp/wasp/ack"
 	"github.com/vx-labs/wasp/wasp/distributed"
 	"github.com/vx-labs/wasp/wasp/messages"
-	"go.etcd.io/etcd/etcdserver/api/snap"
 
 	"github.com/spf13/viper"
-	"github.com/vx-labs/cluster/raft"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/async"
 	"github.com/vx-labs/wasp/rpc"
 	"github.com/vx-labs/wasp/vaultacme"
 	"github.com/vx-labs/wasp/wasp"
-	"github.com/vx-labs/wasp/wasp/fsm"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/taps"
 	"github.com/vx-labs/wasp/wasp/transport"
@@ -68,10 +65,16 @@ func run(config *viper.Viper) {
 	}
 	operations := async.NewOperations(ctx, wasp.L(ctx))
 
+	bcast := &memberlist.TransmitLimitedQueue{
+		RetransmitMult: 3,
+		//TODO: return real cluster node count
+		NumNodes: func() int { return 2 },
+	}
+	dstate := distributed.NewState(id, bcast)
+
 	healthServer := health.NewServer()
 	healthServer.Resume()
 	cancelCh := make(chan struct{})
-	commandsCh := make(chan raft.Command)
 	state := wasp.NewState(id)
 	if config.GetInt("raft-bootstrap-expect") > 1 {
 		if config.GetString("rpc-tls-certificate-file") == "" || config.GetString("rpc-tls-private-key-file") == "" {
@@ -101,8 +104,7 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}
-	stateMachine := fsm.NewFSM(id, state, commandsCh, auditRecorder)
-	mqttServer := wasp.NewMQTTServer(state, stateMachine, messageLog)
+	mqttServer := wasp.NewMQTTServer(dstate, state, messageLog)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {
@@ -124,92 +126,43 @@ func run(config *viper.Viper) {
 
 	publishStorer := wasp.PublishDistributor{
 		ID:      id,
-		State:   state,
+		State:   dstate.Subscriptions(),
 		Storage: messageLog,
 		Logger:  wasp.L(ctx),
 	}
-	bcast := &memberlist.TransmitLimitedQueue{}
-	dstate := distributed.NewState(id, bcast)
+
+	memberManager := wasp.NewNodeMemberManager(id, messageLog, dstate)
 
 	raftConfig := cluster.RaftConfig{
-		GetStateSnapshot:  state.MarshalBinary,
-		ExpectedNodeCount: config.GetInt("raft-bootstrap-expect"),
 		Network: cluster.NetworkConfig{
 			AdvertizedHost: config.GetString("raft-advertized-address"),
 			AdvertizedPort: config.GetInt("raft-advertized-port"),
 			ListeningPort:  config.GetInt("raft-port"),
 		},
-		CommitApplier: func(ctx context.Context, event raft.Commit) error {
-			stateMachine.Apply(event.Payload)
-			return nil
-		},
-		SnapshotApplier: func(ctx context.Context, index uint64, snapshotter *snap.Snapshotter) error {
-			snapshot, err := snapshotter.Load()
-			if err != nil {
-				wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
-			}
-			err = state.Load(snapshot.Data)
-			if err != nil {
-				wasp.L(ctx).Fatal("failed to get snapshot from storage", zap.Error(err))
-			} else {
-				wasp.L(ctx).Debug("loaded snapshot into state")
-			}
-			return err
-		},
-		OnNodeRemoved: func(id uint64, leader bool) {
-			if leader {
-				sessions := state.ListSessionMetadatas()
-				for _, session := range sessions {
-					if session.Peer == id && session.LWT != nil {
-						publishStorer.Distribute(ctx, session.LWT)
-					}
-				}
-			}
-		},
-		ConfChangeApplier: stateMachine.ApplyConfChange,
 	}
 	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
 		ID:            id,
 		ServiceName:   "wasp",
 		DataDirectory: config.GetString("data-dir"),
+		RaftConfig:    raftConfig,
 		GossipConfig: cluster.GossipConfig{
 			JoinList:                 joinList,
 			DistributedStateDelegate: dstate.Distributor(),
+			NodeEventDelegate:        memberManager,
 			Network: cluster.NetworkConfig{
 				AdvertizedHost: config.GetString("serf-advertized-address"),
 				AdvertizedPort: config.GetInt("serf-advertized-port"),
 				ListeningPort:  config.GetInt("serf-port"),
 			},
 		},
-		RaftConfig: raftConfig,
 	}, rpcDialer, server, wasp.L(ctx))
-	clusterNode := clusterMultiNode.Node("wasp", raftConfig)
 
-	publishStorer.Transport = clusterNode
+	publishStorer.Transport = clusterMultiNode
 
 	operations.Run("cluster listener", func(ctx context.Context) {
 		err := server.Serve(clusterListener)
 		if err != nil {
 			panic(err)
-		}
-	})
-	operations.Run("cluster node", func(ctx context.Context) {
-		clusterNode.Run(ctx)
-	})
-	operations.Run("command publisher", func(ctx context.Context) {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case event := <-commandsCh:
-				err := clusterNode.Apply(event.Ctx, event.Payload)
-				select {
-				case <-ctx.Done():
-				case <-event.Ctx.Done():
-				case event.ErrCh <- err:
-				}
-				close(event.ErrCh)
-			}
 		}
 	})
 
@@ -269,7 +222,7 @@ func run(config *viper.Viper) {
 		})
 	}
 	inflights := ack.NewQueue()
-	writer := wasp.NewWriter(id, state, inflights)
+	writer := wasp.NewWriter(id, dstate.Subscriptions(), state, inflights)
 
 	operations.Run("publish distributor", wasp.SchedulePublishes(id, writer, messageLog))
 	operations.Run("publish writer", func(ctx context.Context) {
@@ -278,7 +231,7 @@ func run(config *viper.Viper) {
 			panic(err)
 		}
 	})
-	connManager := wasp.NewConnectionManager(authHandler, stateMachine, state, writer, func(ctx context.Context, sender string, publish *packet.Publish) error {
+	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, func(ctx context.Context, sender string, publish *packet.Publish) error {
 		for _, tap := range loadedTaps {
 			err := tap(ctx, sender, publish)
 			if err != nil {
@@ -287,9 +240,9 @@ func run(config *viper.Viper) {
 		}
 		if publish.Header.Retain {
 			if publish.Payload == nil {
-				err = stateMachine.DeleteRetainedMessage(ctx, publish.Topic)
+				err = dstate.Topics().Delete(publish.Topic)
 			} else {
-				err = stateMachine.RetainedMessage(ctx, publish)
+				err = dstate.Topics().Set(publish)
 			}
 			if err != nil {
 				wasp.L(ctx).Warn("failed to retain message", zap.Error(err))
@@ -304,7 +257,6 @@ func run(config *viper.Viper) {
 		connManager.Setup(ctx, m)
 		return nil
 	}
-	<-clusterNode.Ready()
 	listeners := []listenerConfig{}
 	if port := config.GetInt("tcp-port"); port > 0 {
 		ln, err := transport.NewTCPTransport(port, handler)
@@ -399,12 +351,6 @@ func run(config *viper.Viper) {
 	wasp.L(ctx).Debug("mqtt listeners stopped")
 	connManager.DisconnectClients(ctx)
 	wasp.L(ctx).Debug("client connections closed")
-	err = clusterNode.Shutdown()
-	if err != nil {
-		wasp.L(ctx).Error("failed to leave cluster", zap.Error(err))
-	} else {
-		wasp.L(ctx).Debug("cluster left")
-	}
 	clusterMultiNode.Shutdown()
 	healthServer.Shutdown()
 	wasp.L(ctx).Debug("health server stopped")

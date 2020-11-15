@@ -120,6 +120,11 @@ func (s *sessionMetadatasState) ByClientID(clientID string) (api.SessionMetadata
 	defer s.mu.Unlock()
 	return s.find(func(s api.SessionMetadatas) bool { return s.ClientID == clientID })
 }
+func (s *sessionMetadatasState) ByPeer(peer uint64) []api.SessionMetadatas {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.filter(func(s api.SessionMetadatas) bool { return s.Peer == peer })
+}
 func (s *sessionMetadatasState) All() []api.SessionMetadatas {
 	s.mu.Lock()
 	defer s.mu.Unlock()

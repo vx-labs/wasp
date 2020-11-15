@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/ack"
+	"github.com/vx-labs/wasp/wasp/distributed"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
 	"github.com/vx-labs/wasp/wasp/transport"
@@ -47,7 +48,8 @@ type writer struct {
 	peerID    uint64
 	sessions  map[string]transport.TimeoutReadWriteCloser
 	queue     chan RoutedMessage
-	state     schedulerState
+	state     distributed.SubscriptionsState
+	local     State
 	inflights ack.Queue
 	midPool   *gotomic.List
 	encoder   *encoder.Encoder
@@ -61,7 +63,7 @@ type Writer interface {
 	Send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish)
 }
 
-func NewWriter(peerID uint64, subscriptions schedulerState, ackQueue ack.Queue) *writer {
+func NewWriter(peerID uint64, subscriptions distributed.SubscriptionsState, local State, ackQueue ack.Queue) *writer {
 	midPool := gotomic.NewList()
 	var i int32
 	for i = 500; i > 0; i-- {
@@ -70,6 +72,7 @@ func NewWriter(peerID uint64, subscriptions schedulerState, ackQueue ack.Queue) 
 	return &writer{
 		peerID:    peerID,
 		state:     subscriptions,
+		local:     local,
 		inflights: ackQueue,
 		sessions:  make(map[string]transport.TimeoutReadWriteCloser),
 		encoder:   encoder.New(),
@@ -113,7 +116,7 @@ func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, co
 	}).Add(float64(publish.Length()))
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.state.GetSession(session.ID()) != nil {
+		if expired && w.local.GetSession(session.ID()) != nil {
 			w.sendQoS1(publish, session, conn)
 		} else {
 			w.midPool.Push(stored.(*packet.Publish).MessageId)
@@ -132,7 +135,7 @@ func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, 
 	}).Add(float64(pubRel.Length()))
 
 	w.inflights.Insert(session.ID(), pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.state.GetSession(session.ID()) != nil {
+		if expired && w.local.GetSession(session.ID()) != nil {
 			w.completeQoS2(pubRel, session, conn)
 		} else {
 			w.midPool.Push(stored.(*packet.PubRel).MessageId)
@@ -147,7 +150,7 @@ func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, co
 	}).Add(float64(publish.Length()))
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.state.GetSession(session.ID()) != nil {
+		if expired && w.local.GetSession(session.ID()) != nil {
 			w.sendQoS2(publish, session, conn)
 		} else {
 			pubRel := &packet.PubRel{
@@ -184,7 +187,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 	for idx := range recipients {
 		sessionID := recipients[idx]
 		conn := w.sessions[sessionID]
-		session := w.state.GetSession(sessionID)
+		session := w.local.GetSession(sessionID)
 
 		if conn != nil {
 			publish := &packet.Publish{
@@ -256,10 +259,26 @@ func (w *writer) Run(ctx context.Context, log messageLog) error {
 					L(ctx).Warn("failed to read message from log", zap.Error(err))
 					continue
 				}
-				recipients, qosses, err := w.state.RecipientsForPeer(w.peerID, p.Topic)
+				subscriptions := w.state.ByPattern(p.Topic)
 				if err != nil {
 					L(ctx).Warn("failed to resolve recipients", zap.Error(err))
 					continue
+				}
+				c := 0
+				for _, subscription := range subscriptions {
+					if subscription.Peer == w.peerID {
+						c++
+					}
+				}
+				recipients := make([]string, c)
+				qosses := make([]int32, c)
+				idx := 0
+				for _, subscription := range subscriptions {
+					if subscription.Peer == w.peerID {
+						recipients[idx] = subscription.SessionID
+						qosses[idx] = subscription.QoS
+						idx++
+					}
 				}
 				stats.PublishSchedulingTime.Observe(stats.MilisecondsElapsed(started))
 				w.mtx.Lock()
