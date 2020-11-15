@@ -22,7 +22,7 @@ func getTable(headers []string, out io.Writer) *tablewriter.Table {
 
 	opts := []tablewriter.Colors{}
 	for range headers {
-		opts = append(opts, tablewriter.Colors{tablewriter.Bold, tablewriter.FgHiCyanColor})
+		opts = append(opts, tablewriter.Colors{tablewriter.FgHiYellowColor})
 	}
 	table.SetHeaderColor(opts...)
 	return table

@@ -13,12 +13,13 @@ import (
 	"go.uber.org/zap"
 )
 
-func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
-	mqtt := &cobra.Command{
-		Use: "mqtt",
+func Sessions(ctx context.Context, config *viper.Viper) *cobra.Command {
+	sessions := &cobra.Command{
+		Use: "sessions",
 	}
-	mqtt.AddCommand(&cobra.Command{
-		Use: "list-sessions",
+	sessions.AddCommand(&cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
@@ -40,8 +41,14 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 			table.Render()
 		},
 	})
+	return sessions
+}
+func Messages(ctx context.Context, config *viper.Viper) *cobra.Command {
+	messages := &cobra.Command{
+		Use: "messages",
+	}
 	distributeMessage := &cobra.Command{
-		Use: "distribute-message",
+		Use: "distribute",
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
 			var payload []byte
@@ -50,7 +57,6 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 			}
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
 			_, err := api.NewMQTTClient(conn).DistributeMessage(ctx, &api.DistributeMessageRequest{
-				ResolveRemoteRecipients: config.GetBool("resolve-remote-recipients"),
 				Message: &packet.Publish{
 					Header: &packet.Header{
 						Dup:    config.GetBool("dup"),
@@ -67,16 +73,23 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 			}
 		},
 	}
-	distributeMessage.Flags().Bool("resolve-remote-recipients", true, "Distribute the message accross all servers instances")
 	distributeMessage.Flags().Bool("dup", false, "Mark the message as duplicate.")
 	distributeMessage.Flags().BoolP("retain", "r", false, "Mark the message as retained.")
 	distributeMessage.Flags().Int32P("qos", "q", int32(0), "Set the Message QoS.")
 	distributeMessage.Flags().StringP("topic", "t", "", "Set the Message topic.")
 	distributeMessage.Flags().StringP("payload", "p", "", "Set the Message payload.")
 	distributeMessage.MarkFlagRequired("topic")
+	messages.AddCommand(distributeMessage)
+	return messages
+}
 
+func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
+	subscriptions := &cobra.Command{
+		Use: "subscriptions",
+	}
 	listSubscriptions := &cobra.Command{
-		Use: "list-subscriptions",
+		Use:     "list",
+		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
@@ -97,7 +110,8 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 		},
 	}
 	createSubscription := &cobra.Command{
-		Use: "create-subscription",
+		Use:     "create",
+		Aliases: []string{"new"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
@@ -133,7 +147,8 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 	createSubscription.MarkFlagRequired("session-id")
 
 	deleteSubscription := &cobra.Command{
-		Use: "delete-subscription",
+		Use:     "delete",
+		Aliases: []string{"rm"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
 			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
@@ -164,9 +179,8 @@ func Mqtt(ctx context.Context, config *viper.Viper) *cobra.Command {
 	deleteSubscription.MarkFlagRequired("peer")
 	deleteSubscription.MarkFlagRequired("session-id")
 
-	mqtt.AddCommand(listSubscriptions)
-	mqtt.AddCommand(createSubscription)
-	mqtt.AddCommand(deleteSubscription)
-	mqtt.AddCommand(distributeMessage)
-	return mqtt
+	subscriptions.AddCommand(listSubscriptions)
+	subscriptions.AddCommand(createSubscription)
+	subscriptions.AddCommand(deleteSubscription)
+	return subscriptions
 }

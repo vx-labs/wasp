@@ -4,17 +4,13 @@ import (
 	"context"
 	crypto_rand "crypto/rand"
 	"encoding/binary"
-	"fmt"
 	"log"
 	"math/rand"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/vx-labs/cluster/clusterpb"
-	"go.uber.org/zap"
 )
 
 func seedRand() {
@@ -46,93 +42,11 @@ func main() {
 			}
 		},
 	}
-	raft := &cobra.Command{
-		Use: "raft",
-	}
-	node := &cobra.Command{
-		Use: "node",
-	}
-	mqtt := Mqtt(ctx, config)
-	raft.AddCommand(&cobra.Command{
-		Use: "members",
-		Run: func(cmd *cobra.Command, _ []string) {
-			conn, l := mustDial(ctx, cmd, config)
-			out, err := clusterpb.NewMultiRaftClient(conn).GetMembers(ctx, &clusterpb.GetMembersRequest{ClusterID: "wasp"})
-			if err != nil {
-				l.Fatal("failed to list raft members", zap.Error(err))
-			}
-			table := getTable([]string{"ID", "Leader", "Address", "Health"}, cmd.OutOrStdout())
-			for _, member := range out.GetMembers() {
-				healthString := "healthy"
-				if !member.IsAlive {
-					healthString = "unhealthy"
-				}
-				table.Append([]string{
-					fmt.Sprintf("%x", member.GetID()), fmt.Sprintf("%v", member.GetIsLeader()), member.GetAddress(), healthString,
-				})
-			}
-			table.Render()
-		},
-	})
-	raft.AddCommand(&cobra.Command{
-		Use: "topology",
-		Run: func(cmd *cobra.Command, _ []string) {
-			conn, l := mustDial(ctx, cmd, config)
-			out, err := clusterpb.NewMultiRaftClient(conn).GetTopology(ctx, &clusterpb.GetTopologyRequest{ClusterID: "wasp"})
-			if err != nil {
-				l.Fatal("failed to get raft topology", zap.Error(err))
-			}
-			table := getTable([]string{"ID", "Leader", "Address", "Healthchecks", "Suffrage", "Progress"}, cmd.OutOrStdout())
-			for _, member := range out.GetMembers() {
-				healthString := "passing"
-				suffrageString := "unknown"
-				if !member.IsAlive {
-					healthString = "error"
-				} else {
-					if member.IsVoter {
-						suffrageString = "voter"
-					} else {
-						suffrageString = "learner"
-					}
-				}
-				table.Append([]string{
-					fmt.Sprintf("%x", member.GetID()),
-					fmt.Sprintf("%v", member.GetIsLeader()),
-					member.GetAddress(),
-					healthString,
-					suffrageString,
-					fmt.Sprintf("%d/%d", member.GetApplied(), out.Committed),
-				})
-			}
-			table.Render()
-		},
-	})
-
-	removeMember := &cobra.Command{
-		Use: "remove-member",
-		Run: func(cmd *cobra.Command, args []string) {
-			conn, l := mustDial(ctx, cmd, config)
-			id, err := strconv.ParseUint(args[0], 16, 64)
-			if err != nil {
-				l.Fatal("invalid node id specified", zap.Error(err))
-			}
-			_, err = clusterpb.NewMultiRaftClient(conn).RemoveMember(ctx, &clusterpb.RemoveMultiRaftMemberRequest{
-				ClusterID: "wasp",
-				ID:        id,
-			})
-			if err != nil {
-				l.Fatal("failed to remove raft member", zap.Error(err))
-			}
-		},
-	}
-	removeMember.Args = cobra.ExactArgs(1)
-	raft.AddCommand(removeMember)
 
 	hostname, _ := os.Hostname()
-
-	rootCmd.AddCommand(raft)
-	rootCmd.AddCommand(node)
-	rootCmd.AddCommand(mqtt)
+	rootCmd.AddCommand(Sessions(ctx, config))
+	rootCmd.AddCommand(Subscriptions(ctx, config))
+	rootCmd.AddCommand(Messages(ctx, config))
 	rootCmd.PersistentFlags().BoolP("insecure", "k", false, "Disable GRPC client-side TLS validation.")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity.")
 	rootCmd.PersistentFlags().BoolP("use-vault", "v", false, "Use Hashicorp Vault to generate GRPC Certificates.")
