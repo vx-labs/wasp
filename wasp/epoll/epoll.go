@@ -2,6 +2,7 @@ package epoll
 
 import (
 	"errors"
+	"io"
 	"sync"
 	"syscall"
 	"time"
@@ -20,7 +21,15 @@ type ClientConn struct {
 	Deadline time.Time
 }
 
-const epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
+// Event represents a network event and the associated client connection
+type Event struct {
+	ID    string
+	FD    int
+	Conn  io.ReadWriter
+	Event uint32
+}
+
+const epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT | unix.EPOLLRDHUP
 
 var (
 	// ErrConnectionAlreadyExists means that the connection is already tracked
@@ -36,7 +45,7 @@ type Instance interface {
 	Add(conn ClientConn) error
 	Remove(fd int) error
 	Rearm(fd int) error
-	Wait(connections []ClientConn) (int, error)
+	Wait(connections []Event) (int, error)
 	Shutdown()
 	Count() int
 }
@@ -114,30 +123,33 @@ func (e *instance) Remove(fd int) error {
 	if !ok {
 		return ErrConnectionNotFound
 	}
-	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_DEL, fd, nil)
-	if err != nil {
-		return err
-	}
 	conn := v.(ClientConn)
 	if !conn.Deadline.IsZero() {
 		e.timeouts.Delete(k, conn.Deadline)
 	}
+	conn.Conn.Close()
 	return nil
 }
 func (e *instance) Rearm(fd int) error {
 	return unix.EpollCtl(e.fd, syscall.EPOLL_CTL_MOD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
 }
 
-func (e *instance) Wait(connections []ClientConn) (int, error) {
+func (e *instance) Wait(connections []Event) (int, error) {
 	n, err := unix.EpollWait(e.fd, e.events, 100)
 	if err != nil {
 		return 0, err
 	}
 	for i := 0; i < n; i++ {
 		k := gotomic.IntKey(e.events[i].Fd)
-		conn, ok := e.connections.Get(k)
+		v, ok := e.connections.Get(k)
 		if ok {
-			connections[i] = conn.(ClientConn)
+			conn := v.(ClientConn)
+			connections[i] = Event{
+				ID:    conn.ID,
+				FD:    conn.FD,
+				Conn:  conn.Conn,
+				Event: e.events[i].Events,
+			}
 		}
 	}
 	return n, nil

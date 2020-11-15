@@ -2,6 +2,7 @@ package wasp
 
 import (
 	"context"
+	"io"
 	"sync"
 	"time"
 
@@ -26,7 +27,7 @@ type manager struct {
 	state           ReadState
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
-	connectionsJobs chan chan epoll.ClientConn
+	connectionsJobs chan chan epoll.Event
 	epoll           epoll.Instance
 	publishHandler  PublishHandler
 	inflights       ack.Queue
@@ -71,7 +72,7 @@ func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state Read
 		fsm:             fsm,
 		state:           state,
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
-		connectionsJobs: make(chan chan epoll.ClientConn, connWorkers),
+		connectionsJobs: make(chan chan epoll.Event, connWorkers),
 		writer:          writer,
 		publishHandler:  publishHandler,
 		epoll:           epoller,
@@ -130,23 +131,21 @@ func (s *manager) runTimeouter(ctx context.Context) {
 
 func (s *manager) runDispatcher(ctx context.Context) {
 	defer s.wg.Done()
-	connections := make([]epoll.ClientConn, connWorkers)
+	connections := make([]epoll.Event, connWorkers)
 	for {
 		n, err := s.epoll.Wait(connections)
 		if err != nil && err != unix.EINTR {
 			return
 		}
 		for _, c := range connections[:n] {
-			if c.Conn != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case runner := <-s.connectionsJobs:
 				select {
 				case <-ctx.Done():
 					return
-				case runner := <-s.connectionsJobs:
-					select {
-					case <-ctx.Done():
-						return
-					case runner <- c:
-					}
+				case runner <- c:
 				}
 			}
 		}
@@ -198,7 +197,7 @@ func (s *manager) runConnWorker(ctx context.Context) {
 	}
 	go func() {
 		defer s.wg.Done()
-		ch := make(chan epoll.ClientConn)
+		ch := make(chan epoll.Event)
 		defer close(ch)
 		for {
 			select {
@@ -210,10 +209,7 @@ func (s *manager) runConnWorker(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case job := <-ch:
-				err := worker.processConn(ctx, job)
-				if err != nil {
-					job.Conn.Close()
-				}
+				worker.processConn(ctx, job)
 			}
 		}
 	}()
@@ -295,25 +291,22 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	})
 }
 
-func (s *connectionWorker) processConn(ctx context.Context, c epoll.ClientConn) error {
-	session := s.manager.state.GetSession(c.ID)
+func (s *connectionWorker) processConn(ctx context.Context, ev epoll.Event) {
+	session := s.manager.state.GetSession(ev.ID)
 	if session == nil {
-		c.Conn.Close()
-		return nil
+		s.manager.epoll.Remove(ev.FD)
+		return
 	}
-	err := s.processSession(ctx, session, c)
-	if err != nil {
-		if err == ErrSessionDisconnected {
-			session.Disconnected = true
-		}
+	if ev.Event&unix.EPOLLRDHUP == unix.EPOLLRDHUP || !s.processSession(ctx, session, ev.Conn) {
 		s.manager.shutdownSession(ctx, session)
-		err := s.manager.epoll.Remove(c.FD)
+		err := s.manager.epoll.Remove(ev.FD)
 		if err != nil {
 			L(ctx).Warn("failed to remove session from epoll tracking", zap.Error(err))
 		}
-		return nil
+	} else {
+		s.manager.epoll.SetDeadline(ev.FD, session.NextDeadline(time.Now()))
+		s.manager.epoll.Rearm(ev.FD)
 	}
-	return err
 }
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID())
@@ -343,11 +336,11 @@ type timeoutError interface {
 	Timeout() bool
 }
 
-func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c epoll.ClientConn) error {
+func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c io.ReadWriter) bool {
 	started := time.Now()
-	pkt, err := s.decoder.Decode(c.Conn)
+	pkt, err := s.decoder.Decode(c)
 	if err != nil {
-		return err
+		return false
 	}
 	defer stats.SessionPacketHandling.With(prometheus.Labels{
 		"packet_type": packet.TypeString(pkt),
@@ -357,11 +350,12 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 		"protocol": session.Transport(),
 	}).Add(float64(pkt.Length()))
 
-	s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
-	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c.Conn, pkt)
+	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c, pkt)
 	if err != nil {
-		return err
+		if err == ErrSessionDisconnected {
+			session.Disconnected = true
+		}
+		return false
 	}
-	s.manager.epoll.Rearm(c.FD)
-	return nil
+	return true
 }
