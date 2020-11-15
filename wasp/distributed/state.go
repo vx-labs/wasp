@@ -1,9 +1,28 @@
 package distributed
 
 import (
+	"errors"
+	"time"
+
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 )
+
+var (
+	clock = func() int64 {
+		return time.Now().UnixNano()
+	}
+)
+
+var (
+	ErrInvalidPayload = errors.New("invalid payload")
+)
+
+type Channel interface {
+	Events() chan []byte
+	Broadcast(b []byte)
+	BroadcastFullState(b []byte)
+}
 
 type SubscriptionsState interface {
 	Create(sessionID string, pattern []byte, qos int32) error

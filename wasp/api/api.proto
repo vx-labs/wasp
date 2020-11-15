@@ -10,10 +10,6 @@ message RetainedMessage {
   int64 LastDeleted = 3;
 }
 
-message RetainedMessageList {
-  repeated RetainedMessage RetainedMessages = 1;
-}
-
 message SessionMetadatas {
   string SessionID = 1;
   string ClientID = 2;
@@ -25,10 +21,6 @@ message SessionMetadatas {
   int64 LastDeleted = 8;
 }
 
-message SessionMetadatasList {
-  repeated SessionMetadatas SessionMetadatas = 1;
-}
-
 message Subscription {
   string SessionID = 1;
   uint64 Peer = 2;
@@ -38,10 +30,11 @@ message Subscription {
   int64 LastDeleted = 6;
 }
 
-message SubscriptionList {
+message StateBroadcastEvent {
   repeated Subscription Subscriptions = 1;
+  repeated SessionMetadatas SessionMetadatas = 2;
+  repeated RetainedMessage RetainedMessages = 3;
 }
-
 
 message DistributeMessageRequest {
   packet.Publish Message = 1;
