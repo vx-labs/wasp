@@ -62,6 +62,9 @@ func (s *mqttServer) ListRetainedMessages(ctx context.Context, r *api.ListRetain
 	}
 	return &api.ListRetainedMessagesResponse{RetainedMessages: out}, nil
 }
+func (s *mqttServer) DeleteRetainedMessage(ctx context.Context, r *api.DeleteRetainedMessageRequest) (*api.DeleteRetainedMessageResponse, error) {
+	return &api.DeleteRetainedMessageResponse{}, s.state.Topics().Delete(r.Topic)
+}
 func (s *mqttServer) Serve(grpcServer *grpc.Server) {
 	api.RegisterMQTTServer(grpcServer, s)
 }

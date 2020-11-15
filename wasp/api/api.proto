@@ -73,6 +73,10 @@ message ListRetainedMessagesRequest{
 message ListRetainedMessagesResponse{
   repeated RetainedMessage RetainedMessages = 1;
 }
+message DeleteRetainedMessageRequest{
+  bytes Topic = 1;
+}
+message DeleteRetainedMessageResponse{}
 
 service MQTT {
   rpc ListSubscriptions(ListSubscriptionsRequest)
@@ -87,4 +91,6 @@ service MQTT {
       returns (ListSessionMetadatasResponse) {}
   rpc ListRetainedMessages(ListRetainedMessagesRequest)
       returns (ListRetainedMessagesResponse) {}
+  rpc DeleteRetainedMessage(DeleteRetainedMessageRequest)
+      returns (DeleteRetainedMessageResponse) {}
 }
