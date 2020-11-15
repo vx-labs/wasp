@@ -5,37 +5,17 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/google/btree"
-	"github.com/zond/gotomic"
-
 	"github.com/vx-labs/wasp/wasp/expiration"
 	"github.com/vx-labs/wasp/wasp/transport"
+	"github.com/zond/gotomic"
 	"golang.org/x/sys/unix"
 )
-
-type key int
-
-func (k key) HashCode() uint32 {
-	return uint32(k)
-}
-func (k key) Equals(v gotomic.Thing) bool {
-	return k == v.(key)
-}
 
 type ClientConn struct {
 	ID       string
 	FD       int
 	Conn     transport.TimeoutReadWriteCloser
 	Deadline time.Time
-}
-
-type expirationSet struct {
-	data     map[int]struct{}
-	deadline time.Time
-}
-
-func (e *expirationSet) Less(b btree.Item) bool {
-	return e.deadline.Before(b.(*expirationSet).deadline)
 }
 
 type Epoll struct {
@@ -68,7 +48,7 @@ func (e *Epoll) Expire(now time.Time) []*ClientConn {
 	expired := e.timeouts.Expire(now)
 	out := make([]*ClientConn, 0, len(expired))
 	for _, v := range expired {
-		fd := int(v.(key))
+		fd := int(v.(gotomic.IntKey))
 		if e.connections[fd] != nil && e.connections[fd].Conn != nil {
 			e.connections[fd].Conn.Close()
 			out = append(out, e.connections[fd])
@@ -80,7 +60,7 @@ func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
 	e.lock.Lock()
 	defer e.lock.Unlock()
 	conn := e.connections[fd]
-	e.timeouts.Update(key(conn.FD), conn.Deadline, deadline)
+	e.timeouts.Update(gotomic.IntKey(conn.FD), conn.Deadline, deadline)
 	conn.Deadline = deadline
 }
 
@@ -93,7 +73,7 @@ func (e *Epoll) Add(conn *ClientConn) error {
 	defer e.lock.Unlock()
 	e.connections[conn.FD] = conn
 	if !conn.Deadline.IsZero() {
-		e.timeouts.Insert(key(conn.FD), conn.Deadline)
+		e.timeouts.Insert(gotomic.IntKey(conn.FD), conn.Deadline)
 	}
 	return nil
 }
@@ -107,7 +87,7 @@ func (e *Epoll) Remove(fd int) error {
 	defer e.lock.Unlock()
 	conn := e.connections[fd]
 	if !conn.Deadline.IsZero() {
-		e.timeouts.Delete(key(conn.FD), conn.Deadline)
+		e.timeouts.Delete(gotomic.IntKey(conn.FD), conn.Deadline)
 	}
 	delete(e.connections, fd)
 	return nil
