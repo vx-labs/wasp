@@ -13,6 +13,7 @@ require (
 	github.com/grpc-ecosystem/go-grpc-middleware v1.0.1-0.20190118093823-f849b5445de4
 	github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 	github.com/hashicorp/consul/api v1.4.0
+	github.com/hashicorp/memberlist v0.2.2
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mattn/go-colorable v0.1.6
 	github.com/oklog/ulid v1.3.1
@@ -33,4 +34,5 @@ require (
 	golang.org/x/sys v0.0.0-20201015000850-e3ed0017c211
 	google.golang.org/grpc v1.33.2
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
+	stathat.com/c/treap v1.0.0 // indirect
 )
