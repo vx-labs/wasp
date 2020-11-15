@@ -14,6 +14,9 @@ func IsEntryRemoved(s Entry) bool {
 }
 
 func GetLastEntryUpdate(s Entry) int64 {
+	if s == nil {
+		return 0
+	}
 	if s.GetLastAdded() > s.GetLastDeleted() {
 		return s.GetLastAdded()
 	}
