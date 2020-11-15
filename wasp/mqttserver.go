@@ -8,25 +8,30 @@ import (
 	"google.golang.org/grpc"
 )
 
-type MqttServer struct {
+type mqttServer struct {
 	storage messageLog
 	local   State
 	state   distributed.State
 }
 
-func NewMQTTServer(state distributed.State, local State, storage messageLog) *MqttServer {
-	return &MqttServer{state: state, local: local, storage: storage}
+type RPCServer interface {
+	api.MQTTServer
+	Serve(grpcServer *grpc.Server)
 }
 
-func (s *MqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
+func NewMQTTServer(state distributed.State, local State, storage messageLog) RPCServer {
+	return &mqttServer{state: state, local: local, storage: storage}
+}
+
+func (s *mqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
 	err := s.state.Subscriptions().CreateFrom(r.SessionID, r.Peer, r.Pattern, r.QoS)
 	return &api.CreateSubscriptionResponse{}, err
 }
 
-func (s *MqttServer) DeleteSubscription(ctx context.Context, r *api.DeleteSubscriptionRequest) (*api.DeleteSubscriptionResponse, error) {
+func (s *mqttServer) DeleteSubscription(ctx context.Context, r *api.DeleteSubscriptionRequest) (*api.DeleteSubscriptionResponse, error) {
 	return &api.DeleteSubscriptionResponse{}, s.state.Subscriptions().Delete(r.SessionID, r.Pattern)
 }
-func (s *MqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscriptionsRequest) (*api.ListSubscriptionsResponse, error) {
+func (s *mqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscriptionsRequest) (*api.ListSubscriptionsResponse, error) {
 	subcriptions := s.state.Subscriptions().All()
 	out := make([]*api.Subscription, len(subcriptions))
 	for idx := range out {
@@ -35,10 +40,10 @@ func (s *MqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscript
 	return &api.ListSubscriptionsResponse{Subscriptions: out}, nil
 }
 
-func (s *MqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
+func (s *mqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
 	return &api.DistributeMessageResponse{}, s.storage.Append(r.Message)
 }
-func (s *MqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessionMetadatasRequest) (*api.ListSessionMetadatasResponse, error) {
+func (s *mqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessionMetadatasRequest) (*api.ListSessionMetadatasResponse, error) {
 	sessionMetadatas := s.state.SessionMetadatas().All()
 	out := make([]*api.SessionMetadatas, len(sessionMetadatas))
 	for idx := range out {
@@ -46,6 +51,6 @@ func (s *MqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessio
 	}
 	return &api.ListSessionMetadatasResponse{SessionMetadatasList: out}, nil
 }
-func (s *MqttServer) Serve(grpcServer *grpc.Server) {
+func (s *mqttServer) Serve(grpcServer *grpc.Server) {
 	api.RegisterMQTTServer(grpcServer, s)
 }
