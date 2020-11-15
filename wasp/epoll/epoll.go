@@ -12,6 +12,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// ClientConn represents a network connection been tracked
 type ClientConn struct {
 	ID       string
 	FD       int
@@ -20,11 +21,23 @@ type ClientConn struct {
 }
 
 var (
+	// ErrConnectionAlreadyExists means that the connection is already tracked
 	ErrConnectionAlreadyExists = errors.New("connection already exists")
-	ErrConnectionNotFound      = errors.New("connection not found")
+	//ErrConnectionNotFound means that the connection was not found
+	ErrConnectionNotFound = errors.New("connection not found")
 )
 
-type Epoll struct {
+// Instance tracks file descriptors and notify when data is ready to be read
+type Instance interface {
+	Expire(now time.Time) []ClientConn
+	SetDeadline(fd int, deadline time.Time)
+	Add(conn ClientConn) error
+	Remove(fd int) error
+	Rearm(fd int) error
+	Wait(connections []ClientConn) (int, error)
+	Shutdown()
+}
+type instance struct {
 	fd          int
 	connections *gotomic.Hash
 	lock        *sync.RWMutex
@@ -32,12 +45,13 @@ type Epoll struct {
 	timeouts    expiration.List
 }
 
-func New(maxEvents int) (*Epoll, error) {
+// NewInstance returns a new epoll instance
+func NewInstance(maxEvents int) (Instance, error) {
 	fd, err := unix.EpollCreate1(0)
 	if err != nil {
 		return nil, err
 	}
-	return &Epoll{
+	return &instance{
 		fd:          fd,
 		lock:        &sync.RWMutex{},
 		connections: gotomic.NewHash(),
@@ -48,7 +62,7 @@ func New(maxEvents int) (*Epoll, error) {
 
 var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 
-func (e *Epoll) Expire(now time.Time) []ClientConn {
+func (e *instance) Expire(now time.Time) []ClientConn {
 	expired := e.timeouts.Expire(now)
 	out := make([]ClientConn, 0, len(expired))
 	for _, v := range expired {
@@ -61,7 +75,7 @@ func (e *Epoll) Expire(now time.Time) []ClientConn {
 	}
 	return out
 }
-func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
+func (e *instance) SetDeadline(fd int, deadline time.Time) {
 	k := gotomic.IntKey(fd)
 	v, ok := e.connections.Get(k)
 	if ok {
@@ -72,7 +86,7 @@ func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
 	}
 }
 
-func (e *Epoll) Add(conn ClientConn) error {
+func (e *instance) Add(conn ClientConn) error {
 	k := gotomic.IntKey(conn.FD)
 	ok := e.connections.PutIfMissing(k, conn)
 	if !ok {
@@ -89,7 +103,7 @@ func (e *Epoll) Add(conn ClientConn) error {
 	return nil
 }
 
-func (e *Epoll) Remove(fd int) error {
+func (e *instance) Remove(fd int) error {
 	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_DEL, fd, nil)
 	if err != nil {
 		return err
@@ -105,11 +119,11 @@ func (e *Epoll) Remove(fd int) error {
 	}
 	return nil
 }
-func (e *Epoll) Rearm(fd int) error {
+func (e *instance) Rearm(fd int) error {
 	return unix.EpollCtl(e.fd, syscall.EPOLL_CTL_MOD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
 }
 
-func (e *Epoll) Wait(connections []ClientConn) (int, error) {
+func (e *instance) Wait(connections []ClientConn) (int, error) {
 	n, err := unix.EpollWait(e.fd, e.events, 100)
 	if err != nil {
 		return 0, err
@@ -124,7 +138,7 @@ func (e *Epoll) Wait(connections []ClientConn) (int, error) {
 	return n, nil
 }
 
-func (e *Epoll) Shutdown() {
+func (e *instance) Shutdown() {
 	e.timeouts.Reset()
 	unix.Close(e.fd)
 	e.connections.Each(func(k gotomic.Hashable, _ gotomic.Thing) bool {

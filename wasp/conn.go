@@ -27,7 +27,7 @@ type manager struct {
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
 	connectionsJobs chan chan epoll.ClientConn
-	epoll           *epoll.Epoll
+	epoll           epoll.Instance
 	publishHandler  PublishHandler
 	inflights       ack.Queue
 	wg              *sync.WaitGroup
@@ -40,7 +40,7 @@ type setupWorker struct {
 	fsm         FSM
 	state       ReadState
 	writer      Writer
-	epoll       *epoll.Epoll
+	epoll       epoll.Instance
 }
 
 type connectionWorker struct {
@@ -60,7 +60,7 @@ var (
 
 func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) *manager {
 
-	epoller, err := epoll.New(connWorkers)
+	epoller, err := epoll.NewInstance(connWorkers)
 	if err != nil {
 		panic(err)
 	}
