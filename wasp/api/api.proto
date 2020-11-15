@@ -42,9 +42,12 @@ message StateBroadcastEvent {
 
 message DistributeMessageRequest {
   packet.Publish Message = 1;
-  bool ResolveRemoteRecipients = 2;
 }
 message DistributeMessageResponse {}
+message ScheduleMessageRequest {
+  packet.Publish Message = 1;
+}
+message ScheduleMessageResponse {}
 
 message ListSessionMetadatasRequest {}
 message ListSessionMetadatasResponse {
@@ -87,6 +90,8 @@ service MQTT {
       returns (CreateSubscriptionResponse) {}
   rpc DistributeMessage(DistributeMessageRequest)
       returns (DistributeMessageResponse) {}
+  rpc ScheduleMessage(ScheduleMessageRequest)
+      returns (ScheduleMessageResponse) {}
   rpc ListSessionMetadatas(ListSessionMetadatasRequest)
       returns (ListSessionMetadatasResponse) {}
   rpc ListRetainedMessages(ListRetainedMessagesRequest)

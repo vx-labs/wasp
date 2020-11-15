@@ -9,9 +9,10 @@ import (
 )
 
 type mqttServer struct {
-	storage messageLog
-	local   State
-	state   distributed.State
+	storage     messageLog
+	local       State
+	state       distributed.State
+	distributor *PublishDistributor
 }
 
 type RPCServer interface {
@@ -41,7 +42,10 @@ func (s *mqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscript
 }
 
 func (s *mqttServer) DistributeMessage(ctx context.Context, r *api.DistributeMessageRequest) (*api.DistributeMessageResponse, error) {
-	return &api.DistributeMessageResponse{}, s.storage.Append(r.Message)
+	return &api.DistributeMessageResponse{}, s.distributor.Distribute(ctx, r.Message)
+}
+func (s *mqttServer) ScheduleMessage(ctx context.Context, r *api.ScheduleMessageRequest) (*api.ScheduleMessageResponse, error) {
+	return &api.ScheduleMessageResponse{}, s.storage.Append(r.Message)
 }
 func (s *mqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessionMetadatasRequest) (*api.ListSessionMetadatasResponse, error) {
 	sessionMetadatas := s.state.SessionMetadatas().All()

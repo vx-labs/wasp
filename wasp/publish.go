@@ -83,7 +83,7 @@ func (storer *PublishDistributor) Distribute(ctx context.Context, publish *packe
 			continue
 		}
 		err := storer.Transport.Call(peer, func(c *grpc.ClientConn) error {
-			_, err := api.NewMQTTClient(c).DistributeMessage(ctx, &api.DistributeMessageRequest{Message: publish})
+			_, err := api.NewMQTTClient(c).ScheduleMessage(ctx, &api.ScheduleMessageRequest{Message: publish})
 			return err
 		})
 		if err != nil {
