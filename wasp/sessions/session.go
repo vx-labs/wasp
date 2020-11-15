@@ -1,11 +1,11 @@
 package sessions
 
 import (
+	"bytes"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/subscriptions"
 )
 
 type Session struct {
@@ -15,7 +15,7 @@ type Session struct {
 	lwt               []byte
 	keepaliveInterval int32
 	Disconnected      bool
-	topics            subscriptions.Tree
+	topics            [][]byte
 	transport         string
 }
 
@@ -24,7 +24,6 @@ func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Ses
 		id:         id,
 		mountPoint: mountpoint,
 		transport:  transport,
-		topics:     subscriptions.NewTree(),
 	}
 	return s, s.processConnect(connect)
 }
@@ -72,22 +71,19 @@ func (s *Session) processConnect(connect *packet.Connect) error {
 	}
 	return nil
 }
-func (s *Session) AddTopic(t []byte, qos int32) {
-	s.topics.Insert(0, t, qos, s.id)
+func (s *Session) AddTopic(t []byte) {
+	s.topics = append(s.topics, t)
 }
-func (s *Session) RemoveTopic(t []byte) {
-	s.topics.Remove(t, s.id)
+func (s *Session) RemoveTopic(new []byte) {
+	for idx, t := range s.topics {
+		if bytes.Equal(t, new) {
+			s.topics[idx] = s.topics[len(s.topics)-1]
+			s.topics = s.topics[:len(s.topics)-1]
+		}
+	}
 }
 func (s *Session) GetTopics() [][]byte {
-	recipients := []string{}
-	recipientQos := []int32{}
-	recipientPeer := []uint64{}
-	recipientPatterns := [][]byte{}
-	err := s.topics.List(&recipientPatterns, &recipientPeer, &recipients, &recipientQos)
-	if err != nil {
-		return nil
-	}
-	return recipientPatterns
+	return s.topics
 }
 func (s *Session) NextDeadline(t time.Time) time.Time {
 	return t.Add(2 * time.Duration(s.keepaliveInterval) * time.Second)

@@ -81,7 +81,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			if err != nil {
 				return err
 			}
-			session.AddTopic(topics[idx], p.Qos[idx])
+			session.AddTopic(topics[idx])
 		}
 		err := encoder.SubAck(c, &packet.SubAck{
 			Header:    p.Header,
