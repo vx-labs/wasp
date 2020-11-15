@@ -19,7 +19,7 @@ func NewMQTTServer(state distributed.State, local State, storage messageLog) *Mq
 }
 
 func (s *MqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
-	err := s.state.Subscriptions().Create(r.SessionID, r.Pattern, r.QoS)
+	err := s.state.Subscriptions().CreateFrom(r.SessionID, r.Peer, r.Pattern, r.QoS)
 	return &api.CreateSubscriptionResponse{}, err
 }
 
