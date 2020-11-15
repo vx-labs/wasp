@@ -30,9 +30,9 @@ func (s *MqttServer) ListSubscriptions(ctx context.Context, r *api.ListSubscript
 	if err != nil {
 		return nil, err
 	}
-	out := make([]*api.CreateSubscriptionRequest, len(peers))
+	out := make([]*api.Subscription, len(peers))
 	for idx := range out {
-		out[idx] = &api.CreateSubscriptionRequest{
+		out[idx] = &api.Subscription{
 			SessionID: sessions[idx],
 			Pattern:   patterns[idx],
 			Peer:      peers[idx],
