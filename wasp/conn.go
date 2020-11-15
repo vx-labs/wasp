@@ -283,7 +283,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	s.writer.Register(session.ID(), c)
 	err = s.epoll.Add(epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
 	if err != nil {
-		L(ctx).Error("failed to register epoll session", zap.Error(err))
+		L(ctx).Error("failed to register epoll session", zap.Error(err), zap.Int("conn_fd", m.FD))
 		return err
 	}
 	c.SetReadDeadline(
@@ -307,8 +307,11 @@ func (s *connectionWorker) processConn(ctx context.Context, c epoll.ClientConn) 
 			session.Disconnected = true
 		}
 		s.manager.shutdownSession(ctx, session)
-		s.manager.epoll.Remove(c.FD)
-		return err
+		err := s.manager.epoll.Remove(c.FD)
+		if err != nil {
+			L(ctx).Warn("failed to remove session from epoll tracking", zap.Error(err))
+		}
+		return nil
 	}
 	return err
 }
@@ -327,8 +330,8 @@ func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session
 	}
 	if !session.Disconnected {
 		L(ctx).Debug("session lost")
-		if session.LWT() != nil {
-			err := s.publishHandler(ctx, session.ID(), session.LWT())
+		if lwt := session.LWT(); lwt != nil {
+			err := s.publishHandler(ctx, session.ID(), lwt)
 			if err != nil {
 				L(ctx).Warn("failed to publish session LWT", zap.Error(err))
 			}
@@ -355,10 +358,10 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 	}).Add(float64(pkt.Length()))
 
 	s.manager.epoll.SetDeadline(c.FD, session.NextDeadline(time.Now()))
-	s.manager.epoll.Rearm(c.FD)
 	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c.Conn, pkt)
 	if err != nil {
 		return err
 	}
+	s.manager.epoll.Rearm(c.FD)
 	return nil
 }

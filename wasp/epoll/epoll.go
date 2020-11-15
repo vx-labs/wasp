@@ -20,6 +20,8 @@ type ClientConn struct {
 	Deadline time.Time
 }
 
+const epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
+
 var (
 	// ErrConnectionAlreadyExists means that the connection is already tracked
 	ErrConnectionAlreadyExists = errors.New("connection already exists")
@@ -60,8 +62,6 @@ func NewInstance(maxEvents int) (Instance, error) {
 		timeouts:    expiration.NewList(),
 	}, nil
 }
-
-var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 
 func (e *instance) Count() int {
 	return e.connections.Size()
@@ -109,14 +109,14 @@ func (e *instance) Add(conn ClientConn) error {
 }
 
 func (e *instance) Remove(fd int) error {
-	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_DEL, fd, nil)
-	if err != nil {
-		return err
-	}
 	k := gotomic.IntKey(fd)
 	v, ok := e.connections.Delete(k)
 	if !ok {
 		return ErrConnectionNotFound
+	}
+	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_DEL, fd, nil)
+	if err != nil {
+		return err
 	}
 	conn := v.(ClientConn)
 	if !conn.Deadline.IsZero() {

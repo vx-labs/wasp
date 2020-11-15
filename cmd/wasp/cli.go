@@ -106,7 +106,7 @@ func main() {
 	cmd.Flags().String("pprof-address", "127.0.0.1", "Profiling (pprof) port.")
 	cmd.Flags().Bool("headless", false, "Do not print human-oriented messages on stdout.")
 	cmd.Flags().Bool("fancy-logs", false, "Use a fancy logger.")
-	cmd.Flags().String("log-level", "error", "Select the loggers- log level")
+	cmd.Flags().String("log-level", "warn", "Select the logger's log level")
 	cmd.Flags().Bool("use-vault", false, "Use Hashicorp Vault to store private keys and certificates.")
 	cmd.Flags().Bool("mtls", false, "Enforce GRPC service-side TLS certificates validation for client connections.")
 	cmd.Flags().Bool("insecure", false, "Disable GRPC client-side TLS validation.")

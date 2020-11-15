@@ -47,6 +47,9 @@ func (s *Session) TrimMountPoint(topic []byte) []byte {
 	return trimMountPoint(s.mountPoint, topic)
 }
 func (s *Session) LWT() *packet.Publish {
+	if s.lwt == nil {
+		return nil
+	}
 	p := &packet.Publish{}
 	err := proto.Unmarshal(s.lwt, p)
 	if err != nil {
