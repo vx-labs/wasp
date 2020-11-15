@@ -26,7 +26,7 @@ type manager struct {
 	state           ReadState
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
-	connectionsJobs chan chan *epoll.ClientConn
+	connectionsJobs chan chan epoll.ClientConn
 	epoll           *epoll.Epoll
 	publishHandler  PublishHandler
 	inflights       ack.Queue
@@ -71,7 +71,7 @@ func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state Read
 		fsm:             fsm,
 		state:           state,
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
-		connectionsJobs: make(chan chan *epoll.ClientConn, connWorkers),
+		connectionsJobs: make(chan chan epoll.ClientConn, connWorkers),
 		writer:          writer,
 		publishHandler:  publishHandler,
 		epoll:           epoller,
@@ -130,14 +130,14 @@ func (s *manager) runTimeouter(ctx context.Context) {
 
 func (s *manager) runDispatcher(ctx context.Context) {
 	defer s.wg.Done()
-	connections := make([]*epoll.ClientConn, connWorkers)
+	connections := make([]epoll.ClientConn, connWorkers)
 	for {
 		n, err := s.epoll.Wait(connections)
 		if err != nil && err != unix.EINTR {
 			return
 		}
 		for _, c := range connections[:n] {
-			if c != nil {
+			if c.Conn != nil {
 				select {
 				case <-ctx.Done():
 					return
@@ -198,7 +198,7 @@ func (s *manager) runConnWorker(ctx context.Context) {
 	}
 	go func() {
 		defer s.wg.Done()
-		ch := make(chan *epoll.ClientConn)
+		ch := make(chan epoll.ClientConn)
 		defer close(ch)
 		for {
 			select {
@@ -281,7 +281,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	L(ctx).Debug("session metadata created")
 	s.state.SaveSession(session.ID, session)
 	s.writer.Register(session.ID, c)
-	err = s.epoll.Add(&epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
+	err = s.epoll.Add(epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
 	if err != nil {
 		L(ctx).Error("failed to register epoll session", zap.Error(err))
 		return err
@@ -295,7 +295,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	})
 }
 
-func (s *connectionWorker) processConn(ctx context.Context, c *epoll.ClientConn) error {
+func (s *connectionWorker) processConn(ctx context.Context, c epoll.ClientConn) error {
 	session := s.manager.state.GetSession(c.ID)
 	if session == nil {
 		c.Conn.Close()
@@ -340,7 +340,7 @@ type timeoutError interface {
 	Timeout() bool
 }
 
-func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c *epoll.ClientConn) error {
+func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c epoll.ClientConn) error {
 	started := time.Now()
 	pkt, err := s.decoder.Decode(c.Conn)
 	if err != nil {

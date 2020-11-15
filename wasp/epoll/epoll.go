@@ -48,13 +48,13 @@ func New(maxEvents int) (*Epoll, error) {
 
 var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 
-func (e *Epoll) Expire(now time.Time) []*ClientConn {
+func (e *Epoll) Expire(now time.Time) []ClientConn {
 	expired := e.timeouts.Expire(now)
-	out := make([]*ClientConn, 0, len(expired))
+	out := make([]ClientConn, 0, len(expired))
 	for _, v := range expired {
 		v, ok := e.connections.Delete(v.(gotomic.Hashable))
 		if ok {
-			c := v.(*ClientConn)
+			c := v.(ClientConn)
 			c.Conn.Close()
 			out = append(out, c)
 		}
@@ -65,13 +65,14 @@ func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
 	k := gotomic.IntKey(fd)
 	v, ok := e.connections.Get(k)
 	if ok {
-		conn := v.(*ClientConn)
+		conn := v.(ClientConn)
 		e.timeouts.Update(k, conn.Deadline, deadline)
 		conn.Deadline = deadline
+		e.connections.Put(k, conn)
 	}
 }
 
-func (e *Epoll) Add(conn *ClientConn) error {
+func (e *Epoll) Add(conn ClientConn) error {
 	k := gotomic.IntKey(conn.FD)
 	ok := e.connections.PutIfMissing(k, conn)
 	if !ok {
@@ -98,7 +99,7 @@ func (e *Epoll) Remove(fd int) error {
 	if !ok {
 		return ErrConnectionNotFound
 	}
-	conn := v.(*ClientConn)
+	conn := v.(ClientConn)
 	if !conn.Deadline.IsZero() {
 		e.timeouts.Delete(k, conn.Deadline)
 	}
@@ -108,7 +109,7 @@ func (e *Epoll) Rearm(fd int) error {
 	return unix.EpollCtl(e.fd, syscall.EPOLL_CTL_MOD, fd, &unix.EpollEvent{Events: epollEvents, Fd: int32(fd)})
 }
 
-func (e *Epoll) Wait(connections []*ClientConn) (int, error) {
+func (e *Epoll) Wait(connections []ClientConn) (int, error) {
 	n, err := unix.EpollWait(e.fd, e.events, 100)
 	if err != nil {
 		return 0, err
@@ -117,7 +118,7 @@ func (e *Epoll) Wait(connections []*ClientConn) (int, error) {
 		k := gotomic.IntKey(e.events[i].Fd)
 		conn, ok := e.connections.Get(k)
 		if ok {
-			connections[i] = conn.(*ClientConn)
+			connections[i] = conn.(ClientConn)
 		}
 	}
 	return n, nil
@@ -129,7 +130,7 @@ func (e *Epoll) Shutdown() {
 	e.connections.Each(func(k gotomic.Hashable, _ gotomic.Thing) bool {
 		v, ok := e.connections.Delete(k)
 		if ok {
-			v.(*ClientConn).Conn.Close()
+			v.(ClientConn).Conn.Close()
 		}
 		return false
 	})
