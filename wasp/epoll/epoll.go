@@ -36,6 +36,7 @@ type Instance interface {
 	Rearm(fd int) error
 	Wait(connections []ClientConn) (int, error)
 	Shutdown()
+	Count() int
 }
 type instance struct {
 	fd          int
@@ -61,6 +62,10 @@ func NewInstance(maxEvents int) (Instance, error) {
 }
 
 var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
+
+func (e *instance) Count() int {
+	return e.connections.Size()
+}
 
 func (e *instance) Expire(now time.Time) []ClientConn {
 	expired := e.timeouts.Expire(now)

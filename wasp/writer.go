@@ -112,8 +112,8 @@ func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, co
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
 
-	err := w.inflights.Insert(session.ID, publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.state.GetSession(session.ID) != nil {
+	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+		if expired && w.state.GetSession(session.ID()) != nil {
 			w.sendQoS1(publish, session, conn)
 		} else {
 			w.midPool.Push(stored.(*packet.Publish).MessageId)
@@ -131,8 +131,8 @@ func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, 
 		"protocol": session.Transport(),
 	}).Add(float64(pubRel.Length()))
 
-	w.inflights.Insert(session.ID, pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.state.GetSession(session.ID) != nil {
+	w.inflights.Insert(session.ID(), pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+		if expired && w.state.GetSession(session.ID()) != nil {
 			w.completeQoS2(pubRel, session, conn)
 		} else {
 			w.midPool.Push(stored.(*packet.PubRel).MessageId)
@@ -146,8 +146,8 @@ func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, co
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
 
-	err := w.inflights.Insert(session.ID, publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.state.GetSession(session.ID) != nil {
+	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+		if expired && w.state.GetSession(session.ID()) != nil {
 			w.sendQoS2(publish, session, conn)
 		} else {
 			pubRel := &packet.PubRel{

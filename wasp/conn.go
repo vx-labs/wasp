@@ -254,7 +254,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session, err := sessions.NewSession(ctx, id, mountPoint, m.Name, c, connectPkt)
+	session, err := sessions.NewSession(id, mountPoint, m.Name, connectPkt)
 	if err != nil {
 		return err
 	}
@@ -273,14 +273,14 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 		}
 		L(ctx).Debug("deleted old session metadata")
 	}
-	err = s.fsm.CreateSessionMetadata(ctx, session.ID, session.ClientID, session.LWT(), session.MountPoint)
+	err = s.fsm.CreateSessionMetadata(ctx, session.ID(), session.ClientID, session.LWT(), session.MountPoint)
 	if err != nil {
 		L(ctx).Error("failed to create session metadata", zap.Error(err))
 		return err
 	}
 	L(ctx).Debug("session metadata created")
-	s.state.SaveSession(session.ID, session)
-	s.writer.Register(session.ID, c)
+	s.state.SaveSession(session.ID(), session)
+	s.writer.Register(session.ID(), c)
 	err = s.epoll.Add(epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
 	if err != nil {
 		L(ctx).Error("failed to register epoll session", zap.Error(err))
@@ -313,22 +313,22 @@ func (s *connectionWorker) processConn(ctx context.Context, c epoll.ClientConn) 
 	return err
 }
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
-	s.writer.Unregister(session.ID)
-	s.state.CloseSession(session.ID)
+	s.writer.Unregister(session.ID())
+	s.state.CloseSession(session.ID())
 	topics := session.GetTopics()
 	for idx := range topics {
-		s.fsm.Unsubscribe(ctx, session.ID, topics[idx])
+		s.fsm.Unsubscribe(ctx, session.ID(), topics[idx])
 	}
 	metadata := s.state.GetSessionMetadatasByClientID(session.ClientID)
-	s.fsm.DeleteSessionMetadata(ctx, session.ID, session.MountPoint)
-	if metadata == nil || metadata.SessionID != session.ID || session.Disconnected {
+	s.fsm.DeleteSessionMetadata(ctx, session.ID(), session.MountPoint)
+	if metadata == nil || metadata.SessionID != session.ID() || session.Disconnected {
 		// Session has reconnected on another peer.
 		return
 	}
 	if !session.Disconnected {
 		L(ctx).Debug("session lost")
 		if session.LWT() != nil {
-			err := s.publishHandler(ctx, session.ID, session.LWT())
+			err := s.publishHandler(ctx, session.ID(), session.LWT())
 			if err != nil {
 				L(ctx).Warn("failed to publish session LWT", zap.Error(err))
 			}

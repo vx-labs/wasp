@@ -1,8 +1,6 @@
 package sessions
 
 import (
-	"context"
-	"io"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -10,28 +8,29 @@ import (
 )
 
 type Session struct {
-	ID                string
+	id                string
 	ClientID          string
 	MountPoint        string
 	lwt               *packet.Publish
 	keepaliveInterval int32
-	conn              io.Writer
 	Disconnected      bool
 	topics            subscriptions.Tree
 	transport         string
 }
 
-func NewSession(ctx context.Context, id, mountpoint, transport string, c io.Writer, connect *packet.Connect) (*Session, error) {
+func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Session, error) {
 	s := &Session{
-		ID:         id,
+		id:         id,
 		MountPoint: mountpoint,
 		transport:  transport,
-		conn:       c,
 		topics:     subscriptions.NewTree(),
 	}
 	return s, s.processConnect(connect)
 }
 
+func (s *Session) ID() string {
+	return s.id
+}
 func (s *Session) Transport() string {
 	return s.transport
 }
@@ -52,10 +51,10 @@ func (s *Session) processConnect(connect *packet.Connect) error {
 	return nil
 }
 func (s *Session) AddTopic(t []byte, qos int32) {
-	s.topics.Insert(0, t, qos, s.ID)
+	s.topics.Insert(0, t, qos, s.id)
 }
 func (s *Session) RemoveTopic(t []byte) {
-	s.topics.Remove(t, s.ID)
+	s.topics.Remove(t, s.id)
 }
 func (s *Session) GetTopics() [][]byte {
 	recipients := []string{}

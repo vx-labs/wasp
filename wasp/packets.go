@@ -32,7 +32,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 		p.Topic = sessions.PrefixMountPoint(session.MountPoint, p.Topic)
 		switch p.Header.Qos {
 		case 0, 1:
-			err := publishHander(ctx, session.ID, p)
+			err := publishHander(ctx, session.ID(), p)
 			if err != nil {
 				return err
 			}
@@ -41,7 +41,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			}
-			err := inflights.Insert(session.ID, pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+			err := inflights.Insert(session.ID(), pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 				if expired {
 					L(ctx).Warn("qos2 flow timed out at waiting for PUBREL")
 					return
@@ -49,7 +49,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				err := publishHander(ctx, session.ID, p)
+				err := publishHander(ctx, session.ID(), p)
 				if err == nil {
 					pubcomp := &packet.PubComp{
 						Header:    &packet.Header{},
@@ -77,7 +77,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			topics[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
 		}
 		for idx := range topics {
-			err := fsm.Subscribe(ctx, session.ID, topics[idx], p.Qos[idx])
+			err := fsm.Subscribe(ctx, session.ID(), topics[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
@@ -97,7 +97,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 				return err
 			}
 			for _, message := range messages {
-				writer.Send(ctx, []string{session.ID}, []int32{p.Qos[idx]}, message)
+				writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message)
 			}
 		}
 	case *packet.Unsubscribe:
@@ -106,7 +106,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			topics[idx] = sessions.PrefixMountPoint(session.MountPoint, p.Topic[idx])
 		}
 		for idx := range topics {
-			err := fsm.Unsubscribe(ctx, session.ID, topics[idx])
+			err := fsm.Unsubscribe(ctx, session.ID(), topics[idx])
 			if err != nil {
 				return err
 			}
@@ -117,22 +117,22 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			MessageId: p.MessageId,
 		})
 	case *packet.PubAck:
-		err := inflights.Ack(session.ID, p)
+		err := inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack puback", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubRec:
-		err := inflights.Ack(session.ID, p)
+		err := inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubrec", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubRel:
-		err := inflights.Ack(session.ID, p)
+		err := inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubrel", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubComp:
-		err := inflights.Ack(session.ID, p)
+		err := inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubcomp", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
@@ -140,7 +140,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 		return ErrSessionDisconnected
 	case *packet.PingReq:
 		metadata := state.GetSessionMetadatasByClientID(session.ClientID)
-		if metadata == nil || metadata.SessionID != session.ID {
+		if metadata == nil || metadata.SessionID != session.ID() {
 			// Session has reconnected on another peer.
 			return ErrSessionDisconnected
 		}
