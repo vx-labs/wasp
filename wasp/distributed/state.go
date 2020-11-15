@@ -53,6 +53,7 @@ type State interface {
 	Subscriptions() SubscriptionsState
 	SessionMetadatas() SessionMetadatasState
 	Topics() TopicsState
+	Distributor() memberlist.Delegate
 }
 
 type state struct {
@@ -70,6 +71,7 @@ func NewState(peer uint64, bcast *memberlist.TransmitLimitedQueue) State {
 	}
 }
 
+func (s *state) Distributor() memberlist.Delegate        { return s }
 func (s *state) Subscriptions() SubscriptionsState       { return s.subscriptions }
 func (s *state) SessionMetadatas() SessionMetadatasState { return s.sessionMetadatas }
 func (s *state) Topics() TopicsState                     { return s.topics }
@@ -86,8 +88,8 @@ func (s *state) MergeRemoteState(buf []byte, join bool) {
 	s.subscriptions.mergeSubscriptions(payload.Subscriptions)
 	s.topics.mergeMessages(payload.RetainedMessages)
 }
-func (s *state) NotifyMsg([]byte)                {}
-func (s *state) NotifyNodeMeta(limit int) []byte { return nil }
+func (s *state) NotifyMsg([]byte)          {}
+func (s *state) NodeMeta(limit int) []byte { return nil }
 func (s *state) LocalState(join bool) []byte {
 	payload := &api.StateBroadcastEvent{}
 

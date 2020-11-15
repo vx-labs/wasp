@@ -14,8 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/hashicorp/memberlist"
 	"github.com/vx-labs/cluster"
 	"github.com/vx-labs/wasp/wasp/ack"
+	"github.com/vx-labs/wasp/wasp/distributed"
 	"github.com/vx-labs/wasp/wasp/messages"
 	"go.etcd.io/etcd/etcdserver/api/snap"
 
@@ -126,6 +128,8 @@ func run(config *viper.Viper) {
 		Storage: messageLog,
 		Logger:  wasp.L(ctx),
 	}
+	bcast := &memberlist.TransmitLimitedQueue{}
+	dstate := distributed.NewState(id, bcast)
 
 	raftConfig := cluster.RaftConfig{
 		GetStateSnapshot:  state.MarshalBinary,
@@ -169,7 +173,8 @@ func run(config *viper.Viper) {
 		ServiceName:   "wasp",
 		DataDirectory: config.GetString("data-dir"),
 		GossipConfig: cluster.GossipConfig{
-			JoinList: joinList,
+			JoinList:                 joinList,
+			DistributedStateDelegate: dstate.Distributor(),
 			Network: cluster.NetworkConfig{
 				AdvertizedHost: config.GetString("serf-advertized-address"),
 				AdvertizedPort: config.GetInt("serf-advertized-port"),
