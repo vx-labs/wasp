@@ -40,7 +40,7 @@ func (t *topicsState) mergeMessages(messages []*api.RetainedMessage) error {
 		}
 		outdated := true
 		if len(localList) == 1 {
-			outdated = crdt.IsEntryOutdated(localList[1], msg)
+			outdated = crdt.IsEntryOutdated(localList[0], msg)
 		}
 		if outdated {
 			if crdt.IsEntryAdded(msg) {
@@ -169,6 +169,7 @@ func (t *topicsState) get(pattern []byte) ([]*api.RetainedMessage, error) {
 	}
 	out := make([]*api.RetainedMessage, len(outBuf))
 	for idx := range outBuf {
+		out[idx] = &api.RetainedMessage{}
 		err = proto.Unmarshal(outBuf[idx], out[idx])
 		if err != nil {
 			return nil, err
