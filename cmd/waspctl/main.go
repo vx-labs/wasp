@@ -47,6 +47,8 @@ func main() {
 	rootCmd.AddCommand(Sessions(ctx, config))
 	rootCmd.AddCommand(Subscriptions(ctx, config))
 	rootCmd.AddCommand(Messages(ctx, config))
+	rootCmd.AddCommand(Topics(ctx, config))
+
 	rootCmd.PersistentFlags().BoolP("insecure", "k", false, "Disable GRPC client-side TLS validation.")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity.")
 	rootCmd.PersistentFlags().BoolP("use-vault", "v", false, "Use Hashicorp Vault to generate GRPC Certificates.")

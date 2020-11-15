@@ -80,6 +80,40 @@ func Messages(ctx context.Context, config *viper.Viper) *cobra.Command {
 	distributeMessage.Flags().StringP("payload", "p", "", "Set the Message payload.")
 	distributeMessage.MarkFlagRequired("topic")
 	messages.AddCommand(distributeMessage)
+
+	scheduleMessage := &cobra.Command{
+		Use: "schedule",
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			var payload []byte
+			if p := config.GetString("payload"); p != "" {
+				payload = []byte(p)
+			}
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			_, err := api.NewMQTTClient(conn).ScheduleMessage(ctx, &api.ScheduleMessageRequest{
+				Message: &packet.Publish{
+					Header: &packet.Header{
+						Dup:    config.GetBool("dup"),
+						Qos:    config.GetInt32("qos"),
+						Retain: config.GetBool("retain"),
+					},
+					Topic:   []byte(config.GetString("topic")),
+					Payload: payload,
+				},
+			})
+			cancel()
+			if err != nil {
+				l.Fatal("failed to schedule message", zap.Error(err))
+			}
+		},
+	}
+	scheduleMessage.Flags().Bool("dup", false, "Mark the message as duplicate.")
+	scheduleMessage.Flags().BoolP("retain", "r", false, "Mark the message as retained.")
+	scheduleMessage.Flags().Int32P("qos", "q", int32(0), "Set the Message QoS.")
+	scheduleMessage.Flags().StringP("topic", "t", "", "Set the Message topic.")
+	scheduleMessage.Flags().StringP("payload", "p", "", "Set the Message payload.")
+	scheduleMessage.MarkFlagRequired("topic")
+	messages.AddCommand(scheduleMessage)
 	return messages
 }
 
@@ -183,4 +217,59 @@ func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
 	subscriptions.AddCommand(createSubscription)
 	subscriptions.AddCommand(deleteSubscription)
 	return subscriptions
+}
+
+func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
+	topics := &cobra.Command{
+		Use: "topics",
+	}
+	topics.AddCommand(&cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Run: func(cmd *cobra.Command, patterns []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			if len(patterns) == 0 {
+				patterns = []string{"#"}
+			}
+			for _, pattern := range patterns {
+				ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+				out, err := api.NewMQTTClient(conn).ListRetainedMessages(ctx, &api.ListRetainedMessagesRequest{
+					Pattern: []byte(pattern),
+				})
+				cancel()
+				if err != nil {
+					l.Fatal("failed to list topics", zap.Error(err))
+				}
+				table := getTable([]string{"Topic", "Payload", "QoS"}, cmd.OutOrStdout())
+				for _, member := range out.GetRetainedMessages() {
+					table.Append([]string{
+						string(member.Publish.GetTopic()),
+						string(member.Publish.GetPayload()),
+						fmt.Sprintf("%v", member.Publish.Header.GetQos()),
+					})
+				}
+				table.Render()
+			}
+		},
+	})
+	topics.AddCommand(&cobra.Command{
+		Use:     "delete",
+		Aliases: []string{"rm"},
+		Args:    cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, topics []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			for _, topic := range topics {
+				ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+				_, err := api.NewMQTTClient(conn).DeleteRetainedMessage(ctx, &api.DeleteRetainedMessageRequest{
+					Topic: []byte(topic),
+				})
+				cancel()
+				if err != nil {
+					l.Fatal("failed to delete topic", zap.Error(err))
+				}
+				fmt.Println(string(topic))
+			}
+		},
+	})
+	return topics
 }
