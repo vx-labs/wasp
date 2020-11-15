@@ -20,8 +20,8 @@ type RPCServer interface {
 	Serve(grpcServer *grpc.Server)
 }
 
-func NewMQTTServer(state distributed.State, local State, storage messageLog) RPCServer {
-	return &mqttServer{state: state, local: local, storage: storage}
+func NewMQTTServer(state distributed.State, local State, storage messageLog, distributor *PublishDistributor) RPCServer {
+	return &mqttServer{state: state, local: local, storage: storage, distributor: distributor}
 }
 
 func (s *mqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {

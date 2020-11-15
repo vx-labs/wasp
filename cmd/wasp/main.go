@@ -104,7 +104,14 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}
-	mqttServer := wasp.NewMQTTServer(dstate, state, messageLog)
+	publishDistributor := &wasp.PublishDistributor{
+		ID:      id,
+		State:   dstate.Subscriptions(),
+		Storage: messageLog,
+		Logger:  wasp.L(ctx),
+	}
+
+	mqttServer := wasp.NewMQTTServer(dstate, state, messageLog, publishDistributor)
 	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {
@@ -122,13 +129,6 @@ func run(config *viper.Viper) {
 		wasp.L(ctx).Debug("discovered nodes using Consul",
 			zap.Duration("consul_discovery_duration", time.Since(discoveryStarted)), zap.Int("node_count", len(consulJoinList)))
 		joinList = append(joinList, consulJoinList...)
-	}
-
-	publishStorer := wasp.PublishDistributor{
-		ID:      id,
-		State:   dstate.Subscriptions(),
-		Storage: messageLog,
-		Logger:  wasp.L(ctx),
 	}
 
 	memberManager := wasp.NewNodeMemberManager(id, messageLog, dstate)
@@ -157,7 +157,7 @@ func run(config *viper.Viper) {
 		},
 	}, rpcDialer, server, wasp.L(ctx))
 
-	publishStorer.Transport = clusterMultiNode
+	publishDistributor.Transport = clusterMultiNode
 
 	operations.Run("cluster listener", func(ctx context.Context) {
 		err := server.Serve(clusterListener)
@@ -249,7 +249,7 @@ func run(config *viper.Viper) {
 			}
 			publish.Header.Retain = false
 		}
-		return publishStorer.Distribute(ctx, publish)
+		return publishDistributor.Distribute(ctx, publish)
 	}, inflights)
 	operations.Run("connection manager", connManager.Run)
 
