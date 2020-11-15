@@ -1,6 +1,7 @@
 package epoll
 
 import (
+	"errors"
 	"sync"
 	"syscall"
 	"time"
@@ -18,9 +19,14 @@ type ClientConn struct {
 	Deadline time.Time
 }
 
+var (
+	ErrConnectionAlreadyExists = errors.New("connection already exists")
+	ErrConnectionNotFound      = errors.New("connection not found")
+)
+
 type Epoll struct {
 	fd          int
-	connections map[int]*ClientConn
+	connections *gotomic.Hash
 	lock        *sync.RWMutex
 	events      []unix.EpollEvent
 	timeouts    expiration.List
@@ -34,7 +40,7 @@ func New(maxEvents int) (*Epoll, error) {
 	return &Epoll{
 		fd:          fd,
 		lock:        &sync.RWMutex{},
-		connections: make(map[int]*ClientConn),
+		connections: gotomic.NewHash(),
 		events:      make([]unix.EpollEvent, maxEvents),
 		timeouts:    expiration.NewList(),
 	}, nil
@@ -43,35 +49,39 @@ func New(maxEvents int) (*Epoll, error) {
 var epollEvents uint32 = unix.POLLIN | unix.POLLHUP | unix.EPOLLONESHOT
 
 func (e *Epoll) Expire(now time.Time) []*ClientConn {
-	e.lock.Lock()
-	defer e.lock.Unlock()
 	expired := e.timeouts.Expire(now)
 	out := make([]*ClientConn, 0, len(expired))
 	for _, v := range expired {
-		fd := int(v.(gotomic.IntKey))
-		if e.connections[fd] != nil && e.connections[fd].Conn != nil {
-			e.connections[fd].Conn.Close()
-			out = append(out, e.connections[fd])
+		v, ok := e.connections.Delete(v.(gotomic.Hashable))
+		if ok {
+			c := v.(*ClientConn)
+			c.Conn.Close()
+			out = append(out, c)
 		}
 	}
 	return out
 }
 func (e *Epoll) SetDeadline(fd int, deadline time.Time) {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-	conn := e.connections[fd]
-	e.timeouts.Update(gotomic.IntKey(conn.FD), conn.Deadline, deadline)
-	conn.Deadline = deadline
+	k := gotomic.IntKey(fd)
+	v, ok := e.connections.Get(k)
+	if ok {
+		conn := v.(*ClientConn)
+		e.timeouts.Update(k, conn.Deadline, deadline)
+		conn.Deadline = deadline
+	}
 }
 
 func (e *Epoll) Add(conn *ClientConn) error {
+	k := gotomic.IntKey(conn.FD)
+	ok := e.connections.PutIfMissing(k, conn)
+	if !ok {
+		return ErrConnectionAlreadyExists
+	}
 	err := unix.EpollCtl(e.fd, syscall.EPOLL_CTL_ADD, conn.FD, &unix.EpollEvent{Events: epollEvents, Fd: int32(conn.FD)})
 	if err != nil {
+		e.connections.Delete(k)
 		return err
 	}
-	e.lock.Lock()
-	defer e.lock.Unlock()
-	e.connections[conn.FD] = conn
 	if !conn.Deadline.IsZero() {
 		e.timeouts.Insert(gotomic.IntKey(conn.FD), conn.Deadline)
 	}
@@ -83,13 +93,15 @@ func (e *Epoll) Remove(fd int) error {
 	if err != nil {
 		return err
 	}
-	e.lock.Lock()
-	defer e.lock.Unlock()
-	conn := e.connections[fd]
-	if !conn.Deadline.IsZero() {
-		e.timeouts.Delete(gotomic.IntKey(conn.FD), conn.Deadline)
+	k := gotomic.IntKey(fd)
+	v, ok := e.connections.Delete(k)
+	if !ok {
+		return ErrConnectionNotFound
 	}
-	delete(e.connections, fd)
+	conn := v.(*ClientConn)
+	if !conn.Deadline.IsZero() {
+		e.timeouts.Delete(k, conn.Deadline)
+	}
 	return nil
 }
 func (e *Epoll) Rearm(fd int) error {
@@ -101,22 +113,24 @@ func (e *Epoll) Wait(connections []*ClientConn) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	e.lock.RLock()
-	defer e.lock.RUnlock()
 	for i := 0; i < n; i++ {
-		conn := e.connections[int(e.events[i].Fd)]
-		connections[i] = conn
+		k := gotomic.IntKey(e.events[i].Fd)
+		conn, ok := e.connections.Get(k)
+		if ok {
+			connections[i] = conn.(*ClientConn)
+		}
 	}
 	return n, nil
 }
 
 func (e *Epoll) Shutdown() {
-	e.lock.Lock()
-	defer e.lock.Unlock()
-	unix.Close(e.fd)
-	for fd, conn := range e.connections {
-		delete(e.connections, fd)
-		conn.Conn.Close()
-	}
 	e.timeouts.Reset()
+	unix.Close(e.fd)
+	e.connections.Each(func(k gotomic.Hashable, _ gotomic.Thing) bool {
+		v, ok := e.connections.Delete(k)
+		if ok {
+			v.(*ClientConn).Conn.Close()
+		}
+		return false
+	})
 }
