@@ -4,11 +4,12 @@ package api;
 
 import "github.com/vx-labs/mqtt-protocol/packet/pb.proto";
 
-message DistributeMessageRequest {
-  packet.Publish Message = 1;
-  bool ResolveRemoteRecipients = 2;
+message RetainedMessage {
+  packet.Publish Publish = 1;
+  int64 LastAdded = 2;
+  int64 LastDeleted = 3;
 }
-message DistributeMessageResponse {}
+
 message SessionMetadatas {
   string SessionID = 1;
   string ClientID = 2;
@@ -16,7 +17,34 @@ message SessionMetadatas {
   uint64 Peer = 4;
   packet.Publish LWT = 5;
   string MountPoint = 6;
+  int64 LastAdded = 7;
+  int64 LastDeleted = 8;
 }
+
+message Subscription {
+  string SessionID = 1;
+  uint64 Peer = 2;
+  bytes Pattern = 3;
+  int32 QoS = 4;
+  int64 LastAdded = 5;
+  int64 LastDeleted = 6;
+}
+
+message SubscriptionList {
+  repeated Subscription Subscriptions = 1;
+}
+
+message StateBroadcastEvent {
+  repeated Subscription Subscriptions = 1;
+  repeated SessionMetadatas SessionMetadatas = 2;
+  repeated RetainedMessage RetainedMessages = 3;
+}
+
+message DistributeMessageRequest {
+  packet.Publish Message = 1;
+  bool ResolveRemoteRecipients = 2;
+}
+message DistributeMessageResponse {}
 
 message ListSessionMetadatasRequest {}
 message ListSessionMetadatasResponse {
@@ -36,7 +64,7 @@ message DeleteSubscriptionRequest {
 }
 message DeleteSubscriptionResponse {}
 message ListSubscriptionsResponse {
-  repeated CreateSubscriptionRequest Subscriptions = 1;
+  repeated Subscription Subscriptions = 1;
 }
 message ListSubscriptionsRequest {}
 service MQTT {

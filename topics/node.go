@@ -20,6 +20,8 @@ var (
 	ErrTopicNotFound = errors.New("Topic not found")
 )
 
+type NodeIterator func([]byte)
+
 func newNode() *Node {
 	return &Node{
 		Children: make(map[string]*Node),
@@ -108,11 +110,14 @@ func (n *Node) match(topic format.Topic, msgs *[][]byte) error {
 }
 
 func (n *Node) allRetained(msgs *[][]byte) {
-	if n.Buf != nil {
-		*msgs = append(*msgs, n.Buf)
-	}
+	n.iterate(func(b []byte) { *msgs = append(*msgs, b) })
+}
 
+func (n *Node) iterate(f NodeIterator) {
+	if n.Buf != nil {
+		f(n.Buf)
+	}
 	for _, child := range n.Children {
-		child.allRetained(msgs)
+		child.iterate(f)
 	}
 }

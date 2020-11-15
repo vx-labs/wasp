@@ -1,9 +1,0 @@
-syntax = "proto3";
-package subscriptions;
-
-message Node {
-  repeated string Recipients = 1;
-  repeated int32 Qos = 2;
-  map<string,Node> Children = 3;
-  repeated uint64 Peer = 4;
-}

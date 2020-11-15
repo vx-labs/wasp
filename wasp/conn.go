@@ -12,6 +12,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/ack"
 	"github.com/vx-labs/wasp/wasp/auth"
+	"github.com/vx-labs/wasp/wasp/distributed"
 	"github.com/vx-labs/wasp/wasp/epoll"
 	"github.com/vx-labs/wasp/wasp/sessions"
 	"github.com/vx-labs/wasp/wasp/stats"
@@ -23,8 +24,8 @@ import (
 
 type manager struct {
 	authHandler     AuthenticationHandler
-	fsm             FSM
-	state           ReadState
+	state           distributed.State
+	local           ReadState
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
 	connectionsJobs chan chan epoll.Event
@@ -38,8 +39,8 @@ type setupWorker struct {
 	decoder     *decoder.Sync
 	encoder     *encoder.Encoder
 	authHandler AuthenticationHandler
-	fsm         FSM
-	state       ReadState
+	state       distributed.State
+	local       ReadState
 	writer      Writer
 	epoll       epoll.Instance
 }
@@ -59,7 +60,7 @@ var (
 	connWorkers int = 50
 )
 
-func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state ReadState, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) *manager {
+func NewConnectionManager(authHandler AuthenticationHandler, local ReadState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) *manager {
 
 	epoller, err := epoll.NewInstance(connWorkers)
 	if err != nil {
@@ -69,8 +70,8 @@ func NewConnectionManager(authHandler AuthenticationHandler, fsm FSM, state Read
 	s := &manager{
 		authHandler:     authHandler,
 		inflights:       ackQueue,
-		fsm:             fsm,
 		state:           state,
+		local:           local,
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
 		connectionsJobs: make(chan chan epoll.Event, connWorkers),
 		writer:          writer,
@@ -120,7 +121,7 @@ func (s *manager) runTimeouter(ctx context.Context) {
 			return
 		case t := <-ticker.C:
 			for _, conn := range s.epoll.Expire(t) {
-				session := s.state.GetSession(conn.ID)
+				session := s.local.GetSession(conn.ID)
 				if session != nil {
 					s.shutdownSession(ctx, session)
 				}
@@ -156,8 +157,8 @@ func (s *manager) runSetupper(ctx context.Context) {
 		decoder:     decoder.New(),
 		encoder:     encoder.New(),
 		authHandler: s.authHandler,
-		fsm:         s.fsm,
 		state:       s.state,
+		local:       s.local,
 		writer:      s.writer,
 		epoll:       s.epoll,
 	}
@@ -185,7 +186,7 @@ func (s *manager) runSetupper(ctx context.Context) {
 }
 
 func (s *manager) DisconnectClients(ctx context.Context) {
-	for _, session := range s.state.ListSessions() {
+	for _, session := range s.local.ListSessions() {
 		s.shutdownSession(ctx, session)
 	}
 }
@@ -262,20 +263,20 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 		zap.String("session_username", string(connectPkt.Username)),
 	)
 	L(ctx).Debug("session connected")
-	if metadata := s.state.GetSessionMetadatasByClientID(session.ClientID()); metadata != nil {
-		err := s.fsm.DeleteSessionMetadata(ctx, metadata.SessionID)
+	if metadata, err := s.state.SessionMetadatas().ByClientID(session.ClientID()); err == nil {
+		err := s.state.SessionMetadatas().Delete(metadata.SessionID)
 		if err != nil {
 			return err
 		}
 		L(ctx).Debug("deleted old session metadata")
 	}
-	err = s.fsm.CreateSessionMetadata(ctx, session.ID(), session.ClientID(), session.LWT(), session.MountPoint())
+	err = s.state.SessionMetadatas().Create(session.ID(), session.ClientID(), time.Now().UnixNano(), session.LWT(), session.MountPoint())
 	if err != nil {
 		L(ctx).Error("failed to create session metadata", zap.Error(err))
 		return err
 	}
 	L(ctx).Debug("session metadata created")
-	s.state.SaveSession(session.ID(), session)
+	s.local.SaveSession(session.ID(), session)
 	s.writer.Register(session.ID(), c)
 	err = s.epoll.Add(epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
 	if err != nil {
@@ -292,7 +293,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 }
 
 func (s *connectionWorker) processConn(ctx context.Context, ev epoll.Event) {
-	session := s.manager.state.GetSession(ev.ID)
+	session := s.manager.local.GetSession(ev.ID)
 	if session == nil {
 		s.manager.epoll.Remove(ev.FD)
 		return
@@ -310,16 +311,18 @@ func (s *connectionWorker) processConn(ctx context.Context, ev epoll.Event) {
 }
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID())
-	s.state.CloseSession(session.ID())
+	s.local.CloseSession(session.ID())
 	topics := session.GetTopics()
 	for idx := range topics {
-		s.fsm.Unsubscribe(ctx, session.ID(), topics[idx])
+		s.state.Subscriptions().Delete(session.ID(), topics[idx])
 	}
-	metadata := s.state.GetSessionMetadatasByClientID(session.ClientID())
-	s.fsm.DeleteSessionMetadata(ctx, session.ID())
-	if metadata == nil || metadata.SessionID != session.ID() || session.Disconnected {
-		// Session has reconnected on another peer.
-		return
+	metadata, err := s.state.SessionMetadatas().ByClientID(session.ClientID())
+	if err == nil {
+		if metadata.SessionID != session.ID() || session.Disconnected {
+			// Session has reconnected on another peer.
+			return
+		}
+		s.state.SessionMetadatas().Delete(session.ID())
 	}
 	if !session.Disconnected {
 		L(ctx).Debug("session lost")
@@ -350,7 +353,7 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 		"protocol": session.Transport(),
 	}).Add(float64(pkt.Length()))
 
-	err = processPacket(ctx, s.manager.fsm, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c, pkt)
+	err = processPacket(ctx, s.manager.local, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c, pkt)
 	if err != nil {
 		if err == ErrSessionDisconnected {
 			session.Disconnected = true

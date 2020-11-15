@@ -1,0 +1,7 @@
+syntax = "proto3";
+package subscriptions;
+
+message Node {
+  map<string,Node> Children = 1;
+  bytes Data = 2;
+}

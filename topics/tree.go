@@ -11,6 +11,7 @@ type Store interface {
 	Insert(topic []byte, payload []byte) error
 	Remove(topic []byte) error
 	Match(topic []byte, msg *[][]byte) error
+	Iterate(f NodeIterator)
 	Dump() ([]byte, error)
 	Load([]byte) error
 	Count() int
@@ -48,6 +49,11 @@ func (t *tree) Count() int {
 	t.mtx.RLock()
 	defer t.mtx.RUnlock()
 	return t.root.count(0)
+}
+func (t *tree) Iterate(f NodeIterator) {
+	t.mtx.RLock()
+	defer t.mtx.RUnlock()
+	t.root.iterate(f)
 }
 func (t *tree) Insert(topic []byte, payload []byte) error {
 	t.mtx.Lock()
