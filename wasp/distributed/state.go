@@ -48,7 +48,7 @@ type SessionMetadatasState interface {
 type TopicsState interface {
 	Set(message *packet.Publish) error
 	Delete(topic []byte) error
-	Get(pattern []byte) ([]*packet.Publish, error)
+	Get(pattern []byte) ([]api.RetainedMessage, error)
 }
 
 type State interface {

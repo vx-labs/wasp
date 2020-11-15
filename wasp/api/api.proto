@@ -67,6 +67,13 @@ message ListSubscriptionsResponse {
   repeated Subscription Subscriptions = 1;
 }
 message ListSubscriptionsRequest {}
+message ListRetainedMessagesRequest{
+  bytes Pattern = 1;
+}
+message ListRetainedMessagesResponse{
+  repeated RetainedMessage RetainedMessages = 1;
+}
+
 service MQTT {
   rpc ListSubscriptions(ListSubscriptionsRequest)
       returns (ListSubscriptionsResponse) {}
@@ -78,4 +85,6 @@ service MQTT {
       returns (DistributeMessageResponse) {}
   rpc ListSessionMetadatas(ListSessionMetadatasRequest)
       returns (ListSessionMetadatasResponse) {}
+  rpc ListRetainedMessages(ListRetainedMessagesRequest)
+      returns (ListRetainedMessagesResponse) {}
 }

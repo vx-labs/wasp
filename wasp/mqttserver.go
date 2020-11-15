@@ -51,6 +51,17 @@ func (s *mqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessio
 	}
 	return &api.ListSessionMetadatasResponse{SessionMetadatasList: out}, nil
 }
+func (s *mqttServer) ListRetainedMessages(ctx context.Context, r *api.ListRetainedMessagesRequest) (*api.ListRetainedMessagesResponse, error) {
+	messages, err := s.state.Topics().Get(r.Pattern)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*api.RetainedMessage, len(messages))
+	for idx := range out {
+		out[idx] = &messages[idx]
+	}
+	return &api.ListRetainedMessagesResponse{RetainedMessages: out}, nil
+}
 func (s *mqttServer) Serve(grpcServer *grpc.Server) {
 	api.RegisterMQTTServer(grpcServer, s)
 }
