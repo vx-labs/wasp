@@ -10,7 +10,7 @@ import (
 type Session struct {
 	id                string
 	ClientID          string
-	MountPoint        string
+	mountPoint        string
 	lwt               *packet.Publish
 	keepaliveInterval int32
 	Disconnected      bool
@@ -21,7 +21,7 @@ type Session struct {
 func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Session, error) {
 	s := &Session{
 		id:         id,
-		MountPoint: mountpoint,
+		mountPoint: mountpoint,
 		transport:  transport,
 		topics:     subscriptions.NewTree(),
 	}
@@ -34,6 +34,15 @@ func (s *Session) ID() string {
 func (s *Session) Transport() string {
 	return s.transport
 }
+func (s *Session) MountPoint() string {
+	return s.mountPoint
+}
+func (s *Session) PrefixMountPoint(topic []byte) []byte {
+	return prefixMountPoint(s.mountPoint, topic)
+}
+func (s *Session) TrimMountPoint(topic []byte) []byte {
+	return trimMountPoint(s.mountPoint, topic)
+}
 func (s *Session) LWT() *packet.Publish {
 	return s.lwt
 }
@@ -44,7 +53,7 @@ func (s *Session) processConnect(connect *packet.Connect) error {
 	if len(connect.WillTopic) > 0 {
 		s.lwt = &packet.Publish{
 			Header:  &packet.Header{Retain: connect.WillRetain, Qos: connect.WillQos},
-			Topic:   PrefixMountPoint(s.MountPoint, connect.WillTopic),
+			Topic:   prefixMountPoint(s.mountPoint, connect.WillTopic),
 			Payload: connect.WillPayload,
 		}
 	}

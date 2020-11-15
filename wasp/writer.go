@@ -195,7 +195,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				},
 				MessageId: 0,
 				Payload:   p.Payload,
-				Topic:     sessions.TrimMountPoint(session.MountPoint, p.Topic),
+				Topic:     session.TrimMountPoint(p.Topic),
 			}
 
 			switch publish.Header.Qos {

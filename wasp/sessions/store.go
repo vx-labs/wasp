@@ -4,14 +4,14 @@ import (
 	"sync"
 )
 
-func PrefixMountPoint(mountPoint string, t []byte) []byte {
+func prefixMountPoint(mountPoint string, t []byte) []byte {
 	out := make([]byte, len(t)+len(mountPoint)+1)
 	copy(out[:len(mountPoint)], []byte(mountPoint))
 	out[len(mountPoint)] = '/'
 	copy(out[len(mountPoint)+1:], t)
 	return out
 }
-func TrimMountPoint(mountPoint string, t []byte) []byte {
+func trimMountPoint(mountPoint string, t []byte) []byte {
 	return t[len(mountPoint)+1:] // Trim mountpoint + /
 }
 

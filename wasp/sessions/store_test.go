@@ -7,18 +7,18 @@ import (
 )
 
 func TestPrefixMountPoint(t *testing.T) {
-	require.Equal(t, []byte("_default/test"), PrefixMountPoint("_default", []byte("test")))
+	require.Equal(t, []byte("_default/test"), prefixMountPoint("_default", []byte("test")))
 }
 func TestTrimMountPoint(t *testing.T) {
-	require.Equal(t, []byte("test"), TrimMountPoint("_default", []byte("_default/test")))
+	require.Equal(t, []byte("test"), trimMountPoint("_default", []byte("_default/test")))
 }
 func BenchmarkPrefixMountPoint(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		PrefixMountPoint("_default", []byte("test"))
+		prefixMountPoint("_default", []byte("test"))
 	}
 }
 func BenchmarkTrimMountPoint(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		TrimMountPoint("_default", []byte("_default/test"))
+		trimMountPoint("_default", []byte("_default/test"))
 	}
 }

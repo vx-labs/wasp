@@ -3,6 +3,7 @@ package fsm
 import (
 	"bytes"
 	"context"
+	"errors"
 	fmt "fmt"
 	"log"
 	"time"
@@ -10,8 +11,13 @@ import (
 	"github.com/gogo/protobuf/proto"
 	"github.com/vx-labs/cluster/raft"
 	packet "github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/audit"
 	"go.etcd.io/etcd/raft/raftpb"
+)
+
+var (
+	ErrSessionMetadataNotFound = errors.New("session metadata not found")
 )
 
 type State interface {
@@ -24,6 +30,7 @@ type State interface {
 	CreateSessionMetadata(id string, peer uint64, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error
 	DeleteSessionMetadata(id string, peer uint64) error
 	DeleteSessionMetadatasByPeer(peer uint64)
+	GetSessionMetadatas(id string) *api.SessionMetadatas
 }
 
 func decode(payload []byte) ([]*StateTransition, error) {
@@ -160,12 +167,16 @@ func (f *FSM) CreateSessionMetadata(ctx context.Context, id, clientID string, lw
 		},
 	}})
 }
-func (f *FSM) DeleteSessionMetadata(ctx context.Context, id, mountpoint string) error {
+func (f *FSM) DeleteSessionMetadata(ctx context.Context, id string) error {
+	session := f.state.GetSessionMetadatas(id)
+	if session == nil {
+		return ErrSessionMetadataNotFound
+	}
 	return f.commit(ctx, &StateTransition{Event: &StateTransition_SessionDeleted{
 		SessionDeleted: &SessionDeleted{
 			SessionID:  id,
 			Peer:       f.id,
-			MountPoint: mountpoint,
+			MountPoint: session.MountPoint,
 		},
 	}})
 }
