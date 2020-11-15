@@ -139,7 +139,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:
-		metadata := state.GetSessionMetadatasByClientID(session.ClientID)
+		metadata := state.GetSessionMetadatasByClientID(session.ClientID())
 		if metadata == nil || metadata.SessionID != session.ID() {
 			// Session has reconnected on another peer.
 			return ErrSessionDisconnected

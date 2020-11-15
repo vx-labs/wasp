@@ -266,14 +266,14 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 		zap.String("session_username", string(connectPkt.Username)),
 	)
 	L(ctx).Debug("session connected")
-	if metadata := s.state.GetSessionMetadatasByClientID(session.ClientID); metadata != nil {
+	if metadata := s.state.GetSessionMetadatasByClientID(session.ClientID()); metadata != nil {
 		err := s.fsm.DeleteSessionMetadata(ctx, metadata.SessionID)
 		if err != nil {
 			return err
 		}
 		L(ctx).Debug("deleted old session metadata")
 	}
-	err = s.fsm.CreateSessionMetadata(ctx, session.ID(), session.ClientID, session.LWT(), session.MountPoint())
+	err = s.fsm.CreateSessionMetadata(ctx, session.ID(), session.ClientID(), session.LWT(), session.MountPoint())
 	if err != nil {
 		L(ctx).Error("failed to create session metadata", zap.Error(err))
 		return err
@@ -319,7 +319,7 @@ func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session
 	for idx := range topics {
 		s.fsm.Unsubscribe(ctx, session.ID(), topics[idx])
 	}
-	metadata := s.state.GetSessionMetadatasByClientID(session.ClientID)
+	metadata := s.state.GetSessionMetadatasByClientID(session.ClientID())
 	s.fsm.DeleteSessionMetadata(ctx, session.ID())
 	if metadata == nil || metadata.SessionID != session.ID() || session.Disconnected {
 		// Session has reconnected on another peer.

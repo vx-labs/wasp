@@ -9,7 +9,7 @@ import (
 
 type Session struct {
 	id                string
-	ClientID          string
+	clientID          string
 	mountPoint        string
 	lwt               *packet.Publish
 	keepaliveInterval int32
@@ -31,6 +31,9 @@ func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Ses
 func (s *Session) ID() string {
 	return s.id
 }
+func (s *Session) ClientID() string {
+	return s.clientID
+}
 func (s *Session) Transport() string {
 	return s.transport
 }
@@ -48,7 +51,7 @@ func (s *Session) LWT() *packet.Publish {
 }
 
 func (s *Session) processConnect(connect *packet.Connect) error {
-	s.ClientID = string(connect.ClientId)
+	s.clientID = string(connect.ClientId)
 	s.keepaliveInterval = connect.KeepaliveTimer
 	if len(connect.WillTopic) > 0 {
 		s.lwt = &packet.Publish{
