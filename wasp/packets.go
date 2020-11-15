@@ -88,7 +88,7 @@ func processPacket(ctx context.Context, local ReadState, state distributed.State
 				return err
 			}
 			for _, message := range messages {
-				writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message)
+				writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message.Publish)
 			}
 		}
 	case *packet.Unsubscribe:

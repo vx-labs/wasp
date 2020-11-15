@@ -137,7 +137,7 @@ func (t *topicsState) delete(topic []byte, msg *api.RetainedMessage) error {
 	return nil
 }
 
-func (t *topicsState) Get(pattern []byte) ([]*packet.Publish, error) {
+func (t *topicsState) Get(pattern []byte) ([]api.RetainedMessage, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	v, err := t.get(pattern)
@@ -150,12 +150,12 @@ func (t *topicsState) Get(pattern []byte) ([]*packet.Publish, error) {
 			c++
 		}
 	}
-	out := make([]*packet.Publish, c)
+	out := make([]api.RetainedMessage, c)
 
 	idx := 0
 	for _, msg := range v {
 		if crdt.IsEntryAdded(v[idx]) {
-			out[idx] = msg.Publish
+			out[idx] = *msg
 			idx++
 		}
 	}

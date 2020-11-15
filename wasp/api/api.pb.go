@@ -349,11 +349,10 @@ func (m *StateBroadcastEvent) GetRetainedMessages() []*RetainedMessage {
 }
 
 type DistributeMessageRequest struct {
-	Message                 *packet.Publish `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
-	ResolveRemoteRecipients bool            `protobuf:"varint,2,opt,name=ResolveRemoteRecipients,proto3" json:"ResolveRemoteRecipients,omitempty"`
-	XXX_NoUnkeyedLiteral    struct{}        `json:"-"`
-	XXX_unrecognized        []byte          `json:"-"`
-	XXX_sizecache           int32           `json:"-"`
+	Message              *packet.Publish `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
 }
 
 func (m *DistributeMessageRequest) Reset()         { *m = DistributeMessageRequest{} }
@@ -388,13 +387,6 @@ func (m *DistributeMessageRequest) GetMessage() *packet.Publish {
 	return nil
 }
 
-func (m *DistributeMessageRequest) GetResolveRemoteRecipients() bool {
-	if m != nil {
-		return m.ResolveRemoteRecipients
-	}
-	return false
-}
-
 type DistributeMessageResponse struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -426,6 +418,76 @@ func (m *DistributeMessageResponse) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_DistributeMessageResponse proto.InternalMessageInfo
 
+type ScheduleMessageRequest struct {
+	Message              *packet.Publish `protobuf:"bytes,1,opt,name=Message,proto3" json:"Message,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}        `json:"-"`
+	XXX_unrecognized     []byte          `json:"-"`
+	XXX_sizecache        int32           `json:"-"`
+}
+
+func (m *ScheduleMessageRequest) Reset()         { *m = ScheduleMessageRequest{} }
+func (m *ScheduleMessageRequest) String() string { return proto.CompactTextString(m) }
+func (*ScheduleMessageRequest) ProtoMessage()    {}
+func (*ScheduleMessageRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_00212fb1f9d3bf1c, []int{7}
+}
+
+func (m *ScheduleMessageRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ScheduleMessageRequest.Unmarshal(m, b)
+}
+func (m *ScheduleMessageRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ScheduleMessageRequest.Marshal(b, m, deterministic)
+}
+func (m *ScheduleMessageRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScheduleMessageRequest.Merge(m, src)
+}
+func (m *ScheduleMessageRequest) XXX_Size() int {
+	return xxx_messageInfo_ScheduleMessageRequest.Size(m)
+}
+func (m *ScheduleMessageRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScheduleMessageRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ScheduleMessageRequest proto.InternalMessageInfo
+
+func (m *ScheduleMessageRequest) GetMessage() *packet.Publish {
+	if m != nil {
+		return m.Message
+	}
+	return nil
+}
+
+type ScheduleMessageResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ScheduleMessageResponse) Reset()         { *m = ScheduleMessageResponse{} }
+func (m *ScheduleMessageResponse) String() string { return proto.CompactTextString(m) }
+func (*ScheduleMessageResponse) ProtoMessage()    {}
+func (*ScheduleMessageResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_00212fb1f9d3bf1c, []int{8}
+}
+
+func (m *ScheduleMessageResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ScheduleMessageResponse.Unmarshal(m, b)
+}
+func (m *ScheduleMessageResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ScheduleMessageResponse.Marshal(b, m, deterministic)
+}
+func (m *ScheduleMessageResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ScheduleMessageResponse.Merge(m, src)
+}
+func (m *ScheduleMessageResponse) XXX_Size() int {
+	return xxx_messageInfo_ScheduleMessageResponse.Size(m)
+}
+func (m *ScheduleMessageResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ScheduleMessageResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ScheduleMessageResponse proto.InternalMessageInfo
+
 type ListSessionMetadatasRequest struct {
 	XXX_NoUnkeyedLiteral struct{} `json:"-"`
 	XXX_unrecognized     []byte   `json:"-"`
@@ -436,7 +498,7 @@ func (m *ListSessionMetadatasRequest) Reset()         { *m = ListSessionMetadata
 func (m *ListSessionMetadatasRequest) String() string { return proto.CompactTextString(m) }
 func (*ListSessionMetadatasRequest) ProtoMessage()    {}
 func (*ListSessionMetadatasRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{7}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{9}
 }
 
 func (m *ListSessionMetadatasRequest) XXX_Unmarshal(b []byte) error {
@@ -468,7 +530,7 @@ func (m *ListSessionMetadatasResponse) Reset()         { *m = ListSessionMetadat
 func (m *ListSessionMetadatasResponse) String() string { return proto.CompactTextString(m) }
 func (*ListSessionMetadatasResponse) ProtoMessage()    {}
 func (*ListSessionMetadatasResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{8}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{10}
 }
 
 func (m *ListSessionMetadatasResponse) XXX_Unmarshal(b []byte) error {
@@ -510,7 +572,7 @@ func (m *CreateSubscriptionRequest) Reset()         { *m = CreateSubscriptionReq
 func (m *CreateSubscriptionRequest) String() string { return proto.CompactTextString(m) }
 func (*CreateSubscriptionRequest) ProtoMessage()    {}
 func (*CreateSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{9}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{11}
 }
 
 func (m *CreateSubscriptionRequest) XXX_Unmarshal(b []byte) error {
@@ -569,7 +631,7 @@ func (m *CreateSubscriptionResponse) Reset()         { *m = CreateSubscriptionRe
 func (m *CreateSubscriptionResponse) String() string { return proto.CompactTextString(m) }
 func (*CreateSubscriptionResponse) ProtoMessage()    {}
 func (*CreateSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{10}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{12}
 }
 
 func (m *CreateSubscriptionResponse) XXX_Unmarshal(b []byte) error {
@@ -603,7 +665,7 @@ func (m *DeleteSubscriptionRequest) Reset()         { *m = DeleteSubscriptionReq
 func (m *DeleteSubscriptionRequest) String() string { return proto.CompactTextString(m) }
 func (*DeleteSubscriptionRequest) ProtoMessage()    {}
 func (*DeleteSubscriptionRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{11}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{13}
 }
 
 func (m *DeleteSubscriptionRequest) XXX_Unmarshal(b []byte) error {
@@ -655,7 +717,7 @@ func (m *DeleteSubscriptionResponse) Reset()         { *m = DeleteSubscriptionRe
 func (m *DeleteSubscriptionResponse) String() string { return proto.CompactTextString(m) }
 func (*DeleteSubscriptionResponse) ProtoMessage()    {}
 func (*DeleteSubscriptionResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{12}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{14}
 }
 
 func (m *DeleteSubscriptionResponse) XXX_Unmarshal(b []byte) error {
@@ -687,7 +749,7 @@ func (m *ListSubscriptionsResponse) Reset()         { *m = ListSubscriptionsResp
 func (m *ListSubscriptionsResponse) String() string { return proto.CompactTextString(m) }
 func (*ListSubscriptionsResponse) ProtoMessage()    {}
 func (*ListSubscriptionsResponse) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{13}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{15}
 }
 
 func (m *ListSubscriptionsResponse) XXX_Unmarshal(b []byte) error {
@@ -725,7 +787,7 @@ func (m *ListSubscriptionsRequest) Reset()         { *m = ListSubscriptionsReque
 func (m *ListSubscriptionsRequest) String() string { return proto.CompactTextString(m) }
 func (*ListSubscriptionsRequest) ProtoMessage()    {}
 func (*ListSubscriptionsRequest) Descriptor() ([]byte, []int) {
-	return fileDescriptor_00212fb1f9d3bf1c, []int{14}
+	return fileDescriptor_00212fb1f9d3bf1c, []int{16}
 }
 
 func (m *ListSubscriptionsRequest) XXX_Unmarshal(b []byte) error {
@@ -746,6 +808,154 @@ func (m *ListSubscriptionsRequest) XXX_DiscardUnknown() {
 
 var xxx_messageInfo_ListSubscriptionsRequest proto.InternalMessageInfo
 
+type ListRetainedMessagesRequest struct {
+	Pattern              []byte   `protobuf:"bytes,1,opt,name=Pattern,proto3" json:"Pattern,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *ListRetainedMessagesRequest) Reset()         { *m = ListRetainedMessagesRequest{} }
+func (m *ListRetainedMessagesRequest) String() string { return proto.CompactTextString(m) }
+func (*ListRetainedMessagesRequest) ProtoMessage()    {}
+func (*ListRetainedMessagesRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_00212fb1f9d3bf1c, []int{17}
+}
+
+func (m *ListRetainedMessagesRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ListRetainedMessagesRequest.Unmarshal(m, b)
+}
+func (m *ListRetainedMessagesRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ListRetainedMessagesRequest.Marshal(b, m, deterministic)
+}
+func (m *ListRetainedMessagesRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListRetainedMessagesRequest.Merge(m, src)
+}
+func (m *ListRetainedMessagesRequest) XXX_Size() int {
+	return xxx_messageInfo_ListRetainedMessagesRequest.Size(m)
+}
+func (m *ListRetainedMessagesRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_ListRetainedMessagesRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ListRetainedMessagesRequest proto.InternalMessageInfo
+
+func (m *ListRetainedMessagesRequest) GetPattern() []byte {
+	if m != nil {
+		return m.Pattern
+	}
+	return nil
+}
+
+type ListRetainedMessagesResponse struct {
+	RetainedMessages     []*RetainedMessage `protobuf:"bytes,1,rep,name=RetainedMessages,proto3" json:"RetainedMessages,omitempty"`
+	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
+	XXX_unrecognized     []byte             `json:"-"`
+	XXX_sizecache        int32              `json:"-"`
+}
+
+func (m *ListRetainedMessagesResponse) Reset()         { *m = ListRetainedMessagesResponse{} }
+func (m *ListRetainedMessagesResponse) String() string { return proto.CompactTextString(m) }
+func (*ListRetainedMessagesResponse) ProtoMessage()    {}
+func (*ListRetainedMessagesResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_00212fb1f9d3bf1c, []int{18}
+}
+
+func (m *ListRetainedMessagesResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_ListRetainedMessagesResponse.Unmarshal(m, b)
+}
+func (m *ListRetainedMessagesResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_ListRetainedMessagesResponse.Marshal(b, m, deterministic)
+}
+func (m *ListRetainedMessagesResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_ListRetainedMessagesResponse.Merge(m, src)
+}
+func (m *ListRetainedMessagesResponse) XXX_Size() int {
+	return xxx_messageInfo_ListRetainedMessagesResponse.Size(m)
+}
+func (m *ListRetainedMessagesResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_ListRetainedMessagesResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_ListRetainedMessagesResponse proto.InternalMessageInfo
+
+func (m *ListRetainedMessagesResponse) GetRetainedMessages() []*RetainedMessage {
+	if m != nil {
+		return m.RetainedMessages
+	}
+	return nil
+}
+
+type DeleteRetainedMessageRequest struct {
+	Topic                []byte   `protobuf:"bytes,1,opt,name=Topic,proto3" json:"Topic,omitempty"`
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *DeleteRetainedMessageRequest) Reset()         { *m = DeleteRetainedMessageRequest{} }
+func (m *DeleteRetainedMessageRequest) String() string { return proto.CompactTextString(m) }
+func (*DeleteRetainedMessageRequest) ProtoMessage()    {}
+func (*DeleteRetainedMessageRequest) Descriptor() ([]byte, []int) {
+	return fileDescriptor_00212fb1f9d3bf1c, []int{19}
+}
+
+func (m *DeleteRetainedMessageRequest) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DeleteRetainedMessageRequest.Unmarshal(m, b)
+}
+func (m *DeleteRetainedMessageRequest) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DeleteRetainedMessageRequest.Marshal(b, m, deterministic)
+}
+func (m *DeleteRetainedMessageRequest) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeleteRetainedMessageRequest.Merge(m, src)
+}
+func (m *DeleteRetainedMessageRequest) XXX_Size() int {
+	return xxx_messageInfo_DeleteRetainedMessageRequest.Size(m)
+}
+func (m *DeleteRetainedMessageRequest) XXX_DiscardUnknown() {
+	xxx_messageInfo_DeleteRetainedMessageRequest.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DeleteRetainedMessageRequest proto.InternalMessageInfo
+
+func (m *DeleteRetainedMessageRequest) GetTopic() []byte {
+	if m != nil {
+		return m.Topic
+	}
+	return nil
+}
+
+type DeleteRetainedMessageResponse struct {
+	XXX_NoUnkeyedLiteral struct{} `json:"-"`
+	XXX_unrecognized     []byte   `json:"-"`
+	XXX_sizecache        int32    `json:"-"`
+}
+
+func (m *DeleteRetainedMessageResponse) Reset()         { *m = DeleteRetainedMessageResponse{} }
+func (m *DeleteRetainedMessageResponse) String() string { return proto.CompactTextString(m) }
+func (*DeleteRetainedMessageResponse) ProtoMessage()    {}
+func (*DeleteRetainedMessageResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_00212fb1f9d3bf1c, []int{20}
+}
+
+func (m *DeleteRetainedMessageResponse) XXX_Unmarshal(b []byte) error {
+	return xxx_messageInfo_DeleteRetainedMessageResponse.Unmarshal(m, b)
+}
+func (m *DeleteRetainedMessageResponse) XXX_Marshal(b []byte, deterministic bool) ([]byte, error) {
+	return xxx_messageInfo_DeleteRetainedMessageResponse.Marshal(b, m, deterministic)
+}
+func (m *DeleteRetainedMessageResponse) XXX_Merge(src proto.Message) {
+	xxx_messageInfo_DeleteRetainedMessageResponse.Merge(m, src)
+}
+func (m *DeleteRetainedMessageResponse) XXX_Size() int {
+	return xxx_messageInfo_DeleteRetainedMessageResponse.Size(m)
+}
+func (m *DeleteRetainedMessageResponse) XXX_DiscardUnknown() {
+	xxx_messageInfo_DeleteRetainedMessageResponse.DiscardUnknown(m)
+}
+
+var xxx_messageInfo_DeleteRetainedMessageResponse proto.InternalMessageInfo
+
 func init() {
 	proto.RegisterType((*RetainedMessage)(nil), "api.RetainedMessage")
 	proto.RegisterType((*SessionMetadatas)(nil), "api.SessionMetadatas")
@@ -754,6 +964,8 @@ func init() {
 	proto.RegisterType((*StateBroadcastEvent)(nil), "api.StateBroadcastEvent")
 	proto.RegisterType((*DistributeMessageRequest)(nil), "api.DistributeMessageRequest")
 	proto.RegisterType((*DistributeMessageResponse)(nil), "api.DistributeMessageResponse")
+	proto.RegisterType((*ScheduleMessageRequest)(nil), "api.ScheduleMessageRequest")
+	proto.RegisterType((*ScheduleMessageResponse)(nil), "api.ScheduleMessageResponse")
 	proto.RegisterType((*ListSessionMetadatasRequest)(nil), "api.ListSessionMetadatasRequest")
 	proto.RegisterType((*ListSessionMetadatasResponse)(nil), "api.ListSessionMetadatasResponse")
 	proto.RegisterType((*CreateSubscriptionRequest)(nil), "api.CreateSubscriptionRequest")
@@ -762,54 +974,64 @@ func init() {
 	proto.RegisterType((*DeleteSubscriptionResponse)(nil), "api.DeleteSubscriptionResponse")
 	proto.RegisterType((*ListSubscriptionsResponse)(nil), "api.ListSubscriptionsResponse")
 	proto.RegisterType((*ListSubscriptionsRequest)(nil), "api.ListSubscriptionsRequest")
+	proto.RegisterType((*ListRetainedMessagesRequest)(nil), "api.ListRetainedMessagesRequest")
+	proto.RegisterType((*ListRetainedMessagesResponse)(nil), "api.ListRetainedMessagesResponse")
+	proto.RegisterType((*DeleteRetainedMessageRequest)(nil), "api.DeleteRetainedMessageRequest")
+	proto.RegisterType((*DeleteRetainedMessageResponse)(nil), "api.DeleteRetainedMessageResponse")
 }
 
 func init() { proto.RegisterFile("api.proto", fileDescriptor_00212fb1f9d3bf1c) }
 
 var fileDescriptor_00212fb1f9d3bf1c = []byte{
-	// 668 bytes of a gzipped FileDescriptorProto
-	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x55, 0x4d, 0x4f, 0xdb, 0x4c,
-	0x10, 0x26, 0x71, 0xf8, 0xc8, 0xc0, 0x2b, 0xc2, 0xbe, 0x54, 0x75, 0xc2, 0x47, 0x83, 0x4f, 0xe9,
-	0x81, 0xa4, 0xa2, 0x87, 0xf6, 0x58, 0x4a, 0x7a, 0x40, 0x25, 0x52, 0xd8, 0x44, 0xe2, 0xd4, 0xc3,
-	0xc6, 0x1e, 0xc1, 0xaa, 0xc1, 0x6b, 0xbc, 0x13, 0xd4, 0x4a, 0x95, 0x7a, 0xea, 0xbf, 0xe9, 0xbf,
-	0xe8, 0x4f, 0xe8, 0x1f, 0xaa, 0xbc, 0xb6, 0xc1, 0x89, 0x6d, 0x90, 0x90, 0xb8, 0x79, 0xe7, 0x99,
-	0xcf, 0x67, 0xe6, 0x91, 0xa1, 0x2e, 0x02, 0xd9, 0x0d, 0x42, 0x45, 0x8a, 0x59, 0x22, 0x90, 0xad,
-	0x37, 0x97, 0x92, 0xae, 0x66, 0x93, 0xae, 0xab, 0xae, 0x7b, 0xb7, 0xdf, 0x0e, 0xa7, 0x62, 0xa2,
-	0x7b, 0xd7, 0x37, 0x44, 0x87, 0xc6, 0xc7, 0x55, 0xd3, 0x5e, 0x20, 0xdc, 0xaf, 0x48, 0xbd, 0x60,
-	0x12, 0x87, 0x39, 0x3f, 0x60, 0x93, 0x23, 0x09, 0xe9, 0xa3, 0x37, 0x40, 0xad, 0xc5, 0x25, 0xb2,
-	0xd7, 0xb0, 0x3a, 0x9c, 0x4d, 0xa6, 0x52, 0x5f, 0xd9, 0x95, 0x76, 0xa5, 0xb3, 0x7e, 0xb4, 0xd9,
-	0x8d, 0xa3, 0xba, 0x89, 0x99, 0xa7, 0x38, 0xdb, 0x85, 0xfa, 0x99, 0xd0, 0x74, 0xec, 0x79, 0xe8,
-	0xd9, 0xd5, 0x76, 0xa5, 0x63, 0xf1, 0x7b, 0x03, 0x6b, 0xc3, 0x7a, 0xf4, 0xe8, 0xe3, 0x14, 0x09,
-	0x3d, 0xdb, 0x32, 0x78, 0xd6, 0xe4, 0xfc, 0xaa, 0x42, 0x63, 0x84, 0x5a, 0x4b, 0xe5, 0x0f, 0x90,
-	0x84, 0x27, 0x48, 0xe8, 0x28, 0x69, 0x62, 0x3b, 0xed, 0x9b, 0x0e, 0xea, 0xfc, 0xde, 0xc0, 0x5a,
-	0xb0, 0x76, 0x32, 0x95, 0xe8, 0xd3, 0x69, 0xdf, 0x54, 0xac, 0xf3, 0xbb, 0x77, 0x54, 0xf0, 0x44,
-	0xf9, 0x3e, 0xba, 0x84, 0xde, 0x31, 0xa5, 0x05, 0x33, 0x26, 0xc6, 0xa0, 0x36, 0x44, 0x0c, 0xed,
-	0x5a, 0xbb, 0xd2, 0xa9, 0x71, 0xf3, 0xcd, 0x0e, 0xc0, 0x3a, 0xbb, 0x18, 0xdb, 0xcb, 0xc5, 0xb3,
-	0x46, 0x18, 0xdb, 0x07, 0x18, 0xa8, 0x99, 0x4f, 0x43, 0x25, 0x7d, 0xb2, 0x57, 0x4c, 0xd9, 0x8c,
-	0x65, 0x9e, 0x87, 0xd5, 0x47, 0x78, 0x58, 0xcb, 0xf3, 0xf0, 0xbb, 0x02, 0x1b, 0xa3, 0xd9, 0x44,
-	0xbb, 0xa1, 0x0c, 0x48, 0x2a, 0xff, 0x11, 0x0e, 0xd2, 0x29, 0xaa, 0x99, 0x29, 0x6c, 0x58, 0x1d,
-	0x0a, 0x22, 0x0c, 0x7d, 0x33, 0xf7, 0x06, 0x4f, 0x9f, 0xac, 0x01, 0xd6, 0xb9, 0x1a, 0x99, 0x91,
-	0x97, 0x79, 0xf4, 0x39, 0xdf, 0xee, 0xf2, 0x23, 0xed, 0xae, 0xe4, 0xdb, 0xfd, 0x0c, 0x8d, 0x6c,
-	0xb7, 0x67, 0x52, 0x13, 0x7b, 0x07, 0xff, 0x65, 0x6d, 0xda, 0xae, 0xb4, 0xad, 0xce, 0xfa, 0xd1,
-	0x56, 0x37, 0x3a, 0xd1, 0x2c, 0xc2, 0xe7, 0xfd, 0x9c, 0xbf, 0x15, 0xf8, 0x7f, 0x44, 0x82, 0xf0,
-	0x63, 0xa8, 0x84, 0xe7, 0x0a, 0x4d, 0x9f, 0x6e, 0xd1, 0x7f, 0x7a, 0x42, 0x76, 0x9c, 0xbf, 0x29,
-	0xbb, 0x6a, 0x62, 0x5f, 0xc4, 0xb1, 0x0b, 0x20, 0xcf, 0x9f, 0xe0, 0x07, 0x68, 0x2c, 0xa8, 0x42,
-	0xdb, 0x96, 0x49, 0xb1, 0x6d, 0x52, 0x2c, 0x80, 0x3c, 0xe7, 0xed, 0xfc, 0x04, 0xbb, 0x2f, 0x35,
-	0x85, 0x72, 0x32, 0x23, 0x4c, 0xdd, 0xf0, 0x66, 0x86, 0x9a, 0x22, 0x81, 0x25, 0x96, 0x52, 0x81,
-	0xa5, 0x5a, 0x7c, 0x0f, 0x2f, 0x39, 0x6a, 0x35, 0xbd, 0x45, 0x8e, 0xd7, 0x8a, 0x90, 0xa3, 0x2b,
-	0x83, 0xe8, 0xda, 0xb5, 0x59, 0xfe, 0x1a, 0x2f, 0x83, 0x9d, 0x1d, 0x68, 0x16, 0x34, 0xa0, 0x03,
-	0xe5, 0x6b, 0x74, 0xf6, 0x60, 0x27, 0x5a, 0x5a, 0x8e, 0x89, 0xb8, 0x41, 0x47, 0xc2, 0x6e, 0x31,
-	0x1c, 0x87, 0xb3, 0x53, 0xd8, 0x5e, 0xc4, 0x22, 0xff, 0x64, 0x43, 0x25, 0x2c, 0x17, 0x86, 0x38,
-	0xdf, 0xa1, 0x79, 0x12, 0xa2, 0x20, 0x9c, 0xdb, 0x68, 0x42, 0xd4, 0xb3, 0xaa, 0xc0, 0xd9, 0x85,
-	0x56, 0x51, 0xe9, 0x84, 0xa2, 0x4b, 0x68, 0xc6, 0xe7, 0xfe, 0xcc, 0x8d, 0x45, 0x6d, 0x14, 0x15,
-	0x4a, 0xda, 0x18, 0x43, 0xd3, 0xac, 0x22, 0x7b, 0xe1, 0x77, 0x7b, 0x78, 0xb2, 0xe6, 0x5a, 0x60,
-	0x17, 0x64, 0x35, 0xb3, 0x1d, 0xfd, 0xb1, 0xa0, 0x36, 0x38, 0x1f, 0x8f, 0xd9, 0x18, 0xb6, 0x72,
-	0x4e, 0x6c, 0xcf, 0xe4, 0x2e, 0x0b, 0x6e, 0xed, 0x97, 0xc1, 0xc9, 0x38, 0x4b, 0xec, 0x02, 0x58,
-	0x7e, 0x5c, 0x16, 0xc7, 0x95, 0x12, 0xde, 0x7a, 0x55, 0x8a, 0x67, 0x13, 0xe7, 0xd7, 0x99, 0x24,
-	0x2e, 0x3d, 0xb1, 0x24, 0xf1, 0x03, 0x77, 0xb0, 0x14, 0xf1, 0x90, 0x53, 0x52, 0xc2, 0x43, 0x99,
-	0xc4, 0x13, 0x1e, 0xca, 0x05, 0xb8, 0xc4, 0xbe, 0xc0, 0x76, 0x91, 0xc6, 0x58, 0xfb, 0x9e, 0xc1,
-	0x62, 0x75, 0xb6, 0x0e, 0x1e, 0xf0, 0x48, 0xd3, 0x4f, 0x56, 0xcc, 0xef, 0xfd, 0xed, 0xbf, 0x00,
-	0x00, 0x00, 0xff, 0xff, 0x19, 0x6e, 0xaf, 0xca, 0x22, 0x08, 0x00, 0x00,
+	// 760 bytes of a gzipped FileDescriptorProto
+	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xb4, 0x56, 0xcd, 0x4e, 0xdb, 0x40,
+	0x10, 0x8e, 0xf3, 0x03, 0x64, 0xa0, 0x22, 0x6c, 0x43, 0xeb, 0x98, 0x00, 0xc1, 0xa7, 0xf4, 0x40,
+	0x52, 0xd1, 0x4a, 0x5c, 0x4b, 0x13, 0x0e, 0xa8, 0xa4, 0x0a, 0x4e, 0x24, 0x4e, 0x95, 0xd8, 0xd8,
+	0x2b, 0x58, 0x35, 0xd8, 0x26, 0xbb, 0x41, 0xad, 0xd4, 0x6b, 0xdf, 0xa6, 0x6f, 0xd3, 0x3e, 0x50,
+	0xe5, 0xdd, 0x35, 0x38, 0xf6, 0x1a, 0x54, 0x2a, 0x6e, 0xde, 0xf9, 0xf9, 0xe6, 0xef, 0x9b, 0x91,
+	0xa1, 0x8a, 0x43, 0xda, 0x09, 0x67, 0x01, 0x0f, 0x50, 0x09, 0x87, 0xd4, 0x7a, 0x7b, 0x49, 0xf9,
+	0xd5, 0x7c, 0xd2, 0x71, 0x83, 0xeb, 0xee, 0xed, 0xb7, 0xfd, 0x29, 0x9e, 0xb0, 0xee, 0xf5, 0x0d,
+	0xe7, 0xfb, 0xc2, 0xc6, 0x0d, 0xa6, 0xdd, 0x10, 0xbb, 0x5f, 0x09, 0xef, 0x86, 0x13, 0xe9, 0x66,
+	0xff, 0x80, 0x75, 0x87, 0x70, 0x4c, 0x7d, 0xe2, 0x0d, 0x08, 0x63, 0xf8, 0x92, 0xa0, 0x37, 0xb0,
+	0x3c, 0x9c, 0x4f, 0xa6, 0x94, 0x5d, 0x99, 0x46, 0xcb, 0x68, 0xaf, 0x1e, 0xac, 0x77, 0xa4, 0x57,
+	0x47, 0x89, 0x9d, 0x58, 0x8f, 0x9a, 0x50, 0x3d, 0xc5, 0x8c, 0x1f, 0x79, 0x1e, 0xf1, 0xcc, 0x62,
+	0xcb, 0x68, 0x97, 0x9c, 0x7b, 0x01, 0x6a, 0xc1, 0x6a, 0xf4, 0xe8, 0x93, 0x29, 0xe1, 0xc4, 0x33,
+	0x4b, 0x42, 0x9f, 0x14, 0xd9, 0x3f, 0x8b, 0x50, 0x1b, 0x11, 0xc6, 0x68, 0xe0, 0x0f, 0x08, 0xc7,
+	0x1e, 0xe6, 0x98, 0x45, 0xa0, 0x4a, 0x76, 0xd2, 0x17, 0x19, 0x54, 0x9d, 0x7b, 0x01, 0xb2, 0x60,
+	0xa5, 0x37, 0xa5, 0xc4, 0xe7, 0x27, 0x7d, 0x11, 0xb1, 0xea, 0xdc, 0xbd, 0xa3, 0x80, 0xbd, 0xc0,
+	0xf7, 0x89, 0xcb, 0x89, 0x77, 0xc4, 0xe3, 0x80, 0x09, 0x11, 0x42, 0x50, 0x1e, 0x12, 0x32, 0x33,
+	0xcb, 0x2d, 0xa3, 0x5d, 0x76, 0xc4, 0x37, 0xda, 0x83, 0xd2, 0xe9, 0xf9, 0xd8, 0xac, 0xe8, 0x6b,
+	0x8d, 0x74, 0x68, 0x07, 0x60, 0x10, 0xcc, 0x7d, 0x3e, 0x0c, 0xa8, 0xcf, 0xcd, 0x25, 0x11, 0x36,
+	0x21, 0x59, 0xec, 0xc3, 0xf2, 0x23, 0x7d, 0x58, 0xc9, 0xf6, 0xe1, 0x97, 0x01, 0x6b, 0xa3, 0xf9,
+	0x84, 0xb9, 0x33, 0x1a, 0x72, 0x1a, 0xf8, 0x8f, 0xf4, 0x20, 0xae, 0xa2, 0x98, 0xa8, 0xc2, 0x84,
+	0xe5, 0x21, 0xe6, 0x9c, 0xcc, 0x7c, 0x51, 0xf7, 0x9a, 0x13, 0x3f, 0x51, 0x0d, 0x4a, 0x67, 0xc1,
+	0x48, 0x94, 0x5c, 0x71, 0xa2, 0xcf, 0xc5, 0x74, 0x2b, 0x8f, 0xa4, 0xbb, 0x94, 0x4d, 0xf7, 0x13,
+	0xd4, 0x92, 0xd9, 0x9e, 0x52, 0xc6, 0xd1, 0x21, 0xbc, 0x48, 0xca, 0x98, 0x69, 0xb4, 0x4a, 0xed,
+	0xd5, 0x83, 0x8d, 0x4e, 0x44, 0xd1, 0xa4, 0xc6, 0x59, 0xb4, 0xb3, 0x7f, 0x1b, 0xf0, 0x72, 0xc4,
+	0x31, 0x27, 0x1f, 0x67, 0x01, 0xf6, 0x5c, 0xcc, 0xf8, 0xf1, 0x2d, 0xf1, 0x9f, 0x0e, 0x88, 0x8e,
+	0xb2, 0x9c, 0x32, 0x8b, 0xc2, 0x77, 0x53, 0xfa, 0xa6, 0x94, 0x4e, 0x96, 0x82, 0x1f, 0xa0, 0x96,
+	0xda, 0x0a, 0x66, 0x96, 0x04, 0x44, 0x5d, 0x40, 0xa4, 0x94, 0x4e, 0xc6, 0xda, 0x3e, 0x06, 0xb3,
+	0x4f, 0x19, 0x9f, 0xd1, 0xc9, 0x9c, 0x93, 0xd8, 0x8c, 0xdc, 0xcc, 0x09, 0xe3, 0xd1, 0x82, 0x29,
+	0x49, 0xee, 0x82, 0x29, 0xbd, 0xbd, 0x05, 0x0d, 0x0d, 0x0c, 0x0b, 0x03, 0x9f, 0x11, 0xbb, 0x07,
+	0xaf, 0x46, 0xee, 0x15, 0xf1, 0xe6, 0xd3, 0xff, 0x88, 0xd0, 0x80, 0xd7, 0x19, 0x10, 0x85, 0xbf,
+	0x0d, 0x5b, 0xd1, 0x68, 0x33, 0xfd, 0x92, 0x41, 0x6c, 0x0a, 0x4d, 0xbd, 0x5a, 0xba, 0xa3, 0x13,
+	0xa8, 0xa7, 0x75, 0x91, 0xbd, 0x9a, 0x63, 0xce, 0x2c, 0xb4, 0x2e, 0xf6, 0x77, 0x68, 0xf4, 0x66,
+	0x04, 0x73, 0xb2, 0x30, 0x77, 0x55, 0xec, 0xb3, 0xee, 0x8a, 0xdd, 0x04, 0x4b, 0x17, 0x5a, 0xb5,
+	0xe8, 0x12, 0x1a, 0x72, 0x29, 0x9e, 0x39, 0xb1, 0x28, 0x0d, 0x5d, 0x20, 0x95, 0xc6, 0x18, 0x1a,
+	0x62, 0x14, 0xc9, 0x3d, 0xb8, 0x9b, 0xc3, 0x93, 0x37, 0xd3, 0x02, 0x53, 0x83, 0x2a, 0x87, 0x7f,
+	0x28, 0xb9, 0x91, 0xe6, 0x7d, 0x5c, 0x7a, 0xa2, 0x10, 0x63, 0xb1, 0x90, 0x0b, 0xc9, 0x9a, 0xac,
+	0xa3, 0xca, 0x56, 0xb7, 0x7a, 0xc6, 0x3f, 0xad, 0xde, 0x7b, 0x68, 0xca, 0x56, 0xa5, 0x4d, 0x55,
+	0x6e, 0x75, 0xa8, 0x8c, 0x83, 0x90, 0xba, 0x2a, 0x33, 0xf9, 0xb0, 0x77, 0x61, 0x3b, 0xc7, 0x4b,
+	0x26, 0x76, 0xf0, 0xa7, 0x02, 0xe5, 0xc1, 0xd9, 0x78, 0x8c, 0xc6, 0xb0, 0x91, 0x69, 0x0b, 0xda,
+	0x16, 0xc9, 0xe5, 0xb5, 0xcb, 0xda, 0xc9, 0x53, 0xab, 0x01, 0x16, 0xd0, 0x39, 0xa0, 0xec, 0x80,
+	0x91, 0xf4, 0xcb, 0xa5, 0x98, 0xb5, 0x9b, 0xab, 0x4f, 0x02, 0x67, 0x09, 0xac, 0x80, 0x73, 0x97,
+	0x4a, 0x01, 0x3f, 0xc0, 0xfc, 0x42, 0xd4, 0x87, 0xcc, 0x6d, 0x52, 0x7d, 0xc8, 0x3b, 0x7d, 0xaa,
+	0x0f, 0xf9, 0x27, 0xad, 0x80, 0x3e, 0xc3, 0x7a, 0xea, 0x1e, 0xa1, 0x2d, 0xc9, 0x54, 0xed, 0xa9,
+	0xb3, 0x9a, 0x7a, 0xe5, 0x1d, 0xde, 0x17, 0xa8, 0xeb, 0xae, 0x14, 0x6a, 0xdd, 0x4f, 0x44, 0x7f,
+	0xdf, 0xac, 0xbd, 0x07, 0x2c, 0xd2, 0xf0, 0x69, 0x12, 0x26, 0xe0, 0x73, 0x56, 0x24, 0x01, 0x9f,
+	0xb7, 0x0b, 0x76, 0x01, 0x5d, 0xc0, 0xa6, 0x96, 0x95, 0x68, 0x2f, 0x31, 0x78, 0x3d, 0xcf, 0x2d,
+	0xfb, 0x21, 0x93, 0x38, 0xc2, 0x64, 0x49, 0xfc, 0x07, 0xbe, 0xfb, 0x1b, 0x00, 0x00, 0xff, 0xff,
+	0xd1, 0xb7, 0x1e, 0x08, 0x4b, 0x0a, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -828,7 +1050,10 @@ type MQTTClient interface {
 	DeleteSubscription(ctx context.Context, in *DeleteSubscriptionRequest, opts ...grpc.CallOption) (*DeleteSubscriptionResponse, error)
 	CreateSubscription(ctx context.Context, in *CreateSubscriptionRequest, opts ...grpc.CallOption) (*CreateSubscriptionResponse, error)
 	DistributeMessage(ctx context.Context, in *DistributeMessageRequest, opts ...grpc.CallOption) (*DistributeMessageResponse, error)
+	ScheduleMessage(ctx context.Context, in *ScheduleMessageRequest, opts ...grpc.CallOption) (*ScheduleMessageResponse, error)
 	ListSessionMetadatas(ctx context.Context, in *ListSessionMetadatasRequest, opts ...grpc.CallOption) (*ListSessionMetadatasResponse, error)
+	ListRetainedMessages(ctx context.Context, in *ListRetainedMessagesRequest, opts ...grpc.CallOption) (*ListRetainedMessagesResponse, error)
+	DeleteRetainedMessage(ctx context.Context, in *DeleteRetainedMessageRequest, opts ...grpc.CallOption) (*DeleteRetainedMessageResponse, error)
 }
 
 type mQTTClient struct {
@@ -875,9 +1100,36 @@ func (c *mQTTClient) DistributeMessage(ctx context.Context, in *DistributeMessag
 	return out, nil
 }
 
+func (c *mQTTClient) ScheduleMessage(ctx context.Context, in *ScheduleMessageRequest, opts ...grpc.CallOption) (*ScheduleMessageResponse, error) {
+	out := new(ScheduleMessageResponse)
+	err := c.cc.Invoke(ctx, "/api.MQTT/ScheduleMessage", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *mQTTClient) ListSessionMetadatas(ctx context.Context, in *ListSessionMetadatasRequest, opts ...grpc.CallOption) (*ListSessionMetadatasResponse, error) {
 	out := new(ListSessionMetadatasResponse)
 	err := c.cc.Invoke(ctx, "/api.MQTT/ListSessionMetadatas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mQTTClient) ListRetainedMessages(ctx context.Context, in *ListRetainedMessagesRequest, opts ...grpc.CallOption) (*ListRetainedMessagesResponse, error) {
+	out := new(ListRetainedMessagesResponse)
+	err := c.cc.Invoke(ctx, "/api.MQTT/ListRetainedMessages", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *mQTTClient) DeleteRetainedMessage(ctx context.Context, in *DeleteRetainedMessageRequest, opts ...grpc.CallOption) (*DeleteRetainedMessageResponse, error) {
+	out := new(DeleteRetainedMessageResponse)
+	err := c.cc.Invoke(ctx, "/api.MQTT/DeleteRetainedMessage", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -890,7 +1142,10 @@ type MQTTServer interface {
 	DeleteSubscription(context.Context, *DeleteSubscriptionRequest) (*DeleteSubscriptionResponse, error)
 	CreateSubscription(context.Context, *CreateSubscriptionRequest) (*CreateSubscriptionResponse, error)
 	DistributeMessage(context.Context, *DistributeMessageRequest) (*DistributeMessageResponse, error)
+	ScheduleMessage(context.Context, *ScheduleMessageRequest) (*ScheduleMessageResponse, error)
 	ListSessionMetadatas(context.Context, *ListSessionMetadatasRequest) (*ListSessionMetadatasResponse, error)
+	ListRetainedMessages(context.Context, *ListRetainedMessagesRequest) (*ListRetainedMessagesResponse, error)
+	DeleteRetainedMessage(context.Context, *DeleteRetainedMessageRequest) (*DeleteRetainedMessageResponse, error)
 }
 
 // UnimplementedMQTTServer can be embedded to have forward compatible implementations.
@@ -909,8 +1164,17 @@ func (*UnimplementedMQTTServer) CreateSubscription(ctx context.Context, req *Cre
 func (*UnimplementedMQTTServer) DistributeMessage(ctx context.Context, req *DistributeMessageRequest) (*DistributeMessageResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DistributeMessage not implemented")
 }
+func (*UnimplementedMQTTServer) ScheduleMessage(ctx context.Context, req *ScheduleMessageRequest) (*ScheduleMessageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ScheduleMessage not implemented")
+}
 func (*UnimplementedMQTTServer) ListSessionMetadatas(ctx context.Context, req *ListSessionMetadatasRequest) (*ListSessionMetadatasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListSessionMetadatas not implemented")
+}
+func (*UnimplementedMQTTServer) ListRetainedMessages(ctx context.Context, req *ListRetainedMessagesRequest) (*ListRetainedMessagesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListRetainedMessages not implemented")
+}
+func (*UnimplementedMQTTServer) DeleteRetainedMessage(ctx context.Context, req *DeleteRetainedMessageRequest) (*DeleteRetainedMessageResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method DeleteRetainedMessage not implemented")
 }
 
 func RegisterMQTTServer(s *grpc.Server, srv MQTTServer) {
@@ -989,6 +1253,24 @@ func _MQTT_DistributeMessage_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MQTT_ScheduleMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ScheduleMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MQTTServer).ScheduleMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.MQTT/ScheduleMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MQTTServer).ScheduleMessage(ctx, req.(*ScheduleMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MQTT_ListSessionMetadatas_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListSessionMetadatasRequest)
 	if err := dec(in); err != nil {
@@ -1003,6 +1285,42 @@ func _MQTT_ListSessionMetadatas_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MQTTServer).ListSessionMetadatas(ctx, req.(*ListSessionMetadatasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MQTT_ListRetainedMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListRetainedMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MQTTServer).ListRetainedMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.MQTT/ListRetainedMessages",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MQTTServer).ListRetainedMessages(ctx, req.(*ListRetainedMessagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MQTT_DeleteRetainedMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteRetainedMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MQTTServer).DeleteRetainedMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/api.MQTT/DeleteRetainedMessage",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MQTTServer).DeleteRetainedMessage(ctx, req.(*DeleteRetainedMessageRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1028,8 +1346,20 @@ var _MQTT_serviceDesc = grpc.ServiceDesc{
 			Handler:    _MQTT_DistributeMessage_Handler,
 		},
 		{
+			MethodName: "ScheduleMessage",
+			Handler:    _MQTT_ScheduleMessage_Handler,
+		},
+		{
 			MethodName: "ListSessionMetadatas",
 			Handler:    _MQTT_ListSessionMetadatas_Handler,
+		},
+		{
+			MethodName: "ListRetainedMessages",
+			Handler:    _MQTT_ListRetainedMessages_Handler,
+		},
+		{
+			MethodName: "DeleteRetainedMessage",
+			Handler:    _MQTT_DeleteRetainedMessage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

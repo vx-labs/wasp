@@ -46,6 +46,9 @@ func (s *subscriptionsState) dump(event *api.StateBroadcastEvent) {
 }
 
 func (s *subscriptionsState) Create(sessionID string, pattern []byte, qos int32) error {
+	return s.CreateFrom(sessionID, s.peer, pattern, qos)
+}
+func (s *subscriptionsState) CreateFrom(sessionID string, peer uint64, pattern []byte, qos int32) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	subscription := api.Subscription{

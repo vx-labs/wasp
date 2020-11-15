@@ -28,6 +28,7 @@ type Channel interface {
 
 type SubscriptionsState interface {
 	Create(sessionID string, pattern []byte, qos int32) error
+	CreateFrom(sessionID string, peer uint64, pattern []byte, qos int32) error
 	All() []api.Subscription
 	ByPattern(pattern []byte) []api.Subscription
 	ByPeer(peer uint64) []api.Subscription
@@ -47,7 +48,7 @@ type SessionMetadatasState interface {
 type TopicsState interface {
 	Set(message *packet.Publish) error
 	Delete(topic []byte) error
-	Get(pattern []byte) ([]*packet.Publish, error)
+	Get(pattern []byte) ([]api.RetainedMessage, error)
 }
 
 type State interface {

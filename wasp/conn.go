@@ -270,7 +270,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 		}
 		L(ctx).Debug("deleted old session metadata")
 	}
-	err = s.state.SessionMetadatas().Create(session.ID(), session.ClientID(), time.Now().UnixNano(), session.LWT(), session.MountPoint())
+	err = s.state.SessionMetadatas().Create(session.ID(), session.ClientID(), time.Now().Unix(), session.LWT(), session.MountPoint())
 	if err != nil {
 		L(ctx).Error("failed to create session metadata", zap.Error(err))
 		return err

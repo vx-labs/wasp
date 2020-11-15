@@ -42,9 +42,12 @@ message StateBroadcastEvent {
 
 message DistributeMessageRequest {
   packet.Publish Message = 1;
-  bool ResolveRemoteRecipients = 2;
 }
 message DistributeMessageResponse {}
+message ScheduleMessageRequest {
+  packet.Publish Message = 1;
+}
+message ScheduleMessageResponse {}
 
 message ListSessionMetadatasRequest {}
 message ListSessionMetadatasResponse {
@@ -67,6 +70,17 @@ message ListSubscriptionsResponse {
   repeated Subscription Subscriptions = 1;
 }
 message ListSubscriptionsRequest {}
+message ListRetainedMessagesRequest{
+  bytes Pattern = 1;
+}
+message ListRetainedMessagesResponse{
+  repeated RetainedMessage RetainedMessages = 1;
+}
+message DeleteRetainedMessageRequest{
+  bytes Topic = 1;
+}
+message DeleteRetainedMessageResponse{}
+
 service MQTT {
   rpc ListSubscriptions(ListSubscriptionsRequest)
       returns (ListSubscriptionsResponse) {}
@@ -76,6 +90,12 @@ service MQTT {
       returns (CreateSubscriptionResponse) {}
   rpc DistributeMessage(DistributeMessageRequest)
       returns (DistributeMessageResponse) {}
+  rpc ScheduleMessage(ScheduleMessageRequest)
+      returns (ScheduleMessageResponse) {}
   rpc ListSessionMetadatas(ListSessionMetadatasRequest)
       returns (ListSessionMetadatasResponse) {}
+  rpc ListRetainedMessages(ListRetainedMessagesRequest)
+      returns (ListRetainedMessagesResponse) {}
+  rpc DeleteRetainedMessage(DeleteRetainedMessageRequest)
+      returns (DeleteRetainedMessageResponse) {}
 }
