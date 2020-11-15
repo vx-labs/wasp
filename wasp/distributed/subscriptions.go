@@ -17,7 +17,7 @@ type subscriptionsState struct {
 	bcast         *memberlist.TransmitLimitedQueue
 }
 
-func newSubscriptionState(peer uint64, bcast *memberlist.TransmitLimitedQueue) SubscriptionsState {
+func newSubscriptionState(peer uint64, bcast *memberlist.TransmitLimitedQueue) *subscriptionsState {
 	return &subscriptionsState{
 		subscriptions: subscriptions.NewTree(),
 		peer:          peer,
@@ -38,13 +38,11 @@ func (s *subscriptionsState) mergeSubscriptions(subscriptions []*api.Subscriptio
 	return nil
 }
 
-func (s *subscriptionsState) Merge(buf []byte) error {
-	payload := &api.StateBroadcastEvent{}
-	err := proto.Unmarshal(buf, payload)
-	if err != nil {
-		return err
+func (s *subscriptionsState) dump(event *api.StateBroadcastEvent) {
+	subscriptions := s.All()
+	for _, subscription := range subscriptions {
+		event.Subscriptions = append(event.Subscriptions, &subscription)
 	}
-	return s.mergeSubscriptions(payload.Subscriptions)
 }
 
 func (s *subscriptionsState) Create(sessionID string, pattern []byte, qos int32) error {

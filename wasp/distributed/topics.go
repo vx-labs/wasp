@@ -17,7 +17,7 @@ type topicsState struct {
 	bcast *memberlist.TransmitLimitedQueue
 }
 
-func newTopicState(bcast *memberlist.TransmitLimitedQueue) TopicsState {
+func newTopicState(bcast *memberlist.TransmitLimitedQueue) *topicsState {
 	return &topicsState{
 		tree:  topics.NewTree(),
 		bcast: bcast,
@@ -58,17 +58,14 @@ func (t *topicsState) mergeMessages(messages []*api.RetainedMessage) error {
 	}
 	return nil
 }
-func (t *topicsState) GetBroadcasts(overhead, limit int) [][]byte {
-	return t.bcast.GetBroadcasts(overhead, limit)
-}
 
-func (t *topicsState) Merge(buf []byte) error {
-	payload := &api.StateBroadcastEvent{}
-	err := proto.Unmarshal(buf, payload)
-	if err != nil {
-		return err
-	}
-	return t.mergeMessages(payload.RetainedMessages)
+func (t *topicsState) dump(event *api.StateBroadcastEvent) {
+	t.tree.Iterate(func(b []byte) {
+		message := &api.RetainedMessage{}
+		if proto.Unmarshal(b, message) == nil {
+			event.RetainedMessages = append(event.RetainedMessages, message)
+		}
+	})
 }
 
 func (t *topicsState) Set(message *packet.Publish) error {

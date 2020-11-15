@@ -4,6 +4,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/golang/protobuf/proto"
+	"github.com/hashicorp/memberlist"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
 )
@@ -51,4 +53,51 @@ type State interface {
 	Subscriptions() SubscriptionsState
 	SessionMetadatas() SessionMetadatasState
 	Topics() TopicsState
+}
+
+type state struct {
+	bcast            *memberlist.TransmitLimitedQueue
+	topics           *topicsState
+	subscriptions    *subscriptionsState
+	sessionMetadatas *sessionMetadatasState
+}
+
+func NewState(peer uint64, bcast *memberlist.TransmitLimitedQueue) State {
+	return &state{
+		topics:           newTopicState(bcast),
+		sessionMetadatas: newSessionMetadatasState(peer, bcast),
+		subscriptions:    newSubscriptionState(peer, bcast),
+	}
+}
+
+func (s *state) Subscriptions() SubscriptionsState       { return s.subscriptions }
+func (s *state) SessionMetadatas() SessionMetadatasState { return s.sessionMetadatas }
+func (s *state) Topics() TopicsState                     { return s.topics }
+func (s *state) GetBroadcasts(overhead, limit int) [][]byte {
+	return s.bcast.GetBroadcasts(overhead, limit)
+}
+func (s *state) MergeRemoteState(buf []byte, join bool) {
+	payload := &api.StateBroadcastEvent{}
+	err := proto.Unmarshal(buf, payload)
+	if err != nil {
+		return
+	}
+	s.sessionMetadatas.mergeSessions(payload.SessionMetadatas)
+	s.subscriptions.mergeSubscriptions(payload.Subscriptions)
+	s.topics.mergeMessages(payload.RetainedMessages)
+}
+func (s *state) NotifyMsg([]byte)                {}
+func (s *state) NotifyNodeMeta(limit int) []byte { return nil }
+func (s *state) LocalState(join bool) []byte {
+	payload := &api.StateBroadcastEvent{}
+
+	s.subscriptions.dump(payload)
+	s.sessionMetadatas.dump(payload)
+	s.topics.dump(payload)
+
+	buf, err := proto.Marshal(payload)
+	if err == nil {
+		return buf
+	}
+	return nil
 }

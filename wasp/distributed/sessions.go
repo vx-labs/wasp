@@ -22,7 +22,7 @@ var (
 	ErrSessionMetadatasNotFound = errors.New("session metadatas not found")
 )
 
-func newSessionMetadatasState(peer uint64, bcast *memberlist.TransmitLimitedQueue) SessionMetadatasState {
+func newSessionMetadatasState(peer uint64, bcast *memberlist.TransmitLimitedQueue) *sessionMetadatasState {
 	return &sessionMetadatasState{
 		sessions: make(map[string]api.SessionMetadatas),
 		peer:     peer,
@@ -47,20 +47,12 @@ func (s *sessionMetadatasState) mergeSessions(sessions []*api.SessionMetadatas) 
 	}
 	return nil
 }
-
-func (s *sessionMetadatasState) GetBroadcasts(overhead, limit int) [][]byte {
-	return s.bcast.GetBroadcasts(overhead, limit)
-}
-
-func (s *sessionMetadatasState) Merge(buf []byte) error {
-	payload := &api.StateBroadcastEvent{}
-	err := proto.Unmarshal(buf, payload)
-	if err != nil {
-		return err
+func (s *sessionMetadatasState) dump(event *api.StateBroadcastEvent) {
+	sessions := s.All()
+	for _, session := range sessions {
+		event.SessionMetadatas = append(event.SessionMetadatas, &session)
 	}
-	return s.mergeSessions(payload.SessionMetadatas)
 }
-
 func (s *sessionMetadatasState) Create(id string, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
