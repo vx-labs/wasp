@@ -43,8 +43,12 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 			}
 			err := inflights.Insert(session.ID, pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 				if expired {
+					L(ctx).Warn("qos2 flow timed out at waiting for PUBREL")
 					return
 				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+
 				err := publishHander(ctx, session.ID, p)
 				if err == nil {
 					pubcomp := &packet.PubComp{
@@ -54,6 +58,7 @@ func processPacket(ctx context.Context, fsm FSM, state ReadState, publishHander 
 					encoder.Encode(c, pubcomp)
 					return
 				}
+				L(ctx).Error("failed to finalize qos2 flow", zap.Error(err))
 			})
 			if err != nil {
 				return err

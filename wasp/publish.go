@@ -77,6 +77,7 @@ func (storer *PublishDistributor) Distribute(ctx context.Context, publish *packe
 	defer stats.PublishDistributionTime.Observe(stats.MilisecondsElapsed(started))
 	destinations, err := storer.State.Destinations(publish.Topic)
 	if err != nil {
+		storer.Logger.Warn("failed to resolve publish destinations", zap.Error(err))
 		return err
 	}
 	failed := false
