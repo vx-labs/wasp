@@ -3,27 +3,16 @@ package main
 import (
 	"io"
 
-	"github.com/olekukonko/tablewriter"
+	"github.com/fatih/color"
+	"github.com/rodaine/table"
 )
 
-func getTable(headers []string, out io.Writer) *tablewriter.Table {
-	table := tablewriter.NewWriter(out)
-	table.SetHeader(headers)
-	table.SetAlignment(tablewriter.ALIGN_LEFT)
-	table.SetHeaderAlignment(tablewriter.ALIGN_LEFT)
-	table.SetCenterSeparator("")
-	table.SetColumnSeparator("")
-	table.SetRowSeparator("")
-	table.SetHeaderLine(false)
-	table.SetBorder(false)
-	table.SetTablePadding("\t")
-	table.SetNoWhiteSpace(true)
-	table.SetAutoFormatHeaders(false)
+func getTable(out io.Writer, headers ...interface{}) table.Table {
+	headerFmt := color.New(color.FgHiYellow).SprintfFunc()
+	columnFmt := color.New(color.FgYellow).SprintfFunc()
 
-	opts := []tablewriter.Colors{}
-	for range headers {
-		opts = append(opts, tablewriter.Colors{tablewriter.FgHiYellowColor})
-	}
-	table.SetHeaderColor(opts...)
-	return table
+	tbl := table.New(headers...)
+	tbl.WithHeaderFormatter(headerFmt).WithFirstColumnFormatter(columnFmt)
+
+	return tbl
 }

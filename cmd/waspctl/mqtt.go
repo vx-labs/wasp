@@ -29,17 +29,17 @@ func Sessions(ctx context.Context, config *viper.Viper) *cobra.Command {
 				l.Fatal("failed to list connected sessions", zap.Error(err))
 			}
 			cancel()
-			table := getTable([]string{"ID", "Client ID", "Peer", "Mount Point", "Connected Since"}, cmd.OutOrStdout())
+			table := getTable(cmd.OutOrStdout(), "ID", "Client ID", "Peer", "Mount Point", "Connected Since")
 			for _, member := range out.GetSessionMetadatasList() {
-				table.Append([]string{
+				table.AddRow(
 					member.GetSessionID(),
 					member.GetClientID(),
 					fmt.Sprintf("%x", member.GetPeer()),
 					member.GetMountPoint(),
 					time.Since(time.Unix(member.GetConnectedAt(), 0)).String(),
-				})
+				)
 			}
-			table.Render()
+			table.Print()
 		},
 	})
 	return sessions
@@ -133,15 +133,16 @@ func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if err != nil {
 				l.Fatal("failed to list subscriptions", zap.Error(err))
 			}
-			table := getTable([]string{"Client ID", "Peer", "Pattern", "QoS"}, cmd.OutOrStdout())
+			table := getTable(cmd.OutOrStdout(), "Client ID", "Peer", "Pattern", "QoS")
 			for _, member := range out.GetSubscriptions() {
-				table.Append([]string{
+				table.AddRow(
 					member.GetSessionID(),
 					fmt.Sprintf("%x", member.GetPeer()),
 					string(member.GetPattern()),
-					fmt.Sprintf("%x", member.GetQoS())})
+					fmt.Sprintf("%x", member.GetQoS()),
+				)
 			}
-			table.Render()
+			table.Print()
 		},
 	}
 	createSubscription := &cobra.Command{
@@ -247,16 +248,16 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 				if err != nil {
 					l.Fatal("failed to list topics", zap.Error(err))
 				}
-				table := getTable([]string{"Topic", "Payload", "QoS", "Age"}, cmd.OutOrStdout())
+				table := getTable(cmd.OutOrStdout(), "Topic", "Payload", "QoS", "Age")
 				for _, member := range out.GetRetainedMessages() {
-					table.Append([]string{
+					table.AddRow(
 						string(member.Publish.GetTopic()),
 						string(member.Publish.GetPayload()),
 						qosString[member.Publish.Header.GetQos()],
 						humanize.Time(time.Unix(0, member.LastAdded)),
-					})
+					)
 				}
-				table.Render()
+				table.Print()
 			}
 		},
 	})
@@ -298,14 +299,13 @@ func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if err != nil {
 				l.Fatal("failed to list cluster members", zap.Error(err))
 			}
-			table := getTable([]string{"ID", "RPC Address", "Health"}, cmd.OutOrStdout())
+			table := getTable(cmd.OutOrStdout(), "ID", "RPC Address", "Health")
 			for _, member := range out.GetClusterMembers() {
-				table.Append([]string{
+				table.AddRow(
 					fmt.Sprintf("%x", member.ID),
 					member.Address,
-					member.HealthState,
-				})
-				table.Render()
+					member.HealthState)
+				table.Print()
 			}
 		},
 	})

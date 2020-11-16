@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/MauriceGit/skiplist v0.0.0-20191117202105-643e379adb62
 	github.com/dustin/go-humanize v1.0.0
+	github.com/fatih/color v1.9.0
 	github.com/gogo/protobuf v1.2.1
 	github.com/golang/protobuf v1.4.3
 	github.com/google/btree v1.0.0
@@ -17,9 +18,9 @@ require (
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mattn/go-colorable v0.1.6
 	github.com/oklog/ulid v1.3.1
-	github.com/olekukonko/tablewriter v0.0.4
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
+	github.com/rodaine/table v1.0.1
 	github.com/spf13/cobra v0.0.7
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.6.1
