@@ -23,7 +23,7 @@ func processPacket(ctx context.Context, local ReadState, state distributed.State
 		p.Topic = session.PrefixMountPoint(p.Topic)
 		switch p.Header.Qos {
 		case 0, 1:
-			err := publishHander(ctx, session.ID(), p)
+			err := publishHander(session.ID(), p)
 			if err != nil {
 				return err
 			}
@@ -40,7 +40,7 @@ func processPacket(ctx context.Context, local ReadState, state distributed.State
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				err := publishHander(ctx, session.ID(), p)
+				err := publishHander(session.ID(), p)
 				if err == nil {
 					pubcomp := &packet.PubComp{
 						Header:    &packet.Header{},

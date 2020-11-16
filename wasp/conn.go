@@ -327,7 +327,7 @@ func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session
 	if !session.Disconnected {
 		L(ctx).Debug("session lost")
 		if lwt := session.LWT(); lwt != nil {
-			err := s.publishHandler(ctx, session.ID(), lwt)
+			err := s.publishHandler(session.ID(), lwt)
 			if err != nil {
 				L(ctx).Warn("failed to publish session LWT", zap.Error(err))
 			}

@@ -233,7 +233,7 @@ func run(config *viper.Viper) {
 			panic(err)
 		}
 	})
-	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, func(ctx context.Context, sender string, publish *packet.Publish) error {
+	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, func(sender string, publish *packet.Publish) error {
 		for _, tap := range loadedTaps {
 			err := tap(ctx, sender, publish)
 			if err != nil {
