@@ -18,7 +18,8 @@ var (
 )
 
 var (
-	ErrInvalidPayload = errors.New("invalid payload")
+	ErrInvalidPayload         = errors.New("invalid payload")
+	ErrSessionMetadatasExists = errors.New("session metadatas already exists")
 )
 
 type Channel interface {

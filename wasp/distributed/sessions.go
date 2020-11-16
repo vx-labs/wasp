@@ -60,7 +60,11 @@ func (s *sessionMetadatasState) dump(event *api.StateBroadcastEvent) {
 func (s *sessionMetadatasState) Create(id string, clientID string, connectedAt int64, lwt *packet.Publish, mountpoint string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	session := api.SessionMetadatas{
+	session, ok := s.sessions[id]
+	if ok && crdt.IsEntryAdded(&session) {
+		return ErrSessionMetadatasExists
+	}
+	session = api.SessionMetadatas{
 		SessionID:   id,
 		ClientID:    clientID,
 		ConnectedAt: connectedAt,
@@ -96,7 +100,7 @@ func (s *sessionMetadatasState) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	session, ok := s.sessions[id]
-	if !ok {
+	if !ok || crdt.IsEntryRemoved(&session) {
 		return nil
 	}
 	session.LastDeleted = clock()
