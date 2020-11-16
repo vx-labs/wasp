@@ -277,7 +277,6 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 					l.Fatal("failed to delete topic", zap.Error(err))
 				}
 				fmt.Println(string(topic))
-
 			}
 		},
 	})
@@ -305,8 +304,8 @@ func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
 					fmt.Sprintf("%x", member.ID),
 					member.Address,
 					member.HealthState)
-				table.Print()
 			}
+			table.Print()
 		},
 	})
 	return cluster
