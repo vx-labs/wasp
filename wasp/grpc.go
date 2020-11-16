@@ -2,6 +2,8 @@ package wasp
 
 import (
 	"context"
+	"sort"
+	"strings"
 
 	"github.com/hashicorp/memberlist"
 	"github.com/vx-labs/cluster"
@@ -57,6 +59,9 @@ func (s *mqttServer) ListSessionMetadatas(ctx context.Context, r *api.ListSessio
 	for idx := range out {
 		out[idx] = &sessionMetadatas[idx]
 	}
+	sort.SliceStable(out, func(i, j int) bool {
+		return strings.Compare(out[i].SessionID, out[j].SessionID) < 0
+	})
 	return &api.ListSessionMetadatasResponse{SessionMetadatasList: out}, nil
 }
 func (s *mqttServer) ListRetainedMessages(ctx context.Context, r *api.ListRetainedMessagesRequest) (*api.ListRetainedMessagesResponse, error) {
@@ -103,6 +108,9 @@ func (s *mqttServer) ListClusterMembers(ctx context.Context, r *api.ListClusterM
 			})
 		}
 	}
+	sort.SliceStable(out.ClusterMembers, func(i, j int) bool {
+		return out.ClusterMembers[i].ID < out.ClusterMembers[j].ID
+	})
 	return out, nil
 }
 
