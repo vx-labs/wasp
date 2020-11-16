@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/crdt"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/audit"
 )
 
 type sessionMetadatasState struct {
@@ -16,17 +17,19 @@ type sessionMetadatasState struct {
 	peer     uint64
 	sessions map[string]api.SessionMetadatas
 	bcast    *memberlist.TransmitLimitedQueue
+	recorder audit.Recorder
 }
 
 var (
 	ErrSessionMetadatasNotFound = errors.New("session metadatas not found")
 )
 
-func newSessionMetadatasState(peer uint64, bcast *memberlist.TransmitLimitedQueue) *sessionMetadatasState {
+func newSessionMetadatasState(peer uint64, bcast *memberlist.TransmitLimitedQueue, recorder audit.Recorder) *sessionMetadatasState {
 	return &sessionMetadatasState{
 		sessions: make(map[string]api.SessionMetadatas),
 		peer:     peer,
 		bcast:    bcast,
+		recorder: recorder,
 	}
 }
 func (s *sessionMetadatasState) mergeSessions(sessions []*api.SessionMetadatas) error {
@@ -75,6 +78,10 @@ func (s *sessionMetadatasState) Create(id string, clientID string, connectedAt i
 	if err != nil {
 		return err
 	}
+	s.recorder.RecordEvent(mountpoint, audit.SessionConnected, map[string]string{
+		"session_id": id,
+		"client_id":  clientID,
+	})
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }
@@ -86,11 +93,11 @@ func (s *sessionMetadatasState) set(session api.SessionMetadatas) error {
 func (s *sessionMetadatasState) Delete(id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	session := api.SessionMetadatas{
-		SessionID:   id,
-		Peer:        s.peer,
-		LastDeleted: clock(),
+	session, ok := s.sessions[id]
+	if !ok {
+		return nil
 	}
+	session.LastDeleted = clock()
 	err := s.set(session)
 	if err != nil {
 		return err
@@ -101,6 +108,9 @@ func (s *sessionMetadatasState) Delete(id string) error {
 	if err != nil {
 		return err
 	}
+	s.recorder.RecordEvent(session.MountPoint, audit.SessionDisonnected, map[string]string{
+		"session_id": id,
+	})
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }

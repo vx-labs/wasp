@@ -1,6 +1,8 @@
 package distributed
 
 import (
+	"bytes"
+	"fmt"
 	"sync"
 
 	"github.com/golang/protobuf/proto"
@@ -8,6 +10,7 @@ import (
 	"github.com/vx-labs/wasp/crdt"
 	"github.com/vx-labs/wasp/subscriptions"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/audit"
 )
 
 type subscriptionsState struct {
@@ -15,13 +18,15 @@ type subscriptionsState struct {
 	peer          uint64
 	subscriptions subscriptions.Tree
 	bcast         *memberlist.TransmitLimitedQueue
+	recorder      audit.Recorder
 }
 
-func newSubscriptionState(peer uint64, bcast *memberlist.TransmitLimitedQueue) *subscriptionsState {
+func newSubscriptionState(peer uint64, bcast *memberlist.TransmitLimitedQueue, recorder audit.Recorder) *subscriptionsState {
 	return &subscriptionsState{
 		subscriptions: subscriptions.NewTree(),
 		peer:          peer,
 		bcast:         bcast,
+		recorder:      recorder,
 	}
 }
 
@@ -65,6 +70,12 @@ func (s *subscriptionsState) CreateFrom(sessionID string, peer uint64, pattern [
 	if err != nil {
 		return err
 	}
+	mountpointIdx := bytes.Index(pattern, []byte{'/'})
+	s.recorder.RecordEvent(string(pattern[:mountpointIdx]), audit.SubscriptionCreated, map[string]string{
+		"session_id": sessionID,
+		"pattern":    string(pattern),
+		"qos":        fmt.Sprintf("%d", qos),
+	})
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }
@@ -84,6 +95,11 @@ func (s *subscriptionsState) Delete(sessionID string, pattern []byte) error {
 	if err != nil {
 		return err
 	}
+	mountpointIdx := bytes.Index(pattern, []byte{'/'})
+	s.recorder.RecordEvent(string(pattern[:mountpointIdx]), audit.SubscriptionDeleted, map[string]string{
+		"session_id": sessionID,
+		"pattern":    string(pattern),
+	})
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }

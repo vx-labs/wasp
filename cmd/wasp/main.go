@@ -70,7 +70,6 @@ func run(config *viper.Viper) {
 		//TODO: return real cluster node count
 		NumNodes: func() int { return 2 },
 	}
-	dstate := distributed.NewState(id, bcast)
 
 	healthServer := health.NewServer()
 	healthServer.Resume()
@@ -104,6 +103,9 @@ func run(config *viper.Viper) {
 	if err != nil {
 		wasp.L(ctx).Fatal("failed to create audit recorder", zap.Error(err))
 	}
+
+	dstate := distributed.NewState(id, bcast, auditRecorder)
+
 	publishDistributor := &wasp.PublishDistributor{
 		ID:      id,
 		State:   dstate.Subscriptions(),

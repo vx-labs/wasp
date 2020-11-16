@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/audit"
 )
 
 var (
@@ -65,12 +66,12 @@ type state struct {
 	sessionMetadatas *sessionMetadatasState
 }
 
-func NewState(peer uint64, bcast *memberlist.TransmitLimitedQueue) State {
+func NewState(peer uint64, bcast *memberlist.TransmitLimitedQueue, recorder audit.Recorder) State {
 	return &state{
 		bcast:            bcast,
 		topics:           newTopicState(bcast),
-		sessionMetadatas: newSessionMetadatasState(peer, bcast),
-		subscriptions:    newSubscriptionState(peer, bcast),
+		sessionMetadatas: newSessionMetadatasState(peer, bcast, recorder),
+		subscriptions:    newSubscriptionState(peer, bcast, recorder),
 	}
 }
 
