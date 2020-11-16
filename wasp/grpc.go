@@ -113,6 +113,9 @@ func (s *mqttServer) ListClusterMembers(ctx context.Context, r *api.ListClusterM
 	})
 	return out, nil
 }
+func (s *mqttServer) JoinCluster(ctx context.Context, r *api.JoinClusterRequest) (*api.JoinClusterResponse, error) {
+	return &api.JoinClusterResponse{}, s.cluster.Gossip().Join(r.ClusterMemberAddresses)
+}
 
 func (s *mqttServer) Serve(grpcServer *grpc.Server) {
 	api.RegisterMQTTServer(grpcServer, s)

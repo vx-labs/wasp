@@ -78,6 +78,10 @@ message ListClusterMembersRequest {}
 message ListClusterMembersResponse {
   repeated ClusterMember ClusterMembers = 1;
 }
+message JoinClusterRequest {
+  repeated string ClusterMemberAddresses = 1;
+}
+message JoinClusterResponse {}
 service MQTT {
   rpc ListSubscriptions(ListSubscriptionsRequest)
       returns (ListSubscriptionsResponse) {}
@@ -97,4 +101,5 @@ service MQTT {
       returns (DeleteRetainedMessageResponse) {}
   rpc ListClusterMembers(ListClusterMembersRequest)
       returns (ListClusterMembersResponse) {}
+  rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse) {}
 }

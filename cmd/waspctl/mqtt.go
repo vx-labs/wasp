@@ -308,5 +308,20 @@ func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
 			table.Print()
 		},
 	})
+	cluster.AddCommand(&cobra.Command{
+		Use:  "join",
+		Args: cobra.MinimumNArgs(1),
+		Run: func(cmd *cobra.Command, nodes []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			_, err := api.NewMQTTClient(conn).JoinCluster(ctx, &api.JoinClusterRequest{
+				ClusterMemberAddresses: nodes,
+			})
+			cancel()
+			if err != nil {
+				l.Fatal("failed to list cluster members", zap.Error(err))
+			}
+		},
+	})
 	return cluster
 }
