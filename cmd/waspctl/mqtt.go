@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
@@ -219,6 +220,12 @@ func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
 	return subscriptions
 }
 
+var qosString = map[int32]string{
+	0: "at-most-once",
+	1: "at-least-once",
+	2: "exactly-once",
+}
+
 func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 	topics := &cobra.Command{
 		Use: "topics",
@@ -240,12 +247,13 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 				if err != nil {
 					l.Fatal("failed to list topics", zap.Error(err))
 				}
-				table := getTable([]string{"Topic", "Payload", "QoS"}, cmd.OutOrStdout())
+				table := getTable([]string{"Topic", "Payload", "QoS", "Age"}, cmd.OutOrStdout())
 				for _, member := range out.GetRetainedMessages() {
 					table.Append([]string{
 						string(member.Publish.GetTopic()),
 						string(member.Publish.GetPayload()),
-						fmt.Sprintf("%v", member.Publish.Header.GetQos()),
+						qosString[member.Publish.Header.GetQos()],
+						humanize.Time(time.Unix(0, member.LastAdded)),
 					})
 				}
 				table.Render()
