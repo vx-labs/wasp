@@ -28,11 +28,12 @@ func newNode() *Node {
 	}
 }
 
-func (n *Node) insert(topic format.Topic, msg []byte) error {
+func (n *Node) insert(topic format.Topic, msg []byte) (bool, error) {
 	topic, token := topic.Next()
 	if token == "" {
+		old := len(n.Buf) > 0
 		n.Buf = msg
-		return nil
+		return old, nil
 	}
 
 	if n.Children == nil {

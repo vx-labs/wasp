@@ -9,6 +9,7 @@ import (
 	"github.com/vx-labs/wasp/crdt"
 	"github.com/vx-labs/wasp/topics"
 	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/wasp/stats"
 )
 
 type topicsState struct {
@@ -49,7 +50,7 @@ func (t *topicsState) mergeMessages(messages []*api.RetainedMessage) error {
 					return err
 				}
 			} else if crdt.IsEntryRemoved(msg) {
-				err = t.delete(msg.Publish.Topic, msg)
+				err = t.set(msg.Publish.Topic, msg)
 				if err != nil {
 					return err
 				}
@@ -93,9 +94,11 @@ func (t *topicsState) set(topic []byte, msg *api.RetainedMessage) error {
 	if err != nil {
 		return err
 	}
-	err = t.tree.Insert(topic, buf)
-	if err != nil {
-		return err
+	old, err := t.tree.Insert(topic, buf)
+	if old && crdt.IsEntryRemoved(msg) {
+		stats.RetainedMessagesCount.Dec()
+	} else if !old && crdt.IsEntryAdded(msg) {
+		stats.RetainedMessagesCount.Inc()
 	}
 	return nil
 }
@@ -111,7 +114,7 @@ func (t *topicsState) Delete(topic []byte) error {
 		},
 		LastDeleted: clock(),
 	}
-	err := t.delete(topic, msg)
+	err := t.set(topic, msg)
 	if err != nil {
 		return err
 	}
@@ -122,18 +125,6 @@ func (t *topicsState) Delete(topic []byte) error {
 		return err
 	}
 	t.bcast.QueueBroadcast(simpleBroadcast(buf))
-	return nil
-}
-
-func (t *topicsState) delete(topic []byte, msg *api.RetainedMessage) error {
-	buf, err := proto.Marshal(msg)
-	if err != nil {
-		return err
-	}
-	err = t.tree.Insert(topic, buf)
-	if err != nil {
-		return err
-	}
 	return nil
 }
 

@@ -8,7 +8,7 @@ import (
 )
 
 type Store interface {
-	Insert(topic []byte, payload []byte) error
+	Insert(topic []byte, payload []byte) (bool, error)
 	Remove(topic []byte) error
 	Match(topic []byte, msg *[][]byte) error
 	Iterate(f NodeIterator)
@@ -55,7 +55,7 @@ func (t *tree) Iterate(f NodeIterator) {
 	defer t.mtx.RUnlock()
 	t.root.iterate(f)
 }
-func (t *tree) Insert(topic []byte, payload []byte) error {
+func (t *tree) Insert(topic []byte, payload []byte) (bool, error) {
 	t.mtx.Lock()
 	defer t.mtx.Unlock()
 	return t.root.insert(format.Topic(topic), payload)

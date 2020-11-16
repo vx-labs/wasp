@@ -18,9 +18,15 @@ func sortResults(out [][]byte) {
 func TestTree(t *testing.T) {
 	tree := NewTree()
 	t.Run("insert", func(t *testing.T) {
-		require.NoError(t, tree.Insert([]byte("devices/cars/a"), []byte("a")))
-		require.NoError(t, tree.Insert([]byte("devices/cars/b"), []byte("b")))
-		require.NoError(t, tree.Insert([]byte("devices/bicycle/c"), []byte("c")))
+		old, err := tree.Insert([]byte("devices/cars/a"), []byte("a"))
+		require.False(t, old)
+		require.NoError(t, err)
+		old,err = tree.Insert([]byte("devices/cars/b"), []byte("b"))
+		require.False(t, old)
+		require.NoError(t, err)
+		old,err = tree.Insert([]byte("devices/bicycle/c"), []byte("c"))
+		require.False(t, old)
+		require.NoError(t, err)
 	})
 	t.Run("match", func(t *testing.T) {
 		out := make([][]byte, 0)

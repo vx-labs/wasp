@@ -11,6 +11,7 @@ import (
 	"github.com/vx-labs/wasp/subscriptions"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/audit"
+	"github.com/vx-labs/wasp/wasp/stats"
 )
 
 type subscriptionsState struct {
@@ -76,6 +77,7 @@ func (s *subscriptionsState) CreateFrom(sessionID string, peer uint64, pattern [
 		"pattern":    string(pattern),
 		"qos":        fmt.Sprintf("%d", qos),
 	})
+	stats.SubscriptionsCount.Inc()
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }
@@ -100,6 +102,7 @@ func (s *subscriptionsState) Delete(sessionID string, pattern []byte) error {
 		"session_id": sessionID,
 		"pattern":    string(pattern),
 	})
+	stats.SubscriptionsCount.Dec()
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }

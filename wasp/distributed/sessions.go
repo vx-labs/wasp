@@ -10,6 +10,7 @@ import (
 	"github.com/vx-labs/wasp/crdt"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/audit"
+	"github.com/vx-labs/wasp/wasp/stats"
 )
 
 type sessionMetadatasState struct {
@@ -82,6 +83,7 @@ func (s *sessionMetadatasState) Create(id string, clientID string, connectedAt i
 		"session_id": id,
 		"client_id":  clientID,
 	})
+	stats.SessionsCount.Inc()
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }
@@ -111,6 +113,7 @@ func (s *sessionMetadatasState) Delete(id string) error {
 	s.recorder.RecordEvent(session.MountPoint, audit.SessionDisonnected, map[string]string{
 		"session_id": id,
 	})
+	stats.SessionsCount.Dec()
 	s.bcast.QueueBroadcast(simpleBroadcast(buf))
 	return nil
 }
