@@ -30,8 +30,12 @@ message Subscription {
   int64 LastDeleted = 6;
 }
 
-message SubscriptionList {
-  repeated Subscription Subscriptions = 1;
+message SubscriptionList { repeated Subscription Subscriptions = 1; }
+
+message ClusterMember {
+  uint64 ID = 1;
+  string Address = 2;
+  string HealthState = 3;
 }
 
 message StateBroadcastEvent {
@@ -40,13 +44,9 @@ message StateBroadcastEvent {
   repeated RetainedMessage RetainedMessages = 3;
 }
 
-message DistributeMessageRequest {
-  packet.Publish Message = 1;
-}
+message DistributeMessageRequest { packet.Publish Message = 1; }
 message DistributeMessageResponse {}
-message ScheduleMessageRequest {
-  packet.Publish Message = 1;
-}
+message ScheduleMessageRequest { packet.Publish Message = 1; }
 message ScheduleMessageResponse {}
 
 message ListSessionMetadatasRequest {}
@@ -66,21 +66,18 @@ message DeleteSubscriptionRequest {
   bytes Pattern = 3;
 }
 message DeleteSubscriptionResponse {}
-message ListSubscriptionsResponse {
-  repeated Subscription Subscriptions = 1;
-}
+message ListSubscriptionsResponse { repeated Subscription Subscriptions = 1; }
 message ListSubscriptionsRequest {}
-message ListRetainedMessagesRequest{
-  bytes Pattern = 1;
-}
-message ListRetainedMessagesResponse{
+message ListRetainedMessagesRequest { bytes Pattern = 1; }
+message ListRetainedMessagesResponse {
   repeated RetainedMessage RetainedMessages = 1;
 }
-message DeleteRetainedMessageRequest{
-  bytes Topic = 1;
+message DeleteRetainedMessageRequest { bytes Topic = 1; }
+message DeleteRetainedMessageResponse {}
+message ListClusterMembersRequest {}
+message ListClusterMembersResponse {
+  repeated ClusterMember ClusterMembers = 1;
 }
-message DeleteRetainedMessageResponse{}
-
 service MQTT {
   rpc ListSubscriptions(ListSubscriptionsRequest)
       returns (ListSubscriptionsResponse) {}
@@ -98,4 +95,6 @@ service MQTT {
       returns (ListRetainedMessagesResponse) {}
   rpc DeleteRetainedMessage(DeleteRetainedMessageRequest)
       returns (DeleteRetainedMessageResponse) {}
+  rpc ListClusterMembers(ListClusterMembersRequest)
+      returns (ListClusterMembersResponse) {}
 }

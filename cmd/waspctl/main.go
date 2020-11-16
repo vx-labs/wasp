@@ -48,6 +48,7 @@ func main() {
 	rootCmd.AddCommand(Subscriptions(ctx, config))
 	rootCmd.AddCommand(Messages(ctx, config))
 	rootCmd.AddCommand(Topics(ctx, config))
+	rootCmd.AddCommand(Cluster(ctx, config))
 
 	rootCmd.PersistentFlags().BoolP("insecure", "k", false, "Disable GRPC client-side TLS validation.")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Increase log verbosity.")

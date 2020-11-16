@@ -276,8 +276,38 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 					l.Fatal("failed to delete topic", zap.Error(err))
 				}
 				fmt.Println(string(topic))
+
 			}
 		},
 	})
 	return topics
+}
+
+func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
+	cluster := &cobra.Command{
+		Use: "cluster",
+	}
+	cluster.AddCommand(&cobra.Command{
+		Use:     "list",
+		Aliases: []string{"ls"},
+		Run: func(cmd *cobra.Command, _ []string) {
+			conn, l := mustDial(ctx, cmd, config)
+			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			out, err := api.NewMQTTClient(conn).ListClusterMembers(ctx, &api.ListClusterMembersRequest{})
+			cancel()
+			if err != nil {
+				l.Fatal("failed to list cluster members", zap.Error(err))
+			}
+			table := getTable([]string{"ID", "RPC Address", "Health"}, cmd.OutOrStdout())
+			for _, member := range out.GetClusterMembers() {
+				table.Append([]string{
+					fmt.Sprintf("%x", member.ID),
+					member.Address,
+					member.HealthState,
+				})
+				table.Render()
+			}
+		},
+	})
+	return cluster
 }

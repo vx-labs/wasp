@@ -113,8 +113,6 @@ func run(config *viper.Viper) {
 		Logger:  wasp.L(ctx),
 	}
 
-	mqttServer := wasp.NewMQTTServer(dstate, state, messageLog, publishDistributor)
-	mqttServer.Serve(server)
 	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
 	if err != nil {
 		wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
@@ -160,6 +158,9 @@ func run(config *viper.Viper) {
 	}, rpcDialer, server, wasp.L(ctx))
 
 	publishDistributor.Transport = clusterMultiNode
+
+	mqttServer := wasp.NewMQTTServer(dstate, state, messageLog, publishDistributor, clusterMultiNode)
+	mqttServer.Serve(server)
 
 	operations.Run("cluster listener", func(ctx context.Context) {
 		err := server.Serve(clusterListener)

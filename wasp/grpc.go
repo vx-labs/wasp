@@ -3,6 +3,9 @@ package wasp
 import (
 	"context"
 
+	"github.com/hashicorp/memberlist"
+	"github.com/vx-labs/cluster"
+	"github.com/vx-labs/cluster/membership"
 	"github.com/vx-labs/wasp/wasp/api"
 	"github.com/vx-labs/wasp/wasp/distributed"
 	"google.golang.org/grpc"
@@ -13,6 +16,7 @@ type mqttServer struct {
 	local       State
 	state       distributed.State
 	distributor *PublishDistributor
+	cluster     cluster.MultiNode
 }
 
 type RPCServer interface {
@@ -20,8 +24,8 @@ type RPCServer interface {
 	Serve(grpcServer *grpc.Server)
 }
 
-func NewMQTTServer(state distributed.State, local State, storage messageLog, distributor *PublishDistributor) RPCServer {
-	return &mqttServer{state: state, local: local, storage: storage, distributor: distributor}
+func NewMQTTServer(state distributed.State, local State, storage messageLog, distributor *PublishDistributor, node cluster.MultiNode) RPCServer {
+	return &mqttServer{state: state, local: local, storage: storage, distributor: distributor, cluster: node}
 }
 
 func (s *mqttServer) CreateSubscription(ctx context.Context, r *api.CreateSubscriptionRequest) (*api.CreateSubscriptionResponse, error) {
@@ -69,6 +73,39 @@ func (s *mqttServer) ListRetainedMessages(ctx context.Context, r *api.ListRetain
 func (s *mqttServer) DeleteRetainedMessage(ctx context.Context, r *api.DeleteRetainedMessageRequest) (*api.DeleteRetainedMessageResponse, error) {
 	return &api.DeleteRetainedMessageResponse{}, s.state.Topics().Delete(r.Topic)
 }
+
+func stringClusterState(s memberlist.NodeStateType) string {
+	switch s {
+	case memberlist.StateAlive:
+		return "alive"
+	case memberlist.StateDead:
+		return "dead"
+	case memberlist.StateSuspect:
+		return "suspect"
+	case memberlist.StateLeft:
+		return "left"
+	default:
+		return "unknown"
+	}
+}
+func (s *mqttServer) ListClusterMembers(ctx context.Context, r *api.ListClusterMembersRequest) (*api.ListClusterMembersResponse, error) {
+	nodes := s.cluster.Gossip().GossipMembers()
+	out := &api.ListClusterMembersResponse{
+		ClusterMembers: []*api.ClusterMember{},
+	}
+	for _, n := range nodes {
+		meta, err := membership.DecodeMD(n.Meta)
+		if err == nil {
+			out.ClusterMembers = append(out.ClusterMembers, &api.ClusterMember{
+				ID:          meta.ID,
+				Address:     meta.RPCAddress,
+				HealthState: stringClusterState(n.State),
+			})
+		}
+	}
+	return out, nil
+}
+
 func (s *mqttServer) Serve(grpcServer *grpc.Server) {
 	api.RegisterMQTTServer(grpcServer, s)
 }
