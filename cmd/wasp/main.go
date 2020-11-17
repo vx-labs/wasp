@@ -65,10 +65,16 @@ func run(config *viper.Viper) {
 	}
 	operations := async.NewOperations(ctx, wasp.L(ctx))
 
+	var clusterMultiNode cluster.MultiNode
+
 	bcast := &memberlist.TransmitLimitedQueue{
 		RetransmitMult: 3,
-		//TODO: return real cluster node count
-		NumNodes: func() int { return 2 },
+		NumNodes: func() int {
+			if clusterMultiNode == nil {
+				return 1
+			}
+			return clusterMultiNode.Gossip().MemberCount()
+		},
 	}
 
 	healthServer := health.NewServer()
@@ -133,7 +139,7 @@ func run(config *viper.Viper) {
 
 	memberManager := wasp.NewNodeMemberManager(id, messageLog, dstate)
 
-	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
+	clusterMultiNode = cluster.NewMultiNode(cluster.NodeConfig{
 		ID:            id,
 		ServiceName:   "wasp",
 		DataDirectory: config.GetString("data-dir"),
