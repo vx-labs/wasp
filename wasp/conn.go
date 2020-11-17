@@ -127,7 +127,7 @@ func (s *manager) runTimeouter(ctx context.Context) {
 			return
 		case t := <-ticker.C:
 			for _, conn := range s.epoll.Expire(t) {
-				session := s.local.GetSession(conn.ID)
+				session := s.local.Get(conn.ID)
 				if session != nil {
 					s.shutdownSession(ctx, session)
 				}
@@ -282,7 +282,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 		return err
 	}
 	L(ctx).Debug("session metadata created")
-	s.local.SaveSession(session.ID(), session)
+	s.local.Create(session.ID(), session)
 	s.writer.Register(session.ID(), c)
 	err = s.epoll.Add(epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
 	if err != nil {
@@ -299,7 +299,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 }
 
 func (s *connectionWorker) processConn(ctx context.Context, ev epoll.Event) {
-	session := s.manager.local.GetSession(ev.ID)
+	session := s.manager.local.Get(ev.ID)
 	if session == nil {
 		s.manager.epoll.Remove(ev.FD)
 		return
@@ -317,7 +317,7 @@ func (s *connectionWorker) processConn(ctx context.Context, ev epoll.Event) {
 }
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID())
-	s.local.CloseSession(session.ID())
+	s.local.Delete(session.ID())
 	topics := session.GetTopics()
 	for idx := range topics {
 		s.state.Subscriptions().Delete(session.ID(), topics[idx])

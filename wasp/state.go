@@ -2,39 +2,54 @@ package wasp
 
 import (
 	"github.com/vx-labs/wasp/wasp/sessions"
-	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/zond/gotomic"
 )
 
 type LocalState interface {
-	GetSession(id string) *sessions.Session
+	Get(id string) *sessions.Session
 	ListSessions() []*sessions.Session
-	SaveSession(id string, session *sessions.Session)
-	CloseSession(id string)
+	Create(id string, session *sessions.Session) *sessions.Session
+	Delete(id string) *sessions.Session
 }
 
 type state struct {
 	id       uint64
-	sessions sessions.Store
+	sessions *gotomic.Hash
 }
 
 func NewState(id uint64) LocalState {
 	return &state{
 		id:       id,
-		sessions: sessions.NewStore(),
+		sessions: gotomic.NewHash(),
 	}
 }
 
-func (s *state) GetSession(id string) *sessions.Session {
-	return s.sessions.Get(id)
+func (s *state) Get(id string) *sessions.Session {
+	v, ok := s.sessions.Get(gotomic.StringKey(id))
+	if !ok {
+		return nil
+	}
+	return v.(*sessions.Session)
 }
 func (s *state) ListSessions() []*sessions.Session {
-	return s.sessions.All()
+	out := []*sessions.Session{}
+	s.sessions.Each(func(k gotomic.Hashable, v gotomic.Thing) bool {
+		out = append(out, v.(*sessions.Session))
+		return false
+	})
+	return out
 }
-func (s *state) SaveSession(id string, session *sessions.Session) {
-	s.sessions.Save(id, session)
-	stats.SessionsCount.Set(float64(s.sessions.Count()))
+func (s *state) Create(id string, session *sessions.Session) *sessions.Session {
+	old, ok := s.sessions.Put(gotomic.StringKey(id), session)
+	if ok {
+		return old.(*sessions.Session)
+	}
+	return nil
 }
-func (s *state) CloseSession(id string) {
-	s.sessions.Delete(id)
-	stats.SessionsCount.Set(float64(s.sessions.Count()))
+func (s *state) Delete(id string) *sessions.Session {
+	old, ok := s.sessions.Delete(gotomic.StringKey(id))
+	if ok {
+		return old.(*sessions.Session)
+	}
+	return nil
 }

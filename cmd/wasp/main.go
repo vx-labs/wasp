@@ -133,18 +133,17 @@ func run(config *viper.Viper) {
 
 	memberManager := wasp.NewNodeMemberManager(id, messageLog, dstate)
 
-	raftConfig := cluster.RaftConfig{
-		Network: cluster.NetworkConfig{
-			AdvertizedHost: config.GetString("raft-advertized-address"),
-			AdvertizedPort: config.GetInt("raft-advertized-port"),
-			ListeningPort:  config.GetInt("raft-port"),
-		},
-	}
 	clusterMultiNode := cluster.NewMultiNode(cluster.NodeConfig{
 		ID:            id,
 		ServiceName:   "wasp",
 		DataDirectory: config.GetString("data-dir"),
-		RaftConfig:    raftConfig,
+		RaftConfig: cluster.RaftConfig{
+			Network: cluster.NetworkConfig{
+				AdvertizedHost: config.GetString("raft-advertized-address"),
+				AdvertizedPort: config.GetInt("raft-advertized-port"),
+				ListeningPort:  config.GetInt("raft-port"),
+			},
+		},
 		GossipConfig: cluster.GossipConfig{
 			JoinList:                 joinList,
 			DistributedStateDelegate: dstate.Distributor(),

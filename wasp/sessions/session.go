@@ -19,6 +19,17 @@ type Session struct {
 	transport         string
 }
 
+func prefixMountPoint(mountPoint string, t []byte) []byte {
+	out := make([]byte, len(t)+len(mountPoint)+1)
+	copy(out[:len(mountPoint)], []byte(mountPoint))
+	out[len(mountPoint)] = '/'
+	copy(out[len(mountPoint)+1:], t)
+	return out
+}
+func trimMountPoint(mountPoint string, t []byte) []byte {
+	return t[len(mountPoint)+1:] // Trim mountpoint + /
+}
+
 func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Session, error) {
 	s := &Session{
 		id:         id,

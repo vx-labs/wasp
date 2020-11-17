@@ -116,7 +116,7 @@ func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, co
 	}).Add(float64(publish.Length()))
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.local.GetSession(session.ID()) != nil {
+		if expired && w.local.Get(session.ID()) != nil {
 			w.sendQoS1(publish, session, conn)
 		} else {
 			w.midPool.Push(stored.(*packet.Publish).MessageId)
@@ -135,7 +135,7 @@ func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, 
 	}).Add(float64(pubRel.Length()))
 
 	w.inflights.Insert(session.ID(), pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.local.GetSession(session.ID()) != nil {
+		if expired && w.local.Get(session.ID()) != nil {
 			w.completeQoS2(pubRel, session, conn)
 		} else {
 			w.midPool.Push(stored.(*packet.PubRel).MessageId)
@@ -150,7 +150,7 @@ func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, co
 	}).Add(float64(publish.Length()))
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.local.GetSession(session.ID()) != nil {
+		if expired && w.local.Get(session.ID()) != nil {
 			w.sendQoS2(publish, session, conn)
 		} else {
 			pubRel := &packet.PubRel{
@@ -187,7 +187,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 	for idx := range recipients {
 		sessionID := recipients[idx]
 		conn := w.sessions[sessionID]
-		session := w.local.GetSession(sessionID)
+		session := w.local.Get(sessionID)
 
 		if conn != nil {
 			publish := &packet.Publish{
