@@ -298,12 +298,13 @@ func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if err != nil {
 				l.Fatal("failed to list cluster members", zap.Error(err))
 			}
-			table := getTable(cmd.OutOrStdout(), "ID", "RPC Address", "Health")
+			table := getTable(cmd.OutOrStdout(), "ID", "RPC Address", "Health", "Version")
 			for _, member := range out.GetClusterMembers() {
 				table.AddRow(
 					fmt.Sprintf("%x", member.ID),
 					member.Address,
-					member.HealthState)
+					member.HealthState,
+					member.Version)
 			}
 			table.Print()
 		},

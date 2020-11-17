@@ -142,6 +142,7 @@ func run(config *viper.Viper) {
 	clusterMultiNode = cluster.NewMultiNode(cluster.NodeConfig{
 		ID:            id,
 		ServiceName:   "wasp",
+		Version:       BuiltVersion,
 		DataDirectory: config.GetString("data-dir"),
 		RaftConfig: cluster.RaftConfig{
 			Network: cluster.NetworkConfig{

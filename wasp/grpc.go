@@ -105,6 +105,7 @@ func (s *mqttServer) ListClusterMembers(ctx context.Context, r *api.ListClusterM
 				ID:          meta.ID,
 				Address:     meta.RPCAddress,
 				HealthState: stringClusterState(n.State),
+				Version:     meta.Version,
 			})
 		}
 	}

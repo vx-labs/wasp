@@ -36,6 +36,7 @@ message ClusterMember {
   uint64 ID = 1;
   string Address = 2;
   string HealthState = 3;
+  string Version = 4;
 }
 
 message StateBroadcastEvent {
