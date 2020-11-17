@@ -15,7 +15,7 @@ import (
 
 type mqttServer struct {
 	storage     messageLog
-	local       State
+	local       LocalState
 	state       distributed.State
 	distributor *PublishDistributor
 	cluster     cluster.MultiNode
@@ -26,7 +26,7 @@ type RPCServer interface {
 	Serve(grpcServer *grpc.Server)
 }
 
-func NewMQTTServer(state distributed.State, local State, storage messageLog, distributor *PublishDistributor, node cluster.MultiNode) RPCServer {
+func NewMQTTServer(state distributed.State, local LocalState, storage messageLog, distributor *PublishDistributor, node cluster.MultiNode) RPCServer {
 	return &mqttServer{state: state, local: local, storage: storage, distributor: distributor, cluster: node}
 }
 

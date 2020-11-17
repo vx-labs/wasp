@@ -22,10 +22,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+type Manager interface {
+	Run(ctx context.Context)
+	Setup(ctx context.Context, c transport.Metadata)
+	DisconnectClients(ctx context.Context)
+}
+
 type manager struct {
 	authHandler     AuthenticationHandler
 	state           distributed.State
-	local           ReadState
+	local           LocalState
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
 	connectionsJobs chan chan epoll.Event
@@ -40,7 +46,7 @@ type setupWorker struct {
 	encoder     *encoder.Encoder
 	authHandler AuthenticationHandler
 	state       distributed.State
-	local       ReadState
+	local       LocalState
 	writer      Writer
 	epoll       epoll.Instance
 }
@@ -60,7 +66,7 @@ var (
 	connWorkers int = 50
 )
 
-func NewConnectionManager(authHandler AuthenticationHandler, local ReadState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) *manager {
+func NewConnectionManager(authHandler AuthenticationHandler, local LocalState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) Manager {
 
 	epoller, err := epoll.NewInstance(connWorkers)
 	if err != nil {

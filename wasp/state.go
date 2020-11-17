@@ -5,14 +5,11 @@ import (
 	"github.com/vx-labs/wasp/wasp/stats"
 )
 
-type ReadState interface {
+type LocalState interface {
 	GetSession(id string) *sessions.Session
 	ListSessions() []*sessions.Session
 	SaveSession(id string, session *sessions.Session)
 	CloseSession(id string)
-}
-type State interface {
-	ReadState
 }
 
 type state struct {
@@ -20,7 +17,7 @@ type state struct {
 	sessions sessions.Store
 }
 
-func NewState(id uint64) State {
+func NewState(id uint64) LocalState {
 	return &state{
 		id:       id,
 		sessions: sessions.NewStore(),

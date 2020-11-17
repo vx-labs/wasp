@@ -49,7 +49,7 @@ type writer struct {
 	sessions  map[string]transport.TimeoutReadWriteCloser
 	queue     chan RoutedMessage
 	state     distributed.SubscriptionsState
-	local     State
+	local     LocalState
 	inflights ack.Queue
 	midPool   *gotomic.List
 	encoder   *encoder.Encoder
@@ -63,7 +63,7 @@ type Writer interface {
 	Send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish)
 }
 
-func NewWriter(peerID uint64, subscriptions distributed.SubscriptionsState, local State, ackQueue ack.Queue) *writer {
+func NewWriter(peerID uint64, subscriptions distributed.SubscriptionsState, local LocalState, ackQueue ack.Queue) *writer {
 	midPool := gotomic.NewList()
 	var i int32
 	for i = 500; i > 0; i-- {

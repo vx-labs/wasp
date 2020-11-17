@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-func processPacket(ctx context.Context, local ReadState, state distributed.State, publishHander PublishHandler, writer Writer, inflights ack.Queue, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
+func processPacket(ctx context.Context, local LocalState, state distributed.State, publishHander PublishHandler, writer Writer, inflights ack.Queue, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
