@@ -2,6 +2,7 @@ package wasp
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 
 	"github.com/vx-labs/wasp/wasp/sessions"
@@ -18,6 +19,7 @@ func benchmarkFor(st func() LocalState, n int) func(b *testing.B) {
 		b.ResetTimer()
 		b.StartTimer()
 		for i := 0; i < b.N; i++ {
+			s.Create("40", &sessions.Session{})
 			s.Get("40")
 		}
 	}
@@ -33,12 +35,14 @@ func benchmarkParallelFor(st func() LocalState, n int) func(b *testing.B) {
 		b.StartTimer()
 		b.RunParallel(func(p *testing.PB) {
 			for p.Next() {
+				s.Create("40", &sessions.Session{})
 				s.Get("40")
 			}
 		})
 	}
 }
 func BenchmarkState(b *testing.B) {
+	runtime.GOMAXPROCS(runtime.NumCPU())
 	b.Run("get", func(b *testing.B) {
 		b.Run("hashmap", func(b *testing.B) {
 			prov := func() LocalState { return &hashmapState{sessions: gotomic.NewHash()} }
