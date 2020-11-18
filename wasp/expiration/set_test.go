@@ -58,12 +58,15 @@ func BenchmarkSet(b *testing.B) {
 	b.Run("update", func(b *testing.B) {
 		benchUpdateFunc := func(n int) func(b *testing.B) {
 			return func(b *testing.B) {
+				b.StopTimer()
 				l := NewList()
 				for i := 0; i < n; i++ {
 					l.Insert(key(i), time.Time{}.Add(time.Duration(i)*time.Second))
 				}
 				old := time.Time{}.Add(time.Duration(30) * time.Second)
 				new := time.Time{}.Add(time.Duration(50) * time.Second)
+				b.ResetTimer()
+				b.StartTimer()
 				for i := 0; i < b.N; i++ {
 					l.Update(key(30), old, new)
 					l.Update(key(30), new, old)
