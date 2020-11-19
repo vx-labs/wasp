@@ -13,7 +13,7 @@ type list struct {
 	tree skiplist.SkipList
 }
 
-func NewList() List {
+func newSkipList() List {
 	return &list{tree: skiplist.New()}
 }
 

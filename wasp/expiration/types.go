@@ -13,3 +13,7 @@ type List interface {
 	Expire(now time.Time) []interface{}
 	Reset()
 }
+
+func NewList() List {
+	return newSkipList()
+}
