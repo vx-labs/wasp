@@ -5,32 +5,8 @@ import (
 	"time"
 
 	"github.com/MauriceGit/skiplist"
-	"github.com/google/btree"
 	"github.com/zond/gotomic"
 )
-
-type bucket struct {
-	data     *gotomic.Hash
-	deadline time.Time
-}
-
-func (e *bucket) Less(b btree.Item) bool {
-	return e.deadline.Before(b.(*bucket).deadline)
-}
-func (e *bucket) ExtractKey() float64 {
-	return float64(e.deadline.Unix())
-}
-func (e *bucket) String() string {
-	return e.deadline.String()
-}
-
-type List interface {
-	Insert(id gotomic.Hashable, deadline time.Time)
-	Delete(id gotomic.Hashable, deadline time.Time) bool
-	Update(id gotomic.Hashable, old time.Time, new time.Time)
-	Expire(now time.Time) []interface{}
-	Reset()
-}
 
 type list struct {
 	mtx  sync.Mutex
