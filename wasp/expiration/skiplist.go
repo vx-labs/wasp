@@ -9,7 +9,7 @@ import (
 )
 
 type list struct {
-	mtx  sync.Mutex
+	mtx  sync.RWMutex
 	tree skiplist.SkipList
 }
 
@@ -35,27 +35,48 @@ func (l *list) delete(id gotomic.Hashable, deadline time.Time) bool {
 	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
 	if ok {
 		bucket := set.GetValue().(*bucket)
-		bucket.data.Delete(id)
+		return bucket.delete(id, deadline)
 	}
 	return ok
+}
+func (l *list) getBucket(deadline time.Time) *bucket {
+	l.mtx.RLock()
+	var b *bucket
+	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
+	l.mtx.RUnlock()
+	if !ok {
+		l.mtx.Lock()
+		defer l.mtx.Unlock()
+		set, ok = l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
+		if ok {
+			return set.GetValue().(*bucket)
+		}
+		b = &bucket{data: []item{}, deadline: deadline.Round(time.Second)}
+		l.tree.Insert(b)
+		return b
+	}
+	return set.GetValue().(*bucket)
 }
 func (l *list) insert(id gotomic.Hashable, deadline time.Time) {
 	var b *bucket
 	set, ok := l.tree.Find(&bucket{deadline: deadline.Round(time.Second)})
 	if !ok {
-		b = &bucket{data: gotomic.NewHash(), deadline: deadline.Round(time.Second)}
+		b = &bucket{data: []item{
+			{deadline: deadline, value: id},
+		}, deadline: deadline.Round(time.Second)}
 		l.tree.Insert(b)
 	} else {
 		b = set.GetValue().(*bucket)
+		b.put(id, deadline)
 	}
-	b.data.PutIfMissing(id, nil)
 }
 
 func (l *list) Update(id gotomic.Hashable, old time.Time, new time.Time) {
-	l.mtx.Lock()
-	defer l.mtx.Unlock()
-	l.delete(id, old)
-	l.insert(id, new)
+	b := l.getBucket(old)
+	b.delete(id, old)
+
+	b = l.getBucket(new)
+	b.put(id, new)
 }
 
 func (l *list) Expire(now time.Time) []interface{} {
@@ -67,8 +88,8 @@ func (l *list) Expire(now time.Time) []interface{} {
 	first := elt
 	for elt != nil && elt.GetValue().(*bucket).deadline.Before(now) {
 		set := elt.GetValue().(*bucket)
-		for id := range set.data.ToMap() {
-			out = append(out, id)
+		for _, v := range set.data {
+			out = append(out, v.value)
 		}
 		deleted = append(deleted, set.deadline)
 		elt = l.tree.Next(elt)

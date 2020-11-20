@@ -9,7 +9,7 @@ import (
 )
 
 // A pqueue implements heap.Interface and holds Items.
-type pqueue []*mapBucket
+type pqueue []*bucket
 
 func (pq pqueue) Len() int { return len(pq) }
 
@@ -25,7 +25,7 @@ func (pq pqueue) Swap(i, j int) {
 
 func (pq *pqueue) Push(x interface{}) {
 	n := len(*pq)
-	item := x.(*mapBucket)
+	item := x.(*bucket)
 	item.index = n
 	*pq = append(*pq, item)
 }
@@ -39,7 +39,7 @@ func (pq *pqueue) Pop() interface{} {
 	*pq = old[0 : n-1]
 	return item
 }
-func (pq *pqueue) Peek() *mapBucket {
+func (pq *pqueue) Peek() *bucket {
 	i := *pq
 	if len(i) < 1 {
 		return nil
@@ -49,7 +49,7 @@ func (pq *pqueue) Peek() *mapBucket {
 
 func newPQList() List {
 	list := &pqList{
-		buckets: make(map[time.Time]*mapBucket),
+		buckets: make(map[time.Time]*bucket),
 		pq:      make(pqueue, 0),
 	}
 	heap.Init(&list.pq)
@@ -59,52 +59,50 @@ func newPQList() List {
 type pqList struct {
 	mtx     sync.RWMutex
 	pq      pqueue
-	buckets map[time.Time]*mapBucket
+	buckets map[time.Time]*bucket
 }
 
 func (pq *pqList) Insert(id gotomic.Hashable, expireAt time.Time) {
-	pq.mtx.Lock()
-	defer pq.mtx.Unlock()
 	pq.insert(id, expireAt)
 }
 func (pq *pqList) insert(id gotomic.Hashable, expireAt time.Time) {
+	pq.mtx.RLock()
 	deadline := expireAt.Round(time.Second)
-	bucket, ok := pq.buckets[deadline]
+	elt, ok := pq.buckets[deadline]
+	pq.mtx.RUnlock()
 	if !ok {
-		bucket = &mapBucket{
-			data: map[interface{}]struct{}{
-				id: {},
-			},
-			deadline: deadline,
+		pq.mtx.Lock()
+		defer pq.mtx.Unlock()
+		if elt, ok = pq.buckets[deadline]; !ok {
+			elt = &bucket{
+				data: []item{
+					{value: id, deadline: expireAt},
+				},
+				deadline: deadline,
+			}
+			pq.buckets[deadline] = elt
+			heap.Push(&pq.pq, elt)
+			return
 		}
-		pq.buckets[deadline] = bucket
-		heap.Push(&pq.pq, bucket)
-	} else {
-		bucket.data[id] = struct{}{}
 	}
+	elt.put(id, expireAt)
 }
 func (pq *pqList) Delete(id gotomic.Hashable, expireAt time.Time) bool {
-	pq.mtx.Lock()
-	defer pq.mtx.Unlock()
 	return pq.delete(id, expireAt)
 }
 func (pq *pqList) delete(id gotomic.Hashable, expireAt time.Time) bool {
+	pq.mtx.RLock()
+	defer pq.mtx.RUnlock()
 	deadline := expireAt.Round(time.Second)
 	bucket, ok := pq.buckets[deadline]
 	if !ok {
 		return false
 	}
-	delete(bucket.data, id)
-	if len(bucket.data) == 0 {
-		heap.Remove(&pq.pq, bucket.index)
-		delete(pq.buckets, deadline)
-	}
+	bucket.delete(id, expireAt)
 	return true
 }
 
 func (pq *pqList) Update(id gotomic.Hashable, old time.Time, new time.Time) {
-	pq.mtx.Lock()
-	defer pq.mtx.Unlock()
 	if pq.delete(id, old) {
 		pq.insert(id, new)
 	}
@@ -119,10 +117,9 @@ func (pq *pqList) Expire(now time.Time) []interface{} {
 		if v == nil || !v.deadline.Before(now) {
 			return out
 		}
-
-		expired := heap.Pop(&pq.pq).(*mapBucket)
-		for v := range expired.data {
-			out = append(out, v)
+		expired := heap.Pop(&pq.pq).(*bucket)
+		for _, v := range expired.data {
+			out = append(out, v.value)
 		}
 	}
 }

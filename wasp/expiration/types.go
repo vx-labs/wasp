@@ -15,5 +15,5 @@ type List interface {
 }
 
 func NewList() List {
-	return newSkipList()
+	return newPQList()
 }
