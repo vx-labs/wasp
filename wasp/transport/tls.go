@@ -34,7 +34,7 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 			return
 		}
 		state := c.ConnectionState()
-		go handler(Metadata{
+		handler(Metadata{
 			Channel:         c,
 			Encrypted:       true,
 			EncryptionState: &state,
