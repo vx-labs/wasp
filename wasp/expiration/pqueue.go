@@ -4,8 +4,6 @@ import (
 	"container/heap"
 	"sync"
 	"time"
-
-	"github.com/zond/gotomic"
 )
 
 // A pqueue implements heap.Interface and holds Items.
@@ -62,10 +60,10 @@ type pqList struct {
 	buckets map[time.Time]*bucket
 }
 
-func (pq *pqList) Insert(id gotomic.Hashable, expireAt time.Time) {
+func (pq *pqList) Insert(id interface{}, expireAt time.Time) {
 	pq.insert(id, expireAt)
 }
-func (pq *pqList) insert(id gotomic.Hashable, expireAt time.Time) {
+func (pq *pqList) insert(id interface{}, expireAt time.Time) {
 	pq.mtx.RLock()
 	deadline := expireAt.Round(time.Second)
 	elt, ok := pq.buckets[deadline]
@@ -87,10 +85,10 @@ func (pq *pqList) insert(id gotomic.Hashable, expireAt time.Time) {
 	}
 	elt.put(id, expireAt)
 }
-func (pq *pqList) Delete(id gotomic.Hashable, expireAt time.Time) bool {
+func (pq *pqList) Delete(id interface{}, expireAt time.Time) bool {
 	return pq.delete(id, expireAt)
 }
-func (pq *pqList) delete(id gotomic.Hashable, expireAt time.Time) bool {
+func (pq *pqList) delete(id interface{}, expireAt time.Time) bool {
 	pq.mtx.RLock()
 	defer pq.mtx.RUnlock()
 	deadline := expireAt.Round(time.Second)
@@ -102,7 +100,7 @@ func (pq *pqList) delete(id gotomic.Hashable, expireAt time.Time) bool {
 	return true
 }
 
-func (pq *pqList) Update(id gotomic.Hashable, old time.Time, new time.Time) {
+func (pq *pqList) Update(id interface{}, old time.Time, new time.Time) {
 	if pq.delete(id, old) {
 		pq.insert(id, new)
 	}
