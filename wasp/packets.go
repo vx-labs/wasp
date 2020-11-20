@@ -47,6 +47,10 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 		return ErrProtocolViolation
 	case *packet.Publish:
 		p.Topic = session.PrefixMountPoint(p.Topic)
+		if c == nil {
+			// c is nil: we are sending a LWT.
+			return processor.publishHandler(session.ID(), p)
+		}
 		switch p.Header.Qos {
 		case 0, 1:
 			err := processor.publishHandler(session.ID(), p)

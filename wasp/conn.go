@@ -36,7 +36,6 @@ type manager struct {
 	setupJobs       chan chan transport.Metadata
 	connectionsJobs chan chan epoll.Event
 	epoll           epoll.Instance
-	publishHandler  PublishHandler
 	inflights       ack.Queue
 	wg              *sync.WaitGroup
 	packetProcessor PacketProcessor
@@ -332,7 +331,7 @@ func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session
 	if !session.Disconnected {
 		L(ctx).Debug("session lost")
 		if lwt := session.LWT(); lwt != nil {
-			err := s.publishHandler(session.ID(), lwt)
+			err := s.packetProcessor.Process(ctx, session, nil, lwt)
 			if err != nil {
 				L(ctx).Warn("failed to publish session LWT", zap.Error(err))
 			}

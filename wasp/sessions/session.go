@@ -75,7 +75,7 @@ func (s *Session) processConnect(connect *packet.Connect) error {
 	if len(connect.WillTopic) > 0 {
 		buf, err := proto.Marshal(&packet.Publish{
 			Header:  &packet.Header{Retain: connect.WillRetain, Qos: connect.WillQos},
-			Topic:   prefixMountPoint(s.mountPoint, connect.WillTopic),
+			Topic:   connect.WillTopic,
 			Payload: connect.WillPayload,
 		})
 		if err != nil {
