@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/auth"
+	"github.com/vx-labs/wasp/v4/wasp/auth"
 )
 
 var (

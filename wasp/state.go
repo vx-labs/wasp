@@ -3,7 +3,7 @@ package wasp
 import (
 	"sync"
 
-	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/v4/wasp/sessions"
 	"github.com/zond/gotomic"
 )
 

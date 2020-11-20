@@ -16,7 +16,7 @@ jobs:
       run: |
         go get github.com/mitchellh/gox
         go mod vendor
-        gox -output "artifacts/{{.Dir}}_{{.OS}}-{{.Arch}}" -ldflags="-s -w -X github.com/vx-labs/wasp/cmd/wasp/version.BuiltVersion=${GITHUB_SHA}" -osarch="linux/amd64" -osarch="darwin/amd64" ./cmd/wasp/
+        gox -output "artifacts/{{.Dir}}_{{.OS}}-{{.Arch}}" -ldflags="-s -w -X github.com/vx-labs/wasp/v4/cmd/wasp/version.BuiltVersion=${GITHUB_SHA}" -osarch="linux/amd64" -osarch="darwin/amd64" ./cmd/wasp/
         ls artifacts/
     - name: Create Release
       id: create_release

@@ -1,11 +1,11 @@
 package topics
 
-//go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/topics/ --go_out=plugins=grpc:. topics.proto
+//go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/v4/topics/ --go_out=plugins=grpc:. topics.proto
 
 import (
 	"errors"
 
-	"github.com/vx-labs/wasp/wasp/format"
+	"github.com/vx-labs/wasp/v4/wasp/format"
 )
 
 const (

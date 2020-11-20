@@ -1,4 +1,4 @@
-module github.com/vx-labs/wasp
+module github.com/vx-labs/wasp/v4
 
 go 1.14
 

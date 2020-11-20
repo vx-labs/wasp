@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/expiration"
+	"github.com/vx-labs/wasp/v4/wasp/expiration"
 	"github.com/zond/gotomic"
 )
 

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/vx-labs/wasp/wasp/expiration"
+	"github.com/vx-labs/wasp/v4/wasp/expiration"
 	"golang.org/x/sys/unix"
 )
 

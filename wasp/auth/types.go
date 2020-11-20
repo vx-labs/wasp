@@ -1,6 +1,6 @@
 package auth
 
-//go:generate protoc -I ${GOPATH}/src/github.com/vx-labs/wasp/vendor -I ${GOPATH}/src/github.com/vx-labs/wasp/wasp/auth/ auth.proto --go_out=plugins=grpc:.
+//go:generate protoc -I ${GOPATH}/src/github.com/vx-labs/wasp/v4/vendor -I ${GOPATH}/src/github.com/vx-labs/wasp/v4/wasp/auth/ auth.proto --go_out=plugins=grpc:.
 
 import (
 	"context"

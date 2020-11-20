@@ -3,7 +3,7 @@ package wasp
 import (
 	"time"
 
-	"github.com/vx-labs/wasp/wasp/distributed"
+	"github.com/vx-labs/wasp/v4/wasp/distributed"
 )
 
 type NodeMemberManager interface {

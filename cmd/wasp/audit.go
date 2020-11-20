@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	"github.com/spf13/viper"
-	"github.com/vx-labs/wasp/rpc"
-	"github.com/vx-labs/wasp/wasp/audit"
+	"github.com/vx-labs/wasp/v4/rpc"
+	"github.com/vx-labs/wasp/v4/wasp/audit"
 	"go.uber.org/zap"
 )
 

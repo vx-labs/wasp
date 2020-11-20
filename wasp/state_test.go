@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/v4/wasp/sessions"
 )
 
 func benchmarkFor(st func() LocalState, n int) func(b *testing.B) {

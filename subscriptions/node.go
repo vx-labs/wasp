@@ -1,12 +1,12 @@
 package subscriptions
 
-//go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/subscriptions/ --go_out=plugins=grpc:. subscriptions.proto
+//go:generate protoc -I${GOPATH}/src -I${GOPATH}/src/github.com/vx-labs/wasp/v4/subscriptions/ --go_out=plugins=grpc:. subscriptions.proto
 import (
 	"errors"
 	"sync"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/vx-labs/wasp/wasp/format"
+	"github.com/vx-labs/wasp/v4/wasp/format"
 )
 
 const (

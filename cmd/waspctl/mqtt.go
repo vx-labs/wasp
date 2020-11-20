@@ -10,7 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/api"
+	"github.com/vx-labs/wasp/v4/wasp/api"
 	"go.uber.org/zap"
 )
 

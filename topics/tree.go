@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/vx-labs/wasp/wasp/format"
+	"github.com/vx-labs/wasp/v4/wasp/format"
 )
 
 type Store interface {

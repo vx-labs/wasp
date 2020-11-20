@@ -25,7 +25,7 @@ If you are using Archlinux, an AUR package is available (named `wasp`).
 For other Linux distributions, you can run the following shell one-liner:
 
 ```shell
-curl -sLo Downloads/wasp https://github.com/vx-labs/wasp/releases/download/v4.0.0/wasp_linux-amd64 && chmod +x ./Downloads/wasp
+curl -sLo Downloads/wasp https://github.com/vx-labs/wasp/v4/releases/download/v4.0.0/wasp_linux-amd64 && chmod +x ./Downloads/wasp
 ```
 
 Il will download Wasp, save it in your ./Downloads folder, and make it executable.

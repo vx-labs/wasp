@@ -7,8 +7,8 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/memberlist"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/audit"
+	"github.com/vx-labs/wasp/v4/wasp/api"
+	"github.com/vx-labs/wasp/v4/wasp/audit"
 )
 
 var (

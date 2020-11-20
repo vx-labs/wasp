@@ -7,9 +7,9 @@ import (
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/ack"
-	"github.com/vx-labs/wasp/wasp/distributed"
-	"github.com/vx-labs/wasp/wasp/sessions"
+	"github.com/vx-labs/wasp/v4/wasp/ack"
+	"github.com/vx-labs/wasp/v4/wasp/distributed"
+	"github.com/vx-labs/wasp/v4/wasp/sessions"
 	"go.uber.org/zap"
 )
 

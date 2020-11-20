@@ -8,8 +8,8 @@ import (
 	"github.com/hashicorp/memberlist"
 	"github.com/vx-labs/cluster"
 	"github.com/vx-labs/cluster/membership"
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/distributed"
+	"github.com/vx-labs/wasp/v4/wasp/api"
+	"github.com/vx-labs/wasp/v4/wasp/distributed"
 	"google.golang.org/grpc"
 )
 

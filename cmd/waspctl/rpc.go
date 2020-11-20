@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/vx-labs/wasp/rpc"
+	"github.com/vx-labs/wasp/v4/rpc"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )

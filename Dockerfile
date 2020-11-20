@@ -1,7 +1,7 @@
 FROM golang:alpine as builder
 ENV CGO_ENABLED=0
 RUN mkdir -p $GOPATH/src/github.com/vx-labs
-WORKDIR $GOPATH/src/github.com/vx-labs/wasp
+WORKDIR $GOPATH/src/github.com/vx-labs/wasp/v4
 COPY go.* ./
 RUN go mod download
 COPY . ./

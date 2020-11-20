@@ -7,11 +7,11 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/hashicorp/memberlist"
-	"github.com/vx-labs/wasp/crdt"
-	"github.com/vx-labs/wasp/subscriptions"
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/audit"
-	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/vx-labs/wasp/v4/crdt"
+	"github.com/vx-labs/wasp/v4/subscriptions"
+	"github.com/vx-labs/wasp/v4/wasp/api"
+	"github.com/vx-labs/wasp/v4/wasp/audit"
+	"github.com/vx-labs/wasp/v4/wasp/stats"
 )
 
 type subscriptionsState struct {

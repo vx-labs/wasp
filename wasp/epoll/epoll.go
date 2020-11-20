@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/vx-labs/wasp/wasp/expiration"
-	"github.com/vx-labs/wasp/wasp/transport"
+	"github.com/vx-labs/wasp/v4/wasp/expiration"
+	"github.com/vx-labs/wasp/v4/wasp/transport"
 	"github.com/zond/gotomic"
 	"golang.org/x/sys/unix"
 )

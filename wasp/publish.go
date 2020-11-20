@@ -9,9 +9,9 @@ import (
 
 	"github.com/vx-labs/commitlog/stream"
 	"github.com/vx-labs/mqtt-protocol/packet"
-	"github.com/vx-labs/wasp/wasp/api"
-	"github.com/vx-labs/wasp/wasp/distributed"
-	"github.com/vx-labs/wasp/wasp/stats"
+	"github.com/vx-labs/wasp/v4/wasp/api"
+	"github.com/vx-labs/wasp/v4/wasp/distributed"
+	"github.com/vx-labs/wasp/v4/wasp/stats"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
