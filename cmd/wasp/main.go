@@ -240,7 +240,7 @@ func run(config *viper.Viper) {
 			panic(err)
 		}
 	})
-	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, func(sender string, publish *packet.Publish) error {
+	packetProcessor := wasp.NewPacketProcessor(state, dstate, writer, func(sender string, publish *packet.Publish) error {
 		for _, tap := range loadedTaps {
 			err := tap(ctx, sender, publish)
 			if err != nil {
@@ -260,6 +260,7 @@ func run(config *viper.Viper) {
 		}
 		return publishDistributor.Distribute(ctx, publish)
 	}, inflights)
+	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, packetProcessor, inflights)
 	operations.Run("connection manager", connManager.Run)
 
 	handler := func(m transport.Metadata) error {

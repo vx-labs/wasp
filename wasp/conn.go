@@ -39,6 +39,7 @@ type manager struct {
 	publishHandler  PublishHandler
 	inflights       ack.Queue
 	wg              *sync.WaitGroup
+	packetProcessor PacketProcessor
 }
 
 type setupWorker struct {
@@ -53,7 +54,6 @@ type setupWorker struct {
 
 type connectionWorker struct {
 	decoder *decoder.Sync
-	encoder *encoder.Encoder
 	manager *manager
 }
 
@@ -66,7 +66,7 @@ var (
 	connWorkers int = 50
 )
 
-func NewConnectionManager(authHandler AuthenticationHandler, local LocalState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) Manager {
+func NewConnectionManager(authHandler AuthenticationHandler, local LocalState, state distributed.State, writer Writer, packetProcesor PacketProcessor, ackQueue ack.Queue) Manager {
 
 	epoller, err := epoll.NewInstance(connWorkers)
 	if err != nil {
@@ -81,7 +81,7 @@ func NewConnectionManager(authHandler AuthenticationHandler, local LocalState, s
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
 		connectionsJobs: make(chan chan epoll.Event, connWorkers),
 		writer:          writer,
-		publishHandler:  publishHandler,
+		packetProcessor: packetProcesor,
 		epoll:           epoller,
 		wg:              &sync.WaitGroup{},
 	}
@@ -199,7 +199,6 @@ func (s *manager) DisconnectClients(ctx context.Context) {
 func (s *manager) runConnWorker(ctx context.Context) {
 	worker := &connectionWorker{
 		decoder: decoder.New(),
-		encoder: encoder.New(),
 		manager: s,
 	}
 	go func() {
@@ -359,7 +358,7 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 		"protocol": session.Transport(),
 	}).Add(float64(pkt.Length()))
 
-	err = processPacket(ctx, s.manager.local, s.manager.state, s.manager.publishHandler, s.manager.writer, s.manager.inflights, session, s.encoder, c, pkt)
+	err = s.manager.packetProcessor.Process(ctx, session, c, pkt)
 	if err != nil {
 		if err == ErrSessionDisconnected {
 			session.Disconnected = true

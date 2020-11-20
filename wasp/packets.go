@@ -13,7 +13,33 @@ import (
 	"go.uber.org/zap"
 )
 
-func processPacket(ctx context.Context, local LocalState, state distributed.State, publishHander PublishHandler, writer Writer, inflights ack.Queue, session *sessions.Session, encoder *encoder.Encoder, c io.Writer, pkt interface{}) error {
+//PacketProcessor processes MQTT packet and update state accordingly, or distribute messages
+type PacketProcessor interface {
+	Process(ctx context.Context, session *sessions.Session, c io.Writer, pkt packet.Packet) error
+}
+
+type packetProcessor struct {
+	state          distributed.State
+	local          LocalState
+	writer         Writer
+	publishHandler PublishHandler
+	inflights      ack.Queue
+	encoder        *encoder.Encoder
+}
+
+// NewPacketProcessor returns a new packet processor
+func NewPacketProcessor(local LocalState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) PacketProcessor {
+	return &packetProcessor{
+		state:          state,
+		encoder:        encoder.New(),
+		inflights:      ackQueue,
+		writer:         writer,
+		local:          local,
+		publishHandler: publishHandler,
+	}
+}
+
+func (processor *packetProcessor) Process(ctx context.Context, session *sessions.Session, c io.Writer, pkt packet.Packet) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
 	switch p := pkt.(type) {
@@ -23,7 +49,7 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 		p.Topic = session.PrefixMountPoint(p.Topic)
 		switch p.Header.Qos {
 		case 0, 1:
-			err := publishHander(session.ID(), p)
+			err := processor.publishHandler(session.ID(), p)
 			if err != nil {
 				return err
 			}
@@ -32,7 +58,7 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			}
-			err := inflights.Insert(session.ID(), pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
+			err := processor.inflights.Insert(session.ID(), pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 				if expired {
 					L(ctx).Warn("qos2 flow timed out at waiting for PUBREL")
 					return
@@ -40,13 +66,13 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 				ctx, cancel := context.WithCancel(context.Background())
 				defer cancel()
 
-				err := publishHander(session.ID(), p)
+				err := processor.publishHandler(session.ID(), p)
 				if err == nil {
 					pubcomp := &packet.PubComp{
 						Header:    &packet.Header{},
 						MessageId: received.(*packet.PubRel).MessageId,
 					}
-					encoder.Encode(c, pubcomp)
+					processor.encoder.Encode(c, pubcomp)
 					return
 				}
 				L(ctx).Error("failed to finalize qos2 flow", zap.Error(err))
@@ -54,10 +80,10 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 			if err != nil {
 				return err
 			}
-			return encoder.Encode(c, pubrec)
+			return processor.encoder.Encode(c, pubrec)
 		}
 		if p.Header.Qos == 1 {
-			return encoder.PubAck(c, &packet.PubAck{
+			return processor.encoder.PubAck(c, &packet.PubAck{
 				Header:    &packet.Header{},
 				MessageId: p.MessageId,
 			})
@@ -68,13 +94,13 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 			topics[idx] = session.PrefixMountPoint(p.Topic[idx])
 		}
 		for idx := range topics {
-			err := state.Subscriptions().Create(session.ID(), topics[idx], p.Qos[idx])
+			err := processor.state.Subscriptions().Create(session.ID(), topics[idx], p.Qos[idx])
 			if err != nil {
 				return err
 			}
 			session.AddTopic(topics[idx])
 		}
-		err := encoder.SubAck(c, &packet.SubAck{
+		err := processor.encoder.SubAck(c, &packet.SubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 			Qos:       p.Qos,
@@ -83,12 +109,12 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 			return err
 		}
 		for idx := range topics {
-			messages, err := state.Topics().Get(topics[idx])
+			messages, err := processor.state.Topics().Get(topics[idx])
 			if err != nil {
 				return err
 			}
 			for _, message := range messages {
-				writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message.Publish)
+				processor.writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message.Publish)
 			}
 		}
 	case *packet.Unsubscribe:
@@ -97,45 +123,45 @@ func processPacket(ctx context.Context, local LocalState, state distributed.Stat
 			topics[idx] = session.PrefixMountPoint(p.Topic[idx])
 		}
 		for idx := range topics {
-			err := state.Subscriptions().Delete(session.ID(), topics[idx])
+			err := processor.state.Subscriptions().Delete(session.ID(), topics[idx])
 			if err != nil {
 				return err
 			}
 			session.RemoveTopic(topics[idx])
 		}
-		return encoder.UnsubAck(c, &packet.UnsubAck{
+		return processor.encoder.UnsubAck(c, &packet.UnsubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
 		})
 	case *packet.PubAck:
-		err := inflights.Ack(session.ID(), p)
+		err := processor.inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack puback", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubRec:
-		err := inflights.Ack(session.ID(), p)
+		err := processor.inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubrec", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubRel:
-		err := inflights.Ack(session.ID(), p)
+		err := processor.inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubrel", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.PubComp:
-		err := inflights.Ack(session.ID(), p)
+		err := processor.inflights.Ack(session.ID(), p)
 		if err != nil {
 			L(ctx).Error("failed to ack pubcomp", zap.Int32("message_id", p.MessageId), zap.Error(err))
 		}
 	case *packet.Disconnect:
 		return ErrSessionDisconnected
 	case *packet.PingReq:
-		metadata, err := state.SessionMetadatas().ByClientID(session.ClientID())
+		metadata, err := processor.state.SessionMetadatas().ByClientID(session.ClientID())
 		if err != nil || metadata.SessionID != session.ID() {
 			// Session has reconnected on another peer.
 			return ErrSessionDisconnected
 		}
-		return encoder.PingResp(c, &packet.PingResp{
+		return processor.encoder.PingResp(c, &packet.PingResp{
 			Header: p.Header,
 		})
 	}
