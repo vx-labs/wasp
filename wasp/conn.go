@@ -236,16 +236,21 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	if !ok {
 		return ErrConnectNotDone
 	}
-
+	transportCtx := auth.TransportContext{
+		Encrypted:            m.Encrypted,
+		RemoteAddress:        m.RemoteAddress,
+		X509CertificateChain: nil,
+	}
+	if m.EncryptionState != nil {
+		for _, cert := range m.EncryptionState.PeerCertificates {
+			transportCtx.X509CertificateChain = append(transportCtx.X509CertificateChain, cert.Raw)
+		}
+	}
 	principal, err := s.authHandler.Authenticate(ctx, auth.ApplicationContext{
 		ClientID: connectPkt.ClientId,
 		Username: connectPkt.Username,
 		Password: connectPkt.Password,
-	}, auth.TransportContext{
-		Encrypted:       m.Encrypted,
-		RemoteAddress:   m.RemoteAddress,
-		X509Certificate: nil,
-	})
+	}, transportCtx)
 	id := principal.ID
 	mountPoint := principal.MountPoint
 	if err != nil {

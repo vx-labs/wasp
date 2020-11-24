@@ -5,7 +5,7 @@ package auth;
 message TransportContext {
   bool Encrypted = 1;
   string RemoteAddress = 2;
-  bytes X509Certificate = 3;
+  repeated bytes X509CertificateChain = 4;
 }
 
 message ApplicationContext {

@@ -17,6 +17,7 @@ import (
 type contextKey string
 
 const connFD contextKey = "wasp.connFD"
+const connTLSState contextKey = "wasp.connTLSState"
 
 type wsListener struct {
 	listener net.Listener
@@ -89,7 +90,7 @@ func (c *websocketConnector) Read(p []byte) (int, error) {
 	}
 }
 
-func serveWs(cb func(net.Conn, int)) http.HandlerFunc {
+func serveWs(cb func(net.Conn, int, tls.ConnectionState)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -98,13 +99,14 @@ func serveWs(cb func(net.Conn, int)) http.HandlerFunc {
 		}
 		cb(&websocketConnector{
 			Conn: ws,
-		}, r.Context().Value(connFD).(int))
+		}, r.Context().Value(connFD).(int), r.Context().Value(connTLSState).(tls.ConnectionState))
 	}
 }
 
 type wsConn struct {
-	backend net.Conn
-	initial net.Conn
+	backend         net.Conn
+	initial         net.Conn
+	encryptionState tls.ConnectionState
 }
 
 func (w *wsConn) SetWriteDeadline(t time.Time) error { return w.backend.SetWriteDeadline(t) }
@@ -143,7 +145,7 @@ func (w *wsTLSListener) Accept() (net.Conn, error) {
 		return nil, err
 	}
 	tlsConn := tls.Server(c, w.config)
-	return &wsConn{backend: tlsConn, initial: c}, err
+	return &wsConn{backend: tlsConn, initial: c, encryptionState: tlsConn.ConnectionState()}, err
 }
 
 func (w *wsTLSListener) Close() error {
@@ -157,7 +159,7 @@ func NewWSTransport(port int, handler func(Metadata) error) (net.Listener, error
 	listener := &wsListener{}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/mqtt", serveWs(func(c net.Conn, fd int) {
+	mux.HandleFunc("/mqtt", serveWs(func(c net.Conn, fd int, _ tls.ConnectionState) {
 		listener.queueSession(c, fd, handler)
 	}))
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
