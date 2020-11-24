@@ -290,6 +290,7 @@ func run(config *viper.Viper) {
 		if err != nil {
 			wasp.L(ctx).Fatal("failed to get TLS certificate from ACME", zap.Error(err))
 		}
+		tlsConfig.ClientAuth = tls.RequestClientCert
 
 		if port := config.GetInt("wss-port"); port > 0 {
 			ln, err := transport.NewWSSTransport(tlsConfig, port, handler)
