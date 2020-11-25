@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/viper"
 	"github.com/vx-labs/wasp/v4/rpc"
+	"github.com/vx-labs/wasp/v4/wasp"
 	"github.com/vx-labs/wasp/v4/wasp/auth"
 )
 
@@ -31,6 +32,7 @@ func getAuthHandler(ctx context.Context, rpcDialer rpc.Dialer, config *viper.Vip
 		}
 		return auth.GRPC(
 			conn,
+			wasp.L(ctx),
 		)
 	default:
 		return nil, errors.New("unknown authentication provided")
