@@ -181,6 +181,7 @@ func run(config *viper.Viper) {
 			for k, v := range payload {
 				attributes[k] = v
 			}
+			attributes["mountpoint"] = tenant
 			data := map[string]interface{}{
 				"timestamp":  timestamp,
 				"service":    service,
