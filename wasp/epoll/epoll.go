@@ -9,7 +9,6 @@ import (
 
 	"github.com/vx-labs/wasp/v4/wasp/expiration"
 	"github.com/vx-labs/wasp/v4/wasp/transport"
-	"github.com/zond/gotomic"
 	"golang.org/x/sys/unix"
 )
 
@@ -129,7 +128,7 @@ func (e *instance) Add(conn ClientConn) error {
 		return err
 	}
 	if !conn.Deadline.IsZero() {
-		e.timeouts.Insert(gotomic.IntKey(conn.FD), conn.Deadline)
+		e.timeouts.Insert(conn.FD, conn.Deadline)
 	}
 	return nil
 }
