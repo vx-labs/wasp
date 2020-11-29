@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"bytes"
+	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
@@ -17,6 +18,7 @@ type Session struct {
 	Disconnected      bool
 	topics            [][]byte
 	transport         string
+	mtx               sync.Mutex
 }
 
 func prefixMountPoint(mountPoint string, t []byte) []byte {
@@ -86,9 +88,14 @@ func (s *Session) processConnect(connect *packet.Connect) error {
 	return nil
 }
 func (s *Session) AddTopic(t []byte) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	s.topics = append(s.topics, t)
 }
 func (s *Session) RemoveTopic(new []byte) {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	for idx, t := range s.topics {
 		if bytes.Equal(t, new) {
 			s.topics[idx] = s.topics[len(s.topics)-1]
@@ -97,6 +104,8 @@ func (s *Session) RemoveTopic(new []byte) {
 	}
 }
 func (s *Session) GetTopics() [][]byte {
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
 	return s.topics
 }
 func (s *Session) NextDeadline(t time.Time) time.Time {
