@@ -238,7 +238,7 @@ func run(config *viper.Viper) {
 	operations.Run("publish writer", func(ctx context.Context) {
 		err := writer.Run(ctx, messageLog)
 		if err != nil {
-			panic(err)
+			wasp.L(ctx).Fatal("publish writer failed", zap.Error(err))
 		}
 	})
 	packetProcessor := wasp.NewPacketProcessor(state, dstate, writer, func(sender string, publish *packet.Publish) error {

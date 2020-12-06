@@ -97,9 +97,16 @@ func serveWs(cb func(net.Conn, int, tls.ConnectionState)) http.HandlerFunc {
 			log.Println(err)
 			return
 		}
-		cb(&websocketConnector{
-			Conn: ws,
-		}, r.Context().Value(connFD).(int), r.Context().Value(connTLSState).(tls.ConnectionState))
+		tlsStateKey := r.Context().Value(connTLSState)
+		if tlsStateKey != nil {
+			cb(&websocketConnector{
+				Conn: ws,
+			}, r.Context().Value(connFD).(int), tlsStateKey.(tls.ConnectionState))
+		} else {
+			cb(&websocketConnector{
+				Conn: ws,
+			}, r.Context().Value(connFD).(int), tls.ConnectionState{})
+		}
 	}
 }
 

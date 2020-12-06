@@ -184,12 +184,14 @@ func (w *writer) getFree(ctx context.Context) (int32, error) {
 func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish) {
 	started := time.Now()
 	defer stats.PublishWritingTime.Observe(stats.MilisecondsElapsed(started))
+	if p == nil {
+		return
+	}
 	for idx := range recipients {
 		sessionID := recipients[idx]
 		conn := w.sessions[sessionID]
 		session := w.local.Get(sessionID)
-
-		if conn != nil {
+		if session != nil && conn != nil {
 			publish := &packet.Publish{
 				Header: &packet.Header{
 					Dup:    p.Header.Dup,

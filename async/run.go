@@ -2,6 +2,7 @@ package async
 
 import (
 	"context"
+	"runtime/debug"
 	"sync"
 
 	"go.uber.org/zap"
@@ -22,7 +23,7 @@ func Run(ctx context.Context, wg *sync.WaitGroup, f Runner) {
 
 func LogTermination(name string, logger *zap.Logger) {
 	if r := recover(); r != nil {
-		logger.Fatal("async operation crashed", zap.String("name", name), zap.Any("panic", r))
+		logger.Fatal("async operation crashed", zap.String("name", name), zap.Any("panic", r), zap.Any("stack", debug.Stack()))
 	} else {
 		logger.Debug("async operation stopped", zap.String("name", name))
 	}
