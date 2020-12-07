@@ -176,7 +176,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 			ReturnCode: packet.CONNACK_REFUSED_BAD_USERNAME_OR_PASSWORD,
 		})
 	}
-	session, err := sessions.NewSession(id, mountPoint, m.Name, connectPkt)
+	session, err := sessions.NewSession(id, mountPoint, m.Name, m.Channel, connectPkt)
 	if err != nil {
 		return err
 	}
@@ -203,29 +203,27 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	}
 	L(ctx).Debug("session metadata created")
 	s.local.Create(session.ID(), session)
-	s.writer.Register(session.ID(), c)
 	worker := &connectionWorker{
 		decoder: decoder.New(),
 		manager: s.manager,
 	}
-	go worker.serve(ctx, session, c)
+	go worker.serve(ctx, session)
 	return s.encoder.ConnAck(c, &packet.ConnAck{
 		Header:     connectPkt.Header,
 		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
 	})
 }
 
-func (s *connectionWorker) serve(ctx context.Context, session *sessions.Session, conn transport.TimeoutReadWriteCloser) {
+func (s *connectionWorker) serve(ctx context.Context, session *sessions.Session) {
 	sessionCtx, cancel := context.WithCancel(ctx)
-	for s.processSession(sessionCtx, session, conn) {
-		conn.SetDeadline(session.NextDeadline(time.Now()))
+	for s.processSession(sessionCtx, session, session.ReadWriter()) {
+		session.ExtendDeadline()
 	}
 	cancel()
 	s.manager.shutdownSession(ctx, session)
 }
 
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
-	s.writer.Unregister(session.ID())
 	s.local.Delete(session.ID())
 	topics := session.GetTopics()
 	for idx := range topics {

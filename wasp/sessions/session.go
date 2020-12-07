@@ -2,15 +2,18 @@ package sessions
 
 import (
 	"bytes"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/vx-labs/mqtt-protocol/packet"
+	"github.com/vx-labs/wasp/v4/wasp/transport"
 )
 
 type Session struct {
 	id                string
+	conn              transport.TimeoutReadWriteCloser
 	clientID          string
 	mountPoint        string
 	lwt               []byte
@@ -32,9 +35,10 @@ func trimMountPoint(mountPoint string, t []byte) []byte {
 	return t[len(mountPoint)+1:] // Trim mountpoint + /
 }
 
-func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Session, error) {
+func NewSession(id, mountpoint, transport string, conn transport.TimeoutReadWriteCloser, connect *packet.Connect) (*Session, error) {
 	s := &Session{
 		id:         id,
+		conn:       conn,
 		mountPoint: mountpoint,
 		transport:  transport,
 	}
@@ -43,6 +47,18 @@ func NewSession(id, mountpoint, transport string, connect *packet.Connect) (*Ses
 
 func (s *Session) ID() string {
 	return s.id
+}
+func (s *Session) ReadWriter() io.ReadWriter {
+	return s.conn
+}
+func (s *Session) Writer() io.Writer {
+	return s.conn
+}
+func (s *Session) Reader() io.Reader {
+	return s.conn
+}
+func (s *Session) Close() error {
+	return s.conn.Close()
 }
 func (s *Session) ClientID() string {
 	return s.clientID
@@ -108,6 +124,6 @@ func (s *Session) GetTopics() [][]byte {
 	defer s.mtx.Unlock()
 	return s.topics
 }
-func (s *Session) NextDeadline(t time.Time) time.Time {
-	return t.Add(2 * time.Duration(s.keepaliveInterval) * time.Second)
+func (s *Session) ExtendDeadline() {
+	s.conn.SetDeadline(time.Now().Add(2 * time.Duration(s.keepaliveInterval) * time.Second))
 }

@@ -249,7 +249,7 @@ func run(config *viper.Viper) {
 			}
 		}
 		if publish.Header.Retain {
-			if publish.Payload == nil {
+			if publish.Payload == nil || len(publish.Payload) == 0 {
 				err = dstate.Topics().Delete(publish.Topic)
 			} else {
 				err = dstate.Topics().Set(publish)

@@ -12,7 +12,6 @@ import (
 	"github.com/vx-labs/wasp/v4/wasp/distributed"
 	"github.com/vx-labs/wasp/v4/wasp/sessions"
 	"github.com/vx-labs/wasp/v4/wasp/stats"
-	"github.com/vx-labs/wasp/v4/wasp/transport"
 	"github.com/zond/gotomic"
 	"go.uber.org/zap"
 )
@@ -46,7 +45,6 @@ func (t chanIterator) Next() (uint64, error) {
 type writer struct {
 	mtx       sync.Mutex
 	peerID    uint64
-	sessions  map[string]transport.TimeoutReadWriteCloser
 	queue     chan RoutedMessage
 	state     distributed.SubscriptionsState
 	local     LocalState
@@ -56,8 +54,6 @@ type writer struct {
 }
 
 type Writer interface {
-	Register(sessionID string, enc transport.TimeoutReadWriteCloser)
-	Unregister(sessionID string)
 	Run(ctx context.Context, log messageLog) error
 	Schedule(ctx context.Context, offset uint64)
 	Send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish)
@@ -74,7 +70,6 @@ func NewWriter(peerID uint64, subscriptions distributed.SubscriptionsState, loca
 		state:     subscriptions,
 		local:     local,
 		inflights: ackQueue,
-		sessions:  make(map[string]transport.TimeoutReadWriteCloser),
 		encoder:   encoder.New(),
 		queue:     make(chan RoutedMessage, 25),
 		midPool:   midPool,
@@ -99,24 +94,15 @@ func (w *writer) Send(ctx context.Context, recipients []string, qosses []int32, 
 	case <-ctx.Done():
 	}
 }
-func (w *writer) Register(sessionID string, enc transport.TimeoutReadWriteCloser) {
-	w.mtx.Lock()
-	defer w.mtx.Unlock()
-	w.sessions[sessionID] = enc
-}
-func (w *writer) Unregister(sessionID string) {
-	w.mtx.Lock()
-	defer w.mtx.Unlock()
-	delete(w.sessions, sessionID)
-}
-func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, conn transport.TimeoutReadWriteCloser) error {
+func (w *writer) sendQoS1(ctx context.Context, publish *packet.Publish, session *sessions.Session) error {
+	session.ExtendDeadline()
 	stats.EgressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 		if expired && w.local.Get(session.ID()) != nil {
-			w.sendQoS1(publish, session, conn)
+			w.sendQoS1(ctx, publish, session)
 		} else {
 			w.midPool.Push(stored.(*packet.Publish).MessageId)
 		}
@@ -125,34 +111,37 @@ func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, co
 		return err
 	}
 	// do not return encoder error to avoid freeing message id
-	conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
-	w.encoder.Publish(conn, publish)
+	err = w.encoder.Publish(session.Writer(), publish)
+	if err != nil {
+		L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", session.ID()))
+	}
 	return nil
 }
-func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, conn transport.TimeoutReadWriteCloser) {
+func (w *writer) completeQoS2(ctx context.Context, pubRel *packet.PubRel, session *sessions.Session) {
+	session.ExtendDeadline()
 	stats.EgressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(pubRel.Length()))
 
 	w.inflights.Insert(session.ID(), pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if w.local.Get(session.ID()) == nil {
-			w.midPool.Push(stored.(*packet.PubRel).MessageId)
-			return
-		}
-		if expired {
-			w.completeQoS2(pubRel, session, conn)
+		if expired && w.local.Get(session.ID()) != nil {
+			w.completeQoS2(ctx, pubRel, session)
 			return
 		}
 		w.midPool.Push(stored.(*packet.PubRel).MessageId)
 	})
-	conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
-	w.encoder.Encode(conn, pubRel)
+	err := w.encoder.Encode(session.Writer(), pubRel)
+	if err != nil {
+		L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 2), zap.Error(err), zap.String("session_id", session.ID()))
+	}
 }
-func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, conn transport.TimeoutReadWriteCloser) error {
+func (w *writer) sendQoS2(ctx context.Context, publish *packet.Publish, session *sessions.Session) error {
 
 	stats.EgressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
+
+	session.ExtendDeadline()
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 		if w.local.Get(session.ID()) == nil {
@@ -160,21 +149,23 @@ func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, co
 			return
 		}
 		if expired {
-			w.sendQoS2(publish, session, conn)
+			w.sendQoS2(ctx, publish, session)
 			return
 		}
 		pubRel := &packet.PubRel{
 			Header:    &packet.Header{},
 			MessageId: stored.(*packet.Publish).MessageId,
 		}
-		w.completeQoS2(pubRel, session, conn)
+		w.completeQoS2(ctx, pubRel, session)
 	})
 	if err != nil {
 		return err
 	}
 	// do not return encoder error to avoid freeing message id
-	conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
-	w.encoder.Publish(conn, publish)
+	err = w.encoder.Publish(session.Writer(), publish)
+	if err != nil {
+		L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", session.ID()))
+	}
 	return nil
 }
 func (w *writer) getFree(ctx context.Context) (int32, error) {
@@ -202,9 +193,8 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 	}
 	for idx := range recipients {
 		sessionID := recipients[idx]
-		conn := w.sessions[sessionID]
 		session := w.local.Get(sessionID)
-		if session != nil && conn != nil {
+		if session != nil {
 			publish := &packet.Publish{
 				Header: &packet.Header{
 					Dup:    p.Header.Dup,
@@ -215,10 +205,10 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				Payload:   p.Payload,
 				Topic:     session.TrimMountPoint(p.Topic),
 			}
-
+			conn := session.Writer()
 			switch publish.Header.Qos {
 			case 0:
-				conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
+				session.ExtendDeadline()
 				err := w.encoder.Publish(conn, publish)
 				if err != nil {
 					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 0), zap.Error(err), zap.String("session_id", sessionID))
@@ -229,7 +219,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 					return
 				}
 				publish.MessageId = mid
-				err = w.sendQoS1(publish, session, conn)
+				err = w.sendQoS1(ctx, publish, session)
 				if err != nil {
 					w.midPool.Push(mid)
 					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
@@ -240,7 +230,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 					return
 				}
 				publish.MessageId = mid
-				err = w.sendQoS2(publish, session, conn)
+				err = w.sendQoS2(ctx, publish, session)
 				if err != nil {
 					w.midPool.Push(mid)
 					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))

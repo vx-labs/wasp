@@ -83,7 +83,7 @@ func (n *Node) count(counter int) int {
 func (n *Node) match(topic format.Topic, msgs *[][]byte) error {
 	topic, token := topic.Next()
 	if token == "" {
-		if n.Buf != nil {
+		if n.Buf != nil && len(n.Buf) > 0 {
 			*msgs = append(*msgs, n.Buf)
 		}
 		return nil
@@ -115,7 +115,7 @@ func (n *Node) allRetained(msgs *[][]byte) {
 }
 
 func (n *Node) iterate(f NodeIterator) {
-	if n.Buf != nil {
+	if n.Buf != nil && len(n.Buf) > 0 {
 		f(n.Buf)
 	}
 	for _, child := range n.Children {

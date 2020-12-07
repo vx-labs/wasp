@@ -143,11 +143,11 @@ func (t *topicsState) Get(pattern []byte) ([]api.RetainedMessage, error) {
 	}
 	out := make([]api.RetainedMessage, c)
 
-	idx := 0
-	for _, msg := range v {
+	addedIdx := 0
+	for idx := range v {
 		if crdt.IsEntryAdded(v[idx]) {
-			out[idx] = *msg
-			idx++
+			out[addedIdx] = *v[idx]
+			addedIdx++
 		}
 	}
 	return out, nil

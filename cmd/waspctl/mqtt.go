@@ -250,12 +250,14 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 				}
 				table := getTable(cmd.OutOrStdout(), "Topic", "Payload", "QoS", "Age")
 				for _, member := range out.GetRetainedMessages() {
-					table.AddRow(
-						string(member.Publish.GetTopic()),
-						string(member.Publish.GetPayload()),
-						qosString[member.Publish.Header.GetQos()],
-						humanize.Time(time.Unix(0, member.LastAdded)),
-					)
+					if member != nil && member.Publish != nil && member.Publish.Header != nil {
+						table.AddRow(
+							string(member.Publish.GetTopic()),
+							string(member.Publish.GetPayload()),
+							qosString[member.Publish.Header.GetQos()],
+							humanize.Time(time.Unix(0, member.LastAdded)),
+						)
+					}
 				}
 				table.Print()
 			}

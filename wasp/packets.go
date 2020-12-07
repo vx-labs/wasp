@@ -105,7 +105,6 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 			}
 			session.AddTopic(topics[idx])
 		}
-		L(ctx).Debug("created subscription")
 		err := processor.encoder.SubAck(c, &packet.SubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
@@ -114,7 +113,6 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 		if err != nil {
 			return err
 		}
-		L(ctx).Debug("acked subscription")
 		for idx := range topics {
 			messages, err := processor.state.Topics().Get(topics[idx])
 			if err != nil {
