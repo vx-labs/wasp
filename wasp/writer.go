@@ -2,7 +2,7 @@ package wasp
 
 import (
 	"context"
-	"io"
+	"errors"
 	"sync"
 	"time"
 
@@ -109,8 +109,7 @@ func (w *writer) Unregister(sessionID string) {
 	defer w.mtx.Unlock()
 	delete(w.sessions, sessionID)
 }
-func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, conn io.Writer) error {
-
+func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, conn transport.TimeoutReadWriteCloser) error {
 	stats.EgressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
@@ -126,49 +125,62 @@ func (w *writer) sendQoS1(publish *packet.Publish, session *sessions.Session, co
 		return err
 	}
 	// do not return encoder error to avoid freeing message id
+	conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
 	w.encoder.Publish(conn, publish)
 	return nil
 }
-func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, conn io.Writer) {
+func (w *writer) completeQoS2(pubRel *packet.PubRel, session *sessions.Session, conn transport.TimeoutReadWriteCloser) {
 	stats.EgressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(pubRel.Length()))
 
 	w.inflights.Insert(session.ID(), pubRel, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.local.Get(session.ID()) != nil {
-			w.completeQoS2(pubRel, session, conn)
-		} else {
+		if w.local.Get(session.ID()) == nil {
 			w.midPool.Push(stored.(*packet.PubRel).MessageId)
+			return
 		}
+		if expired {
+			w.completeQoS2(pubRel, session, conn)
+			return
+		}
+		w.midPool.Push(stored.(*packet.PubRel).MessageId)
 	})
+	conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
 	w.encoder.Encode(conn, pubRel)
 }
-func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, conn io.Writer) error {
+func (w *writer) sendQoS2(publish *packet.Publish, session *sessions.Session, conn transport.TimeoutReadWriteCloser) error {
 
 	stats.EgressBytes.With(map[string]string{
 		"protocol": session.Transport(),
 	}).Add(float64(publish.Length()))
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
-		if expired && w.local.Get(session.ID()) != nil {
-			w.sendQoS2(publish, session, conn)
-		} else {
-			pubRel := &packet.PubRel{
-				Header:    &packet.Header{},
-				MessageId: stored.(*packet.Publish).MessageId,
-			}
-			w.completeQoS2(pubRel, session, conn)
+		if w.local.Get(session.ID()) == nil {
+			w.midPool.Push(stored.(*packet.Publish).MessageId)
+			return
 		}
+		if expired {
+			w.sendQoS2(publish, session, conn)
+			return
+		}
+		pubRel := &packet.PubRel{
+			Header:    &packet.Header{},
+			MessageId: stored.(*packet.Publish).MessageId,
+		}
+		w.completeQoS2(pubRel, session, conn)
 	})
 	if err != nil {
 		return err
 	}
 	// do not return encoder error to avoid freeing message id
+	conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
 	w.encoder.Publish(conn, publish)
 	return nil
 }
 func (w *writer) getFree(ctx context.Context) (int32, error) {
-	for {
+	retries := 5
+	for retries > 0 {
+		retries--
 		mid, ok := w.midPool.Pop()
 		if !ok {
 			select {
@@ -180,6 +192,7 @@ func (w *writer) getFree(ctx context.Context) (int32, error) {
 		}
 		return mid.(int32), nil
 	}
+	return 0, errors.New("failed to get free mid")
 }
 func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, p *packet.Publish) {
 	started := time.Now()
@@ -205,6 +218,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 
 			switch publish.Header.Qos {
 			case 0:
+				conn.SetWriteDeadline(time.Now().Add(200 * time.Millisecond))
 				err := w.encoder.Publish(conn, publish)
 				if err != nil {
 					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 0), zap.Error(err), zap.String("session_id", sessionID))
@@ -291,6 +305,7 @@ func (w *writer) Run(ctx context.Context, log messageLog) error {
 				w.send(ctx, routedMessage.recipients, routedMessage.qosses, routedMessage.publish)
 				w.mtx.Unlock()
 			}
+			L(ctx).Debug("message written")
 		}
 	}
 }

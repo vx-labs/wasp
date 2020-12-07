@@ -23,7 +23,6 @@ func NewTCPTransport(port int, handler func(Metadata) error) (net.Listener, erro
 			Encrypted:       false,
 			EncryptionState: nil,
 			Name:            "tcp",
-			FD:              socketFD(tcpConn),
 		})
 	})
 	return l, nil

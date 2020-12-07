@@ -1,7 +1,6 @@
 package transport
 
 import (
-	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -90,7 +89,7 @@ func (c *websocketConnector) Read(p []byte) (int, error) {
 	}
 }
 
-func serveWs(cb func(net.Conn, int, tls.ConnectionState)) http.HandlerFunc {
+func serveWs(cb func(net.Conn, tls.ConnectionState)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -101,73 +100,21 @@ func serveWs(cb func(net.Conn, int, tls.ConnectionState)) http.HandlerFunc {
 		if tlsStateKey != nil {
 			cb(&websocketConnector{
 				Conn: ws,
-			}, r.Context().Value(connFD).(int), tlsStateKey.(tls.ConnectionState))
+			}, tlsStateKey.(tls.ConnectionState))
 		} else {
 			cb(&websocketConnector{
 				Conn: ws,
-			}, r.Context().Value(connFD).(int), tls.ConnectionState{})
+			}, tls.ConnectionState{})
 		}
 	}
-}
-
-type wsConn struct {
-	backend         net.Conn
-	initial         net.Conn
-	encryptionState tls.ConnectionState
-}
-
-func (w *wsConn) SetWriteDeadline(t time.Time) error { return w.backend.SetWriteDeadline(t) }
-func (w *wsConn) SetReadDeadline(t time.Time) error  { return w.backend.SetReadDeadline(t) }
-func (w *wsConn) SetDeadline(t time.Time) error      { return w.backend.SetDeadline(t) }
-func (w *wsConn) Read(b []byte) (int, error)         { return w.backend.Read(b) }
-func (w *wsConn) Write(b []byte) (int, error)        { return w.backend.Write(b) }
-func (w *wsConn) Close() error                       { return w.backend.Close() }
-func (w *wsConn) LocalAddr() net.Addr                { return w.backend.LocalAddr() }
-func (w *wsConn) RemoteAddr() net.Addr               { return w.backend.RemoteAddr() }
-
-type wsTCPListener struct {
-	l net.Listener
-}
-
-func (w *wsTCPListener) Accept() (net.Conn, error) {
-	c, err := w.l.Accept()
-	return &wsConn{backend: c, initial: c}, err
-}
-
-func (w *wsTCPListener) Close() error {
-	return w.l.Close()
-}
-func (w *wsTCPListener) Addr() net.Addr {
-	return w.l.Addr()
-}
-
-type wsTLSListener struct {
-	l      net.Listener
-	config *tls.Config
-}
-
-func (w *wsTLSListener) Accept() (net.Conn, error) {
-	c, err := w.l.Accept()
-	if err != nil {
-		return nil, err
-	}
-	tlsConn := tls.Server(c, w.config)
-	return &wsConn{backend: tlsConn, initial: c, encryptionState: tlsConn.ConnectionState()}, err
-}
-
-func (w *wsTLSListener) Close() error {
-	return w.l.Close()
-}
-func (w *wsTLSListener) Addr() net.Addr {
-	return w.l.Addr()
 }
 
 func NewWSTransport(port int, handler func(Metadata) error) (net.Listener, error) {
 	listener := &wsListener{}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/mqtt", serveWs(func(c net.Conn, fd int, _ tls.ConnectionState) {
-		listener.queueSession(c, fd, handler)
+	mux.HandleFunc("/mqtt", serveWs(func(c net.Conn, _ tls.ConnectionState) {
+		listener.queueSession(c, handler)
 	}))
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -176,22 +123,17 @@ func NewWSTransport(port int, handler func(Metadata) error) (net.Listener, error
 	listener.listener = ln
 	srv := &http.Server{
 		Handler: mux,
-		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
-			tcpConn := c.(*wsConn)
-			return context.WithValue(ctx, connFD, socketFD(tcpConn.initial))
-		},
 	}
-	go srv.Serve(&wsTCPListener{l: ln})
+	go srv.Serve(ln)
 	return ln, nil
 }
 
-func (t *wsListener) queueSession(c net.Conn, fd int, handler func(Metadata) error) {
+func (t *wsListener) queueSession(c net.Conn, handler func(Metadata) error) {
 	handler(Metadata{
 		Channel:         c,
 		Encrypted:       false,
 		EncryptionState: nil,
 		Name:            "ws",
 		RemoteAddress:   c.RemoteAddr().String(),
-		FD:              fd,
 	})
 }

@@ -37,7 +37,7 @@ func parseTemplate(body string) *template.Template {
 }
 
 var templates = map[event]*template.Template{
-	SessionConnected:    parseTemplate("session {{ .session_id | shorten }} connected"),
+	SessionConnected:    parseTemplate("session {{ .session_id | shorten }} connected with client-id {{ .client_id }}"),
 	SessionDisonnected:  parseTemplate("session {{ .session_id | shorten }} disconnected"),
 	SubscriptionCreated: parseTemplate("session {{ .session_id | shorten }} subscribed to topic \"{{ .pattern }}\""),
 	SubscriptionDeleted: parseTemplate("session {{ .session_id | shorten }} unsubscribed to topic \"{{ .pattern }}\""),

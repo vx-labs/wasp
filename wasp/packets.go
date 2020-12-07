@@ -42,6 +42,7 @@ func NewPacketProcessor(local LocalState, state distributed.State, writer Writer
 func (processor *packetProcessor) Process(ctx context.Context, session *sessions.Session, c io.Writer, pkt packet.Packet) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
+	//log.Printf("%s: %s", session.ID(), packet.TypeString(pkt))
 	switch p := pkt.(type) {
 	case *packet.Connect:
 		return ErrProtocolViolation
@@ -64,7 +65,7 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 			}
 			err := processor.inflights.Insert(session.ID(), pubrec, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 				if expired {
-					L(ctx).Warn("qos2 flow timed out at waiting for PUBREL")
+					L(ctx).Warn("qos2 flow timed out waiting for PUBREL")
 					return
 				}
 				ctx, cancel := context.WithCancel(context.Background())
@@ -104,6 +105,7 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 			}
 			session.AddTopic(topics[idx])
 		}
+		L(ctx).Debug("created subscription")
 		err := processor.encoder.SubAck(c, &packet.SubAck{
 			Header:    p.Header,
 			MessageId: p.MessageId,
@@ -112,13 +114,17 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 		if err != nil {
 			return err
 		}
+		L(ctx).Debug("acked subscription")
 		for idx := range topics {
 			messages, err := processor.state.Topics().Get(topics[idx])
 			if err != nil {
 				return err
 			}
-			for _, message := range messages {
-				processor.writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message.Publish)
+			if len(messages) > 0 {
+				for _, message := range messages {
+					processor.writer.Send(ctx, []string{session.ID()}, []int32{p.Qos[idx]}, message.Publish)
+				}
+				L(ctx).Debug("sent retained messages", zap.Int("message_count", len(messages)))
 			}
 		}
 	case *packet.Unsubscribe:

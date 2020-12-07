@@ -39,7 +39,6 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 			Encrypted:       true,
 			EncryptionState: &state,
 			Name:            "tls",
-			FD:              socketFD(tcpConn),
 		})
 	})
 	return l, nil

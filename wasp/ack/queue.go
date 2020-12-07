@@ -73,7 +73,7 @@ func (q *queue) Ack(prefix string, pkt packet.Packet) error {
 		msg := v.(message)
 		q.timeouts.Delete(k, msg.deadline)
 		if msg.state != pkt.Type() {
-			return ErrUnexpectedPacketType
+			return fmt.Errorf("unexpected packet type: wanted %v, got %v", msg.state, pkt.Type())
 		}
 		msg.callback(false, msg.pkt, pkt)
 		return nil

@@ -13,13 +13,11 @@ import (
 	"github.com/vx-labs/wasp/v4/wasp/ack"
 	"github.com/vx-labs/wasp/v4/wasp/auth"
 	"github.com/vx-labs/wasp/v4/wasp/distributed"
-	"github.com/vx-labs/wasp/v4/wasp/epoll"
 	"github.com/vx-labs/wasp/v4/wasp/sessions"
 	"github.com/vx-labs/wasp/v4/wasp/stats"
 	"github.com/vx-labs/wasp/v4/wasp/transport"
 
 	"go.uber.org/zap"
-	"golang.org/x/sys/unix"
 )
 
 type Manager interface {
@@ -34,8 +32,6 @@ type manager struct {
 	local           LocalState
 	writer          Writer
 	setupJobs       chan chan transport.Metadata
-	connectionsJobs chan chan epoll.Event
-	epoll           epoll.Instance
 	inflights       ack.Queue
 	wg              *sync.WaitGroup
 	packetProcessor PacketProcessor
@@ -43,12 +39,12 @@ type manager struct {
 
 type setupWorker struct {
 	decoder     *decoder.Sync
+	manager     *manager
 	encoder     *encoder.Encoder
 	authHandler AuthenticationHandler
 	state       distributed.State
 	local       LocalState
 	writer      Writer
-	epoll       epoll.Instance
 }
 
 type connectionWorker struct {
@@ -61,16 +57,10 @@ const (
 )
 
 var (
-	setuppers   int = 20
-	connWorkers int = 50
+	setuppers int = 20
 )
 
 func NewConnectionManager(authHandler AuthenticationHandler, local LocalState, state distributed.State, writer Writer, packetProcesor PacketProcessor, ackQueue ack.Queue) Manager {
-
-	epoller, err := epoll.NewInstance(connWorkers)
-	if err != nil {
-		panic(err)
-	}
 
 	s := &manager{
 		authHandler:     authHandler,
@@ -78,10 +68,8 @@ func NewConnectionManager(authHandler AuthenticationHandler, local LocalState, s
 		state:           state,
 		local:           local,
 		setupJobs:       make(chan chan transport.Metadata, setuppers),
-		connectionsJobs: make(chan chan epoll.Event, connWorkers),
 		writer:          writer,
 		packetProcessor: packetProcesor,
-		epoll:           epoller,
 		wg:              &sync.WaitGroup{},
 	}
 	return s
@@ -91,15 +79,7 @@ func (s *manager) Run(ctx context.Context) {
 		s.runSetupper(ctx)
 		s.wg.Add(1)
 	}
-	for i := 0; i < connWorkers; i++ {
-		s.runConnWorker(ctx)
-		s.wg.Add(1)
-	}
-	go s.runTimeouter(ctx)
-	go s.runDispatcher(ctx)
-	s.wg.Add(2)
 	<-ctx.Done()
-	s.epoll.Shutdown()
 	s.wg.Wait()
 }
 
@@ -116,56 +96,16 @@ func (s *manager) Setup(ctx context.Context, c transport.Metadata) {
 		}
 	}
 }
-func (s *manager) runTimeouter(ctx context.Context) {
-	defer s.wg.Done()
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case t := <-ticker.C:
-			for _, conn := range s.epoll.Expire(t) {
-				session := s.local.Get(conn.ID)
-				if session != nil {
-					s.shutdownSession(ctx, session)
-				}
-			}
-		}
-	}
-}
 
-func (s *manager) runDispatcher(ctx context.Context) {
-	defer s.wg.Done()
-	connections := make([]epoll.Event, connWorkers)
-	for {
-		n, err := s.epoll.Wait(connections)
-		if err != nil && err != unix.EINTR {
-			return
-		}
-		for _, c := range connections[:n] {
-			select {
-			case <-ctx.Done():
-				return
-			case runner := <-s.connectionsJobs:
-				select {
-				case <-ctx.Done():
-					return
-				case runner <- c:
-				}
-			}
-		}
-	}
-}
 func (s *manager) runSetupper(ctx context.Context) {
 	worker := &setupWorker{
+		manager:     s,
 		decoder:     decoder.New(),
 		encoder:     encoder.New(),
 		authHandler: s.authHandler,
 		state:       s.state,
 		local:       s.local,
 		writer:      s.writer,
-		epoll:       s.epoll,
 	}
 	go func() {
 		defer s.wg.Done()
@@ -194,30 +134,6 @@ func (s *manager) DisconnectClients(ctx context.Context) {
 	for _, session := range s.local.ListSessions() {
 		s.shutdownSession(ctx, session)
 	}
-}
-func (s *manager) runConnWorker(ctx context.Context) {
-	worker := &connectionWorker{
-		decoder: decoder.New(),
-		manager: s,
-	}
-	go func() {
-		defer s.wg.Done()
-		ch := make(chan epoll.Event)
-		defer close(ch)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case s.connectionsJobs <- ch:
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case job := <-ch:
-				worker.processConn(ctx, job)
-			}
-		}
-	}()
 }
 
 func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
@@ -267,6 +183,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 
 	ctx = AddFields(ctx,
 		zap.String("session_id", id),
+		zap.String("client_id", session.ClientID()),
 		zap.String("session_mountpoint", mountPoint),
 		zap.Time("connected_at", time.Now()),
 		zap.String("session_username", string(connectPkt.Username)),
@@ -287,37 +204,26 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 	L(ctx).Debug("session metadata created")
 	s.local.Create(session.ID(), session)
 	s.writer.Register(session.ID(), c)
-	err = s.epoll.Add(epoll.ClientConn{ID: id, FD: m.FD, Conn: c, Deadline: session.NextDeadline(time.Now())})
-	if err != nil {
-		L(ctx).Error("failed to register epoll session", zap.Error(err), zap.Int("conn_fd", m.FD))
-		return err
+	worker := &connectionWorker{
+		decoder: decoder.New(),
+		manager: s.manager,
 	}
-	c.SetReadDeadline(
-		time.Time{},
-	)
+	go worker.serve(ctx, session, c)
 	return s.encoder.ConnAck(c, &packet.ConnAck{
 		Header:     connectPkt.Header,
 		ReturnCode: packet.CONNACK_CONNECTION_ACCEPTED,
 	})
 }
 
-func (s *connectionWorker) processConn(ctx context.Context, ev epoll.Event) {
-	session := s.manager.local.Get(ev.ID)
-	if session == nil {
-		s.manager.epoll.Remove(ev.FD)
-		return
+func (s *connectionWorker) serve(ctx context.Context, session *sessions.Session, conn transport.TimeoutReadWriteCloser) {
+	sessionCtx, cancel := context.WithCancel(ctx)
+	for s.processSession(sessionCtx, session, conn) {
+		conn.SetDeadline(session.NextDeadline(time.Now()))
 	}
-	if ev.Event&unix.EPOLLRDHUP == unix.EPOLLRDHUP || !s.processSession(ctx, session, ev.Conn) {
-		s.manager.shutdownSession(ctx, session)
-		err := s.manager.epoll.Remove(ev.FD)
-		if err != nil {
-			L(ctx).Warn("failed to remove session from epoll tracking", zap.Error(err))
-		}
-	} else {
-		s.manager.epoll.SetDeadline(ev.FD, session.NextDeadline(time.Now()))
-		s.manager.epoll.Rearm(ev.FD)
-	}
+	cancel()
+	s.manager.shutdownSession(ctx, session)
 }
+
 func (s *manager) shutdownSession(ctx context.Context, session *sessions.Session) {
 	s.writer.Unregister(session.ID())
 	s.local.Delete(session.ID())
