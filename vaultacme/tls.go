@@ -129,5 +129,7 @@ func GetConfig(ctx context.Context, cn string, logger *zap.Logger) (*tls.Config,
 	logger.Debug("loaded ACME client", zap.Strings("acme_common_names", []string{cn}))
 	tlsConfig := manager.TLSConfig()
 	tlsConfig.MinVersion = tls.VersionTLS12
+	tlsConfig.MaxVersion = tls.VersionTLS12
+	tlsConfig.PreferServerCipherSuites = true
 	return tlsConfig, nil
 }

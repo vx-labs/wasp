@@ -21,7 +21,7 @@ func NewWSSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 
 	ln, err := tls.Listen("tcp", fmt.Sprintf(":%d", port), tlsConfig)
 	if err != nil {
-		log.Fatalf("failed to start WS listener: %v", err)
+		log.Fatalf("failed to start WSS listener: %v", err)
 	}
 	listener.listener = ln
 	srv := &http.Server{
