@@ -119,7 +119,7 @@ func run(config *viper.Viper) {
 		Logger:  wasp.L(ctx),
 	}
 
-	clusterListener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", config.GetInt("raft-port")))
+	clusterListener, err := net.Listen("tcp", net.JoinHostPort("::", fmt.Sprintf("%d", config.GetInt("raft-port"))))
 	if err != nil {
 		wasp.L(ctx).Fatal("cluster listener failed to start", zap.Error(err))
 	}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"strings"
@@ -17,34 +18,23 @@ import (
 type listenerConfig struct {
 	name     string
 	port     int
-	listener net.Listener
+	listener io.Closer
 }
 
 func localPrivateHost() string {
-	ifaces, err := net.Interfaces()
+	// Maybe we are running on fly.io
+	flyLocalAddr, err := net.ResolveIPAddr("ip", "fly-local-6pn")
+	if err == nil {
+		return flyLocalAddr.IP.String()
+	}
+	// last attempt: use the default outgoing iface.
+	conn, err := net.Dial("udp", "example.net:80")
 	if err != nil {
 		panic(err)
 	}
-
-	for _, v := range ifaces {
-		if v.Flags&net.FlagLoopback != net.FlagLoopback && v.Flags&net.FlagUp == net.FlagUp {
-			h := v.HardwareAddr.String()
-			if len(h) == 0 {
-				continue
-			} else {
-				addresses, _ := v.Addrs()
-				for idx := range addresses {
-					ip := addresses[idx]
-					if ipnet, ok := ip.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-						if ipnet.IP.To4() != nil {
-							return ipnet.IP.String()
-						}
-					}
-				}
-			}
-		}
-	}
-	panic("could not find a valid network interface")
+	defer conn.Close()
+	localAddr := conn.LocalAddr().(*net.UDPAddr)
+	return localAddr.IP.String()
 }
 
 func findPeers(name, tag string, minimumCount int) ([]string, error) {

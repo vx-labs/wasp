@@ -4,7 +4,7 @@ job "wasp" {
 
   update {
     max_parallel     = 1
-    min_healthy_time = "30s"
+    min_healthy_time = "10s"
     healthy_deadline = "3m"
     auto_revert      = true
     canary           = 0

@@ -84,6 +84,15 @@ func loadVaultToken(api *api.Client) {
 	}()
 }
 
+func resolveCipherSuite(suite []uint16) []string {
+	out := make([]string, len(suite))
+	for idx := range out {
+		cipher := suite[idx]
+		out[idx] = tls.CipherSuiteName(cipher)
+	}
+	return out
+}
+
 func GetConfig(ctx context.Context, cn string, logger *zap.Logger) (*tls.Config, error) {
 	config := api.DefaultConfig()
 	config.HttpClient = http.DefaultClient
@@ -128,7 +137,18 @@ func GetConfig(ctx context.Context, cn string, logger *zap.Logger) (*tls.Config,
 	}
 	logger.Debug("loaded ACME client", zap.Strings("acme_common_names", []string{cn}))
 	tlsConfig := manager.TLSConfig()
-	tlsConfig.MinVersion = tls.VersionTLS12
 	tlsConfig.PreferServerCipherSuites = true
+	tlsConfig.MinVersion = tls.VersionTLS12
+
+	tlsConfig.GetCertificate = func(hello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+		logger.Info("TLS connection received", zap.String("tls_server_name", hello.ServerName), zap.Strings("tls_client_cipher_suites", resolveCipherSuite(hello.CipherSuites)))
+
+		cert, err := manager.GetCertificate(hello)
+		if err != nil {
+			logger.Error("failed to fetch tls connection certificate", zap.String("tls_server_name", hello.ServerName), zap.Error(err))
+		}
+		return cert, err
+	}
+
 	return tlsConfig, nil
 }

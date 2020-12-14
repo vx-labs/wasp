@@ -23,7 +23,7 @@ func Sessions(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			out, err := api.NewMQTTClient(conn).ListSessionMetadatas(ctx, &api.ListSessionMetadatasRequest{})
 			if err != nil {
 				l.Fatal("failed to list connected sessions", zap.Error(err))
@@ -56,7 +56,7 @@ func Messages(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if p := config.GetString("payload"); p != "" {
 				payload = []byte(p)
 			}
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			_, err := api.NewMQTTClient(conn).DistributeMessage(ctx, &api.DistributeMessageRequest{
 				Message: &packet.Publish{
 					Header: &packet.Header{
@@ -90,7 +90,7 @@ func Messages(ctx context.Context, config *viper.Viper) *cobra.Command {
 			if p := config.GetString("payload"); p != "" {
 				payload = []byte(p)
 			}
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			_, err := api.NewMQTTClient(conn).ScheduleMessage(ctx, &api.ScheduleMessageRequest{
 				Message: &packet.Publish{
 					Header: &packet.Header{
@@ -127,7 +127,7 @@ func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			out, err := api.NewMQTTClient(conn).ListSubscriptions(ctx, &api.ListSubscriptionsRequest{})
 			cancel()
 			if err != nil {
@@ -150,7 +150,7 @@ func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Aliases: []string{"new"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			peerIDStr := config.GetString("peer")
 			peerID, err := strconv.ParseUint(peerIDStr, 10, 64)
 			if err != nil {
@@ -187,7 +187,7 @@ func Subscriptions(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Aliases: []string{"rm"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			peerIDStr := config.GetString("peer")
 			peerID, err := strconv.ParseUint(peerIDStr, 10, 64)
 			if err != nil {
@@ -240,7 +240,7 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 				patterns = []string{"#"}
 			}
 			for _, pattern := range patterns {
-				ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+				ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 				out, err := api.NewMQTTClient(conn).ListRetainedMessages(ctx, &api.ListRetainedMessagesRequest{
 					Pattern: []byte(pattern),
 				})
@@ -270,7 +270,7 @@ func Topics(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Run: func(cmd *cobra.Command, topics []string) {
 			conn, l := mustDial(ctx, cmd, config)
 			for _, topic := range topics {
-				ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+				ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 				_, err := api.NewMQTTClient(conn).DeleteRetainedMessage(ctx, &api.DeleteRetainedMessageRequest{
 					Topic: []byte(topic),
 				})
@@ -294,7 +294,7 @@ func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Aliases: []string{"ls"},
 		Run: func(cmd *cobra.Command, _ []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			out, err := api.NewMQTTClient(conn).ListClusterMembers(ctx, &api.ListClusterMembersRequest{})
 			cancel()
 			if err != nil {
@@ -316,7 +316,7 @@ func Cluster(ctx context.Context, config *viper.Viper) *cobra.Command {
 		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, nodes []string) {
 			conn, l := mustDial(ctx, cmd, config)
-			ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+			ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 			_, err := api.NewMQTTClient(conn).JoinCluster(ctx, &api.JoinClusterRequest{
 				ClusterMemberAddresses: nodes,
 			})
