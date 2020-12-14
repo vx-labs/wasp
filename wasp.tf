@@ -1,6 +1,4 @@
-provider "nomad" {
-  version = "~> 1.4"
-}
+provider "nomad" {}
 variable image_repository {
   default = "vxlabs/wasp"
 }
