@@ -1,0 +1,57 @@
+app = "wasp"
+
+kill_signal = "SIGINT"
+kill_timeout = 5
+
+[env]
+  WASP_JOIN_NODE="wasp.internal:1799"
+  WASP_WS_PORT="443"
+  WASP_INSECURE="true"
+  WASP_AUTHENTICATION_PROVIDER="grpc"
+  WASP_AUTHENTICATION_PROVIDER_GRPC_ADDRESS="global.vespiary.internal:3899"
+  WASP_NEST_TAP_ADDRESS="nest.internal:2899"
+
+[experimental]
+  private_network = true
+
+[[services]]
+  internal_port = 1899
+  protocol = "tcp"
+
+[[services]]
+  internal_port = 1799
+  protocol = "tcp"
+
+[[services]]
+  internal_port = 1883
+  protocol = "tcp"
+
+  [services.concurrency]
+    hard_limit = 100000
+    soft_limit = 10000
+
+  [[services.ports]]
+    port = "10000"
+  [[services.ports]]
+    handlers = ["tls"]
+    port = "10001"
+
+  [[services.tcp_checks]]
+    interval = 10000
+    timeout = 2000
+
+[[services]]
+  internal_port = 443
+  protocol = "tcp"
+
+  [services.concurrency]
+    hard_limit = 100000
+    soft_limit = 10000
+
+  [[services.ports]]
+    handlers = ["tls"]
+    port = "443"
+
+  [[services.tcp_checks]]
+    interval = 10000
+    timeout = 2000

@@ -6,9 +6,7 @@ build::
 	docker build ${DOCKER_BUILD_ARGS} -t quay.io/vxlabs/wasp:${VERSION} .
 release:: build release-nodep
 deploy:
-	terraform apply -auto-approve -var image_tag=${VERSION}
-nuke:
-	terraform destroy -auto-approve -var image_tag=${VERSION}
+	fly deploy -i vxlabs/wasp:${VERSION}
 test::
 	go test -v ./...
 watch::
