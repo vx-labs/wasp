@@ -6,7 +6,7 @@ build::
 	docker build ${DOCKER_BUILD_ARGS} -t quay.io/vxlabs/wasp:${VERSION} .
 release:: build release-nodep
 deploy:
-	fly deploy -i vxlabs/wasp:${VERSION}
+	flyctl deploy -i vxlabs/wasp:${VERSION}
 test::
 	go test -v ./...
 watch::
