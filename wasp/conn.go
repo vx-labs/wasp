@@ -2,7 +2,6 @@ package wasp
 
 import (
 	"context"
-	"io"
 	"sync"
 	"time"
 
@@ -216,7 +215,7 @@ func (s *setupWorker) setup(ctx context.Context, m transport.Metadata) error {
 
 func (s *connectionWorker) serve(ctx context.Context, session *sessions.Session) {
 	sessionCtx, cancel := context.WithCancel(ctx)
-	for s.processSession(sessionCtx, session, session.ReadWriter()) {
+	for s.processSession(sessionCtx, session) {
 		session.ExtendDeadline()
 	}
 	cancel()
@@ -252,7 +251,8 @@ type timeoutError interface {
 	Timeout() bool
 }
 
-func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session, c io.ReadWriter) bool {
+func (s *connectionWorker) processSession(ctx context.Context, session *sessions.Session) bool {
+	c := session.ReadWriter()
 	started := time.Now()
 	pkt, err := s.decoder.Decode(c)
 	if err != nil {
