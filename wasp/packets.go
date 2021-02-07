@@ -15,34 +15,62 @@ import (
 
 //PacketProcessor processes MQTT packet and update state accordingly, or distribute messages
 type PacketProcessor interface {
+	Run(ctx context.Context)
 	Process(ctx context.Context, session *sessions.Session, c io.Writer, pkt packet.Packet) error
 }
 
 type packetProcessor struct {
-	state          distributed.State
-	local          LocalState
-	writer         Writer
-	publishHandler PublishHandler
-	inflights      ack.Queue
-	encoder        *encoder.Encoder
+	state     distributed.State
+	local     LocalState
+	writer    Writer
+	handler   PublishHandler
+	inflights ack.Queue
+	encoder   *encoder.Encoder
+	publishes chan publishRequestInput
+}
+
+type publishRequestInput struct {
+	sender  string
+	publish *packet.Publish
+	cb      func(publish *packet.Publish)
 }
 
 // NewPacketProcessor returns a new packet processor
 func NewPacketProcessor(local LocalState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) PacketProcessor {
 	return &packetProcessor{
-		state:          state,
-		encoder:        encoder.New(),
-		inflights:      ackQueue,
-		writer:         writer,
-		local:          local,
-		publishHandler: publishHandler,
+		state:     state,
+		encoder:   encoder.New(),
+		inflights: ackQueue,
+		writer:    writer,
+		local:     local,
+		handler:   publishHandler,
+		publishes: make(chan publishRequestInput, 20),
+	}
+}
+func (processor *packetProcessor) Run(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case in := <-processor.publishes:
+			processor.handler(in.sender, in.publish, in.cb)
+		}
+	}
+}
+func (processor *packetProcessor) publishHandler(ctx context.Context, sender string, publish *packet.Publish, cb func(publish *packet.Publish)) {
+	select {
+	case processor.publishes <- publishRequestInput{
+		sender:  sender,
+		publish: publish,
+		cb:      cb,
+	}:
+	case <-ctx.Done():
 	}
 }
 
 func (processor *packetProcessor) Process(ctx context.Context, session *sessions.Session, c io.Writer, pkt packet.Packet) error {
 	ctx, cancel := context.WithTimeout(ctx, 800*time.Millisecond)
 	defer cancel()
-	//log.Printf("%s: %s", session.ID(), packet.TypeString(pkt))
 	switch p := pkt.(type) {
 	case *packet.Connect:
 		return ErrProtocolViolation
@@ -50,14 +78,18 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 		p.Topic = session.PrefixMountPoint(p.Topic)
 		if c == nil {
 			// c is nil: we are sending a LWT.
-			return processor.publishHandler(session.ID(), p)
+			processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {})
 		}
 		switch p.Header.Qos {
 		case 0, 1:
-			err := processor.publishHandler(session.ID(), p)
-			if err != nil {
-				return err
-			}
+			processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {
+				if publish.Header.Qos == 1 {
+					processor.encoder.PubAck(c, &packet.PubAck{
+						Header:    &packet.Header{},
+						MessageId: p.MessageId,
+					})
+				}
+			})
 		case 2:
 			pubrec := &packet.PubRec{
 				Header:    &packet.Header{},
@@ -68,30 +100,18 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 					L(ctx).Warn("qos2 flow timed out waiting for PUBREL")
 					return
 				}
-				ctx, cancel := context.WithCancel(context.Background())
-				defer cancel()
-
-				err := processor.publishHandler(session.ID(), p)
-				if err == nil {
+				processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {
 					pubcomp := &packet.PubComp{
 						Header:    &packet.Header{},
 						MessageId: received.(*packet.PubRel).MessageId,
 					}
 					processor.encoder.Encode(c, pubcomp)
-					return
-				}
-				L(ctx).Error("failed to finalize qos2 flow", zap.Error(err))
+				})
 			})
 			if err != nil {
 				return err
 			}
 			return processor.encoder.Encode(c, pubrec)
-		}
-		if p.Header.Qos == 1 {
-			return processor.encoder.PubAck(c, &packet.PubAck{
-				Header:    &packet.Header{},
-				MessageId: p.MessageId,
-			})
 		}
 	case *packet.Subscribe:
 		topics := make([][]byte, len(p.Topic))

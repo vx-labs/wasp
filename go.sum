@@ -402,17 +402,12 @@ github.com/tysontate/gommap v0.0.0-20190103205956-899e1273fb5c/go.mod h1:D/qzp3B
 github.com/ugorji/go v1.1.4/go.mod h1:uQMGLiO92mf5W77hV/PUCpI3pbzQx3CRekS0kk+RGrc=
 github.com/urfave/cli v1.20.0/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
 github.com/urfave/cli v1.22.1/go.mod h1:Gos4lmkARVdJ6EkW0WaNv/tZAAMe9V7XWyB60NtXRu0=
-github.com/vx-labs/cluster v1.4.0 h1:QIQQfyl5gB+2OJgCIB31VTbaRbV6G6xpPMYG9cML5Hc=
-github.com/vx-labs/cluster v1.4.0/go.mod h1:hLbLE2+vCXixbFKkARaR2J/umZhAJN/RDR4LVru0lQ0=
-github.com/vx-labs/cluster v1.5.0 h1:FxJ8c9QZtwr7sOhEN8JwSRtFprLQCe5ODGNv2niVtFg=
-github.com/vx-labs/cluster v1.5.0/go.mod h1:hLbLE2+vCXixbFKkARaR2J/umZhAJN/RDR4LVru0lQ0=
 github.com/vx-labs/cluster v1.7.7 h1:KkX/5BlrR3xeTLwkeWeEzER/wde7foXbPSyiXZQ4Yx8=
 github.com/vx-labs/cluster v1.7.7/go.mod h1:hLbLE2+vCXixbFKkARaR2J/umZhAJN/RDR4LVru0lQ0=
 github.com/vx-labs/commitlog v1.2.4 h1:5FEhCUVI4kBl//5lIUUcr5k2mgDjyP5YBzU7sWk/ulg=
 github.com/vx-labs/commitlog v1.2.4/go.mod h1:oD9S7H5eUBFcEg7ZyAxJomwac+B0vulxvEbqQGDhHF0=
 github.com/vx-labs/mqtt-protocol v5.1.1+incompatible h1:NMV8ETPa3e2lQbW6wc+Nmqnm4ZJ9C93DpcwLY+vGuwI=
 github.com/vx-labs/mqtt-protocol v5.1.1+incompatible/go.mod h1:pTTydlvsQlJkWKiGB8xwGJ5QgBOxU6yUiGm4u6C0Ydg=
-github.com/vx-labs/wasp v1.9.24 h1:7J2HCesqDrBTrSrjLCcYJ8v8WDhmHcVXT1I9z0ynIvY=
 github.com/xiang90/probing v0.0.0-20190116061207-43a291ad63a2/go.mod h1:UETIi67q53MR2AWcXfiuqkDkRtnGDLqkBTpCHuJHxtU=
 github.com/xordataexchange/crypt v0.0.3-0.20170626215501-b2862e3d0a77/go.mod h1:aYKd//L2LvnjZzWKhF00oedf4jCCReLcmhLdhm1A27Q=
 github.com/zond/gotomic v0.0.0-20160912093511-c442ca1e4aa6 h1:YmxpZlE9hkP4Wgx7i2RIA6o2Gmvcyoffc3SR/r+vjxc=

@@ -241,7 +241,7 @@ func run(config *viper.Viper) {
 			wasp.L(ctx).Fatal("publish writer failed", zap.Error(err))
 		}
 	})
-	packetProcessor := wasp.NewPacketProcessor(state, dstate, writer, func(sender string, publish *packet.Publish) error {
+	packetProcessor := wasp.NewPacketProcessor(state, dstate, writer, func(sender string, publish *packet.Publish, cb func(publish *packet.Publish)) {
 		for _, tap := range loadedTaps {
 			err := tap(ctx, sender, publish)
 			if err != nil {
@@ -259,8 +259,14 @@ func run(config *viper.Viper) {
 			}
 			publish.Header.Retain = false
 		}
-		return publishDistributor.Distribute(ctx, publish)
+		err := publishDistributor.Distribute(ctx, publish)
+		if err != nil {
+			wasp.L(ctx).Warn("failed to distribute message", zap.Error(err))
+		}
+		cb(publish)
 	}, inflights)
+	operations.Run("packet processor", packetProcessor.Run)
+
 	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, packetProcessor, inflights)
 	operations.Run("connection manager", connManager.Run)
 

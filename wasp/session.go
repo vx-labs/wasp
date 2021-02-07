@@ -23,4 +23,4 @@ type AuthenticationHandler interface {
 	Authenticate(ctx context.Context, mqtt auth.ApplicationContext, transport auth.TransportContext) (principal auth.Principal, err error)
 }
 
-type PublishHandler func(sender string, publish *packet.Publish) error
+type PublishHandler func(sender string, publish *packet.Publish, cb func(publish *packet.Publish))
