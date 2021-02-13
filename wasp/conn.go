@@ -270,6 +270,8 @@ func (s *connectionWorker) processSession(ctx context.Context, session *sessions
 	if err != nil {
 		if err == ErrSessionDisconnected {
 			session.Disconnected = true
+		} else {
+			L(ctx).Warn("packet processing failed", zap.Error(err))
 		}
 		return false
 	}

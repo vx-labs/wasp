@@ -53,18 +53,27 @@ func (processor *packetProcessor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case in := <-processor.publishes:
-			processor.handler(in.sender, in.publish, in.cb)
+			err := processor.handler(in.sender, in.publish)
+			if err != nil {
+				L(ctx).Warn("packet processing failed", zap.Error(err))
+			} else {
+				if in.cb != nil {
+					in.cb(in.publish)
+				}
+			}
 		}
 	}
 }
-func (processor *packetProcessor) publishHandler(ctx context.Context, sender string, publish *packet.Publish, cb func(publish *packet.Publish)) {
+func (processor *packetProcessor) publishHandler(ctx context.Context, sender string, publish *packet.Publish, cb func(publish *packet.Publish)) error {
 	select {
 	case processor.publishes <- publishRequestInput{
 		sender:  sender,
 		publish: publish,
 		cb:      cb,
 	}:
+		return nil
 	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
@@ -78,11 +87,11 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 		p.Topic = session.PrefixMountPoint(p.Topic)
 		if c == nil {
 			// c is nil: we are sending a LWT.
-			processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {})
+			return processor.publishHandler(ctx, session.ID(), p, nil)
 		}
 		switch p.Header.Qos {
 		case 0, 1:
-			processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {
+			return processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {
 				if publish.Header.Qos == 1 {
 					processor.encoder.PubAck(c, &packet.PubAck{
 						Header:    &packet.Header{},
@@ -100,6 +109,8 @@ func (processor *packetProcessor) Process(ctx context.Context, session *sessions
 					L(ctx).Warn("qos2 flow timed out waiting for PUBREL")
 					return
 				}
+				ctx, cancel := context.WithTimeout(context.Background(), 800*time.Millisecond)
+				defer cancel()
 				processor.publishHandler(ctx, session.ID(), p, func(publish *packet.Publish) {
 					pubcomp := &packet.PubComp{
 						Header:    &packet.Header{},
