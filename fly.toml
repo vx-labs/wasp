@@ -9,7 +9,8 @@ kill_timeout = 5
   WASP_INSECURE="true"
   WASP_AUTHENTICATION_PROVIDER="grpc"
   WASP_AUTHENTICATION_PROVIDER_GRPC_ADDRESS="global.vespiary.internal:3899"
-  WASP_NEST_TAP_ADDRESS="nest.internal:2899"
+  WASP_TAP_RECORDER="grpc"
+  WASP_TAP_RECORDER_GRPC_ADDRESS="nest.internal:2899"
 
 [experimental]
   private_network = true

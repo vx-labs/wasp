@@ -204,33 +204,6 @@ func run(config *viper.Viper) {
 		}
 	})
 
-	loadedTaps := []taps.Tap{}
-	if remote := config.GetString("syslog-tap-address"); remote != "" {
-		operations.Run("syslog tap", func(ctx context.Context) {
-			tap, err := taps.Syslog(ctx, remote)
-			if err != nil {
-				wasp.L(ctx).Warn("failed to start syslog tap", zap.Error(err))
-				return
-			}
-			loadedTaps = append(loadedTaps, tap)
-		})
-	}
-	if target := config.GetString("nest-tap-address"); target != "" {
-		operations.Run("nest tap", func(ctx context.Context) {
-			remote, err := rpcDialer(target)
-			if err != nil {
-				wasp.L(ctx).Warn("failed to dial nest tap", zap.Error(err))
-				return
-			}
-			tap, err := taps.GRPC(remote)
-			if err != nil {
-				wasp.L(ctx).Warn("failed to start nest tap", zap.Error(err))
-				return
-			}
-			wasp.L(ctx).Debug("nest tap started")
-			loadedTaps = append(loadedTaps, tap)
-		})
-	}
 	inflights := ack.NewQueue()
 	writer := wasp.NewWriter(id, dstate.Subscriptions(), state, inflights)
 
@@ -241,30 +214,13 @@ func run(config *viper.Viper) {
 			wasp.L(ctx).Fatal("publish writer failed", zap.Error(err))
 		}
 	})
-	packetProcessor := wasp.NewPacketProcessor(state, dstate, writer, func(sender string, publish *packet.Publish) error {
-		for _, tap := range loadedTaps {
-			err := tap(ctx, sender, publish)
-			if err != nil {
-				wasp.L(ctx).Warn("failed to run tap", zap.Error(err))
-			}
-		}
-		if publish.Header.Retain {
-			if publish.Payload == nil || len(publish.Payload) == 0 {
-				err = dstate.Topics().Delete(publish.Topic)
-			} else {
-				err = dstate.Topics().Set(publish)
-			}
-			if err != nil {
-				wasp.L(ctx).Warn("failed to retain message", zap.Error(err))
-			}
-			publish.Header.Retain = false
-		}
-		err := publishDistributor.Distribute(ctx, publish)
-		if err != nil {
-			wasp.L(ctx).Warn("failed to distribute message", zap.Error(err))
-		}
-		return err
-	}, inflights)
+	loadedTap, err := getTapRecorder(ctx, rpcDialer, config, wasp.L(ctx))
+	if err != nil {
+		wasp.L(ctx).Fatal("failed to load tap recorder", zap.Error(err))
+	}
+	tapsRunner := taps.NewDispatcher([]taps.Tap{loadedTap})
+	operations.Run("taps dispatcher", tapsRunner.Run)
+	packetProcessor := wasp.NewPacketProcessor(state, dstate, writer, tapsRunner, publishDistributor, inflights)
 	operations.Run("packet processor", packetProcessor.Run)
 
 	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, packetProcessor, inflights)

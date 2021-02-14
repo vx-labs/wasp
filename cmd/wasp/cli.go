@@ -125,8 +125,9 @@ func main() {
 	cmd.Flags().String("rpc-tls-certificate-file", "", "x509 certificate used by RPC Server.")
 	cmd.Flags().String("rpc-tls-private-key-file", "", "Private key used by RPC Server.")
 
-	cmd.Flags().String("syslog-tap-address", "", "Syslog address to send a copy of all message published.")
-	cmd.Flags().String("nest-tap-address", "", "Nest address to send a copy of all message published.")
+	cmd.Flags().String("tap-recorder", "stdout", "Messages recorder used to record mqtt messages. Set to \"none\" to disable message recording.")
+	cmd.Flags().String("tap-recorder-syslog-address", "", "Syslog address to send a copy of all message published.")
+	cmd.Flags().String("tap-recorder-grpc-address", "", "Nest address to send a copy of all message published.")
 
 	cmd.Flags().String("authentication-provider", "none", "Authentication mecanism to use to authenticate MQTT clients. Set to \"none\" to disable authentication.")
 	cmd.Flags().String("authentication-provider-file-path", "credentials.csv", "Read allowed client credentials from this file, when using \"file\" authentication provider.")

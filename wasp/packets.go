@@ -19,14 +19,21 @@ type PacketProcessor interface {
 	Process(ctx context.Context, session *sessions.Session, c io.Writer, pkt packet.Packet) error
 }
 
+type tapsDispatcher interface {
+	Run(ctx context.Context)
+	Dispatch(context.Context, string, *packet.Publish) error
+}
+
 type packetProcessor struct {
-	state     distributed.State
-	local     LocalState
-	writer    Writer
-	handler   PublishHandler
-	inflights ack.Queue
-	encoder   *encoder.Encoder
-	publishes chan publishRequestInput
+	state          distributed.State
+	local          LocalState
+	writer         Writer
+	handler        PublishHandler
+	inflights      ack.Queue
+	encoder        *encoder.Encoder
+	publishes      chan publishRequestInput
+	distributor    *PublishDistributor
+	tapsDispatcher tapsDispatcher
 }
 
 type publishRequestInput struct {
@@ -36,15 +43,16 @@ type publishRequestInput struct {
 }
 
 // NewPacketProcessor returns a new packet processor
-func NewPacketProcessor(local LocalState, state distributed.State, writer Writer, publishHandler PublishHandler, ackQueue ack.Queue) PacketProcessor {
+func NewPacketProcessor(local LocalState, state distributed.State, writer Writer, tapsDispatcher tapsDispatcher, distributor *PublishDistributor, ackQueue ack.Queue) PacketProcessor {
 	return &packetProcessor{
-		state:     state,
-		encoder:   encoder.New(),
-		inflights: ackQueue,
-		writer:    writer,
-		local:     local,
-		handler:   publishHandler,
-		publishes: make(chan publishRequestInput, 20),
+		state:          state,
+		encoder:        encoder.New(),
+		inflights:      ackQueue,
+		writer:         writer,
+		local:          local,
+		distributor:    distributor,
+		tapsDispatcher: tapsDispatcher,
+		publishes:      make(chan publishRequestInput, 20),
 	}
 }
 func (processor *packetProcessor) Run(ctx context.Context) {
@@ -53,7 +61,24 @@ func (processor *packetProcessor) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case in := <-processor.publishes:
-			err := processor.handler(in.sender, in.publish)
+			publish := in.publish
+			processor.tapsDispatcher.Dispatch(ctx, in.sender, in.publish)
+			if publish.Header.Retain {
+				var err error
+				if publish.Payload == nil || len(publish.Payload) == 0 {
+					err = processor.state.Topics().Delete(publish.Topic)
+				} else {
+					err = processor.state.Topics().Set(publish)
+				}
+				if err != nil {
+					L(ctx).Warn("failed to retain message", zap.Error(err))
+				}
+				publish.Header.Retain = false
+			}
+			err := processor.distributor.Distribute(ctx, publish)
+			if err != nil {
+				L(ctx).Warn("failed to distribute message", zap.Error(err))
+			}
 			if err != nil {
 				L(ctx).Warn("packet processing failed", zap.Error(err))
 			} else {

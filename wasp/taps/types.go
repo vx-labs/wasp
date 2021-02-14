@@ -8,8 +8,4 @@ import (
 	"github.com/vx-labs/mqtt-protocol/packet"
 )
 
-type MessageLog interface {
-	Consume(context.Context, string, func(string, *packet.Publish) error) error
-}
-
 type Tap func(context.Context, string, *packet.Publish) error
