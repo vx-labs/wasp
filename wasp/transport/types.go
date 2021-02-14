@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"crypto/tls"
 	"io"
 	"time"
@@ -11,6 +12,10 @@ type TimeoutReadWriteCloser interface {
 	SetReadDeadline(time.Time) error
 	SetWriteDeadline(time.Time) error
 	io.ReadWriteCloser
+}
+
+type ConnectionSetuper interface {
+	Setup(ctx context.Context, c Metadata)
 }
 
 type Metadata struct {

@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -12,7 +13,7 @@ type tlsListener struct {
 	listener net.Listener
 }
 
-func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) error) (net.Listener, error) {
+func NewTLSTransport(ctx context.Context, tlsConfig *tls.Config, port int, setuper ConnectionSetuper) (net.Listener, error) {
 	listener := &tlsListener{}
 
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
@@ -34,7 +35,7 @@ func NewTLSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 			return
 		}
 		state := c.ConnectionState()
-		handler(Metadata{
+		setuper.Setup(ctx, Metadata{
 			Channel:         c,
 			Encrypted:       true,
 			EncryptionState: &state,

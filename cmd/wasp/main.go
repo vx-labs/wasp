@@ -226,13 +226,9 @@ func run(config *viper.Viper) {
 	connManager := wasp.NewConnectionManager(authHandler, state, dstate, writer, packetProcessor, inflights)
 	operations.Run("connection manager", connManager.Run)
 
-	handler := func(m transport.Metadata) error {
-		connManager.Setup(ctx, m)
-		return nil
-	}
 	listeners := []listenerConfig{}
 	if port := config.GetInt("tcp-port"); port > 0 {
-		ln, err := transport.NewTCPTransport(port, handler)
+		ln, err := transport.NewTCPTransport(ctx, port, connManager)
 		if err != nil {
 			wasp.L(ctx).Error("failed to start listener", zap.String("listener_name", "tcp"), zap.Error(err))
 		} else {
@@ -240,7 +236,7 @@ func run(config *viper.Viper) {
 		}
 	}
 	if port := config.GetInt("ws-port"); port > 0 {
-		ln, err := transport.NewWSTransport(port, handler)
+		ln, err := transport.NewWSTransport(ctx, port, connManager)
 		if err != nil {
 			wasp.L(ctx).Error("failed to start listener", zap.String("listener_name", "ws"), zap.Error(err))
 		} else {
@@ -256,7 +252,7 @@ func run(config *viper.Viper) {
 		tlsConfig.ClientAuth = tls.RequestClientCert
 
 		if port := config.GetInt("wss-port"); port > 0 {
-			ln, err := transport.NewWSSTransport(tlsConfig, port, handler)
+			ln, err := transport.NewWSSTransport(ctx, tlsConfig, port, connManager)
 			if err != nil {
 				wasp.L(ctx).Error("failed to start listener", zap.String("listener_name", "wss"), zap.Error(err))
 			} else {
@@ -264,7 +260,7 @@ func run(config *viper.Viper) {
 			}
 		}
 		if port := config.GetInt("tls-port"); port > 0 {
-			ln, err := transport.NewTLSTransport(tlsConfig, port, handler)
+			ln, err := transport.NewTLSTransport(ctx, tlsConfig, port, connManager)
 			if err != nil {
 				wasp.L(ctx).Error("failed to start listener", zap.String("listener_name", "tls"), zap.Error(err))
 			} else {

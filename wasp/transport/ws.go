@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io"
@@ -109,12 +110,12 @@ func serveWs(cb func(net.Conn, tls.ConnectionState)) http.HandlerFunc {
 	}
 }
 
-func NewWSTransport(port int, handler func(Metadata) error) (net.Listener, error) {
+func NewWSTransport(ctx context.Context, port int, setuper ConnectionSetuper) (net.Listener, error) {
 	listener := &wsListener{}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mqtt", serveWs(func(c net.Conn, _ tls.ConnectionState) {
-		listener.queueSession(c, handler)
+		listener.queueSession(ctx, c, setuper)
 	}))
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -128,8 +129,8 @@ func NewWSTransport(port int, handler func(Metadata) error) (net.Listener, error
 	return ln, nil
 }
 
-func (t *wsListener) queueSession(c net.Conn, handler func(Metadata) error) {
-	handler(Metadata{
+func (t *wsListener) queueSession(ctx context.Context, c net.Conn, setuper ConnectionSetuper) {
+	setuper.Setup(ctx, Metadata{
 		Channel:         c,
 		Encrypted:       false,
 		EncryptionState: nil,

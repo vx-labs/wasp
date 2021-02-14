@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"context"
 	"fmt"
 	"net"
 )
@@ -9,7 +10,7 @@ type tcp struct {
 	listener net.Listener
 }
 
-func NewTCPTransport(port int, handler func(Metadata) error) (net.Listener, error) {
+func NewTCPTransport(ctx context.Context, port int, setuper ConnectionSetuper) (net.Listener, error) {
 	listener := &tcp{}
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -18,7 +19,7 @@ func NewTCPTransport(port int, handler func(Metadata) error) (net.Listener, erro
 	listener.listener = l
 	go runAccept(l, func(rawConn net.Conn) {
 		tcpConn := rawConn.(*net.TCPConn)
-		handler(Metadata{
+		setuper.Setup(ctx, Metadata{
 			Channel:         tcpConn,
 			Encrypted:       false,
 			EncryptionState: nil,

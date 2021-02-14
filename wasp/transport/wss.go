@@ -21,11 +21,11 @@ func (l *wssListener) Close() error {
 	return l.srv.Shutdown(ctx)
 }
 
-func NewWSSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) error) (io.Closer, error) {
+func NewWSSTransport(ctx context.Context, tlsConfig *tls.Config, port int, setuper ConnectionSetuper) (io.Closer, error) {
 	listener := &wssListener{}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mqtt", serveWs(func(c net.Conn, state tls.ConnectionState) {
-		listener.queueSession(c, state, handler)
+		listener.queueSession(ctx, c, state, setuper)
 	}))
 	ln, err := tls.Listen("tcp", fmt.Sprintf(":%d", port), tlsConfig)
 	if err != nil {
@@ -44,8 +44,8 @@ func NewWSSTransport(tlsConfig *tls.Config, port int, handler func(Metadata) err
 	return listener, nil
 }
 
-func (t *wssListener) queueSession(c net.Conn, state tls.ConnectionState, handler func(Metadata) error) {
-	handler(Metadata{
+func (t *wssListener) queueSession(ctx context.Context, c net.Conn, state tls.ConnectionState, setuper ConnectionSetuper) {
+	setuper.Setup(ctx, Metadata{
 		Channel:         c,
 		Encrypted:       true,
 		EncryptionState: &state,
