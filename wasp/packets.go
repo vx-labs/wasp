@@ -3,6 +3,7 @@ package wasp
 import (
 	"context"
 	"io"
+	"sync"
 	"time"
 
 	"github.com/vx-labs/mqtt-protocol/encoder"
@@ -31,7 +32,7 @@ type packetProcessor struct {
 	handler        PublishHandler
 	inflights      ack.Queue
 	encoder        *encoder.Encoder
-	publishes      chan publishRequestInput
+	publishes      chan chan publishRequestInput
 	distributor    *PublishDistributor
 	tapsDispatcher tapsDispatcher
 }
@@ -52,53 +53,72 @@ func NewPacketProcessor(local LocalState, state distributed.State, writer Writer
 		local:          local,
 		distributor:    distributor,
 		tapsDispatcher: tapsDispatcher,
-		publishes:      make(chan publishRequestInput, 20),
+		publishes:      make(chan chan publishRequestInput),
 	}
 }
 func (processor *packetProcessor) Run(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case in := <-processor.publishes:
-			publish := in.publish
-			processor.tapsDispatcher.Dispatch(ctx, in.sender, in.publish)
-			if publish.Header.Retain {
-				var err error
-				if publish.Payload == nil || len(publish.Payload) == 0 {
-					err = processor.state.Topics().Delete(publish.Topic)
-				} else {
-					err = processor.state.Topics().Set(publish)
+	wg := &sync.WaitGroup{}
+	for i := 0; i < 20; i++ {
+		wg.Add(1)
+		go func(ctx context.Context) {
+			defer wg.Done()
+			ch := make(chan publishRequestInput, 20)
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case processor.publishes <- ch:
+				case in := <-ch:
+					publish := in.publish
+					processor.tapsDispatcher.Dispatch(ctx, in.sender, in.publish)
+					if publish.Header.Retain {
+						var err error
+						if publish.Payload == nil || len(publish.Payload) == 0 {
+							err = processor.state.Topics().Delete(publish.Topic)
+						} else {
+							err = processor.state.Topics().Set(publish)
+						}
+						if err != nil {
+							L(ctx).Warn("failed to retain message", zap.Error(err))
+						}
+						publish.Header.Retain = false
+					}
+					err := processor.distributor.Distribute(ctx, publish)
+					if err != nil {
+						L(ctx).Warn("failed to distribute message", zap.Error(err))
+					}
+					if err != nil {
+						L(ctx).Warn("packet processing failed", zap.Error(err))
+					} else {
+						if in.cb != nil {
+							in.cb(in.publish)
+						}
+					}
 				}
-				if err != nil {
-					L(ctx).Warn("failed to retain message", zap.Error(err))
-				}
-				publish.Header.Retain = false
 			}
-			err := processor.distributor.Distribute(ctx, publish)
-			if err != nil {
-				L(ctx).Warn("failed to distribute message", zap.Error(err))
-			}
-			if err != nil {
-				L(ctx).Warn("packet processing failed", zap.Error(err))
-			} else {
-				if in.cb != nil {
-					in.cb(in.publish)
-				}
-			}
-		}
+		}(ctx)
+	}
+	select {
+	case <-ctx.Done():
+		wg.Wait()
+		return
 	}
 }
 func (processor *packetProcessor) publishHandler(ctx context.Context, sender string, publish *packet.Publish, cb func(publish *packet.Publish)) error {
 	select {
-	case processor.publishes <- publishRequestInput{
-		sender:  sender,
-		publish: publish,
-		cb:      cb,
-	}:
-		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	case ch := <-processor.publishes:
+		select {
+		case ch <- publishRequestInput{
+			sender:  sender,
+			publish: publish,
+			cb:      cb,
+		}:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 }
 
