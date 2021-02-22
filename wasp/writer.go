@@ -12,7 +12,6 @@ import (
 	"github.com/vx-labs/wasp/v4/wasp/distributed"
 	"github.com/vx-labs/wasp/v4/wasp/sessions"
 	"github.com/vx-labs/wasp/v4/wasp/stats"
-	"github.com/zond/gotomic"
 	"go.uber.org/zap"
 )
 
@@ -49,7 +48,7 @@ type writer struct {
 	state     distributed.SubscriptionsState
 	local     LocalState
 	inflights ack.Queue
-	midPool   *gotomic.List
+	midPool   midPool
 	encoder   *encoder.Encoder
 }
 
@@ -60,11 +59,6 @@ type Writer interface {
 }
 
 func NewWriter(peerID uint64, subscriptions distributed.SubscriptionsState, local LocalState, ackQueue ack.Queue) *writer {
-	midPool := gotomic.NewList()
-	var i int32
-	for i = 500; i > 0; i-- {
-		midPool.Push(i)
-	}
 	return &writer{
 		peerID:    peerID,
 		state:     subscriptions,
@@ -72,7 +66,7 @@ func NewWriter(peerID uint64, subscriptions distributed.SubscriptionsState, loca
 		inflights: ackQueue,
 		encoder:   encoder.New(),
 		queue:     make(chan RoutedMessage, 25),
-		midPool:   midPool,
+		midPool:   newMIDPool(0, 65535),
 	}
 }
 
@@ -104,7 +98,7 @@ func (w *writer) sendQoS1(ctx context.Context, publish *packet.Publish, session 
 		if expired && w.local.Get(session.ID()) != nil {
 			w.sendQoS1(ctx, publish, session)
 		} else {
-			w.midPool.Push(stored.(*packet.Publish).MessageId)
+			w.midPool.Put(stored.(*packet.Publish).MessageId)
 		}
 	})
 	if err != nil {
@@ -128,7 +122,7 @@ func (w *writer) completeQoS2(ctx context.Context, pubRel *packet.PubRel, sessio
 			w.completeQoS2(ctx, pubRel, session)
 			return
 		}
-		w.midPool.Push(stored.(*packet.PubRel).MessageId)
+		w.midPool.Put(stored.(*packet.PubRel).MessageId)
 	})
 	err := w.encoder.Encode(session.Writer(), pubRel)
 	if err != nil {
@@ -145,7 +139,7 @@ func (w *writer) sendQoS2(ctx context.Context, publish *packet.Publish, session 
 
 	err := w.inflights.Insert(session.ID(), publish, time.Now().Add(3*time.Second), func(expired bool, stored, received packet.Packet) {
 		if w.local.Get(session.ID()) == nil {
-			w.midPool.Push(stored.(*packet.Publish).MessageId)
+			w.midPool.Put(stored.(*packet.Publish).MessageId)
 			return
 		}
 		if expired {
@@ -172,8 +166,8 @@ func (w *writer) getFree(ctx context.Context) (int32, error) {
 	retries := 5
 	for retries > 0 {
 		retries--
-		mid, ok := w.midPool.Pop()
-		if !ok {
+		mid := w.midPool.Get()
+		if mid == 0 {
 			select {
 			case <-time.After(100 * time.Millisecond):
 				continue
@@ -181,7 +175,7 @@ func (w *writer) getFree(ctx context.Context) (int32, error) {
 				return 0, ctx.Err()
 			}
 		}
-		return mid.(int32), nil
+		return mid, nil
 	}
 	return 0, errors.New("failed to get free mid")
 }
@@ -221,7 +215,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				publish.MessageId = mid
 				err = w.sendQoS1(ctx, publish, session)
 				if err != nil {
-					w.midPool.Push(mid)
+					w.midPool.Put(mid)
 					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
 				}
 			case 2:
@@ -232,7 +226,7 @@ func (w *writer) send(ctx context.Context, recipients []string, qosses []int32, 
 				publish.MessageId = mid
 				err = w.sendQoS2(ctx, publish, session)
 				if err != nil {
-					w.midPool.Push(mid)
+					w.midPool.Put(mid)
 					L(ctx).Error("failed to write message to session", zap.Int32("qos_level", 1), zap.Error(err), zap.String("session_id", sessionID))
 				}
 			}
