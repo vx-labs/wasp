@@ -138,6 +138,8 @@ func main() {
 	cmd.Flags().String("audit-recorder", "stdout", "Audit recorder used to record state updates. Set to \"none\" to disable audit.")
 	cmd.Flags().String("audit-recorder-grpc-address", "", "GRPC Audit Recorder server address, when using \"grpc\" audit recorder.")
 
+	cmd.Flags().String("newrelic-license-key", "", "Enable NewRelic agent using this license key.")
+
 	cmd.AddCommand(TLSHelper(config))
 	cmd.Execute()
 }

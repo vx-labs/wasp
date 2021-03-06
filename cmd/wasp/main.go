@@ -15,17 +15,17 @@ import (
 	"time"
 
 	"github.com/hashicorp/memberlist"
-	"github.com/vx-labs/cluster"
-	"github.com/vx-labs/wasp/v4/wasp/ack"
-	"github.com/vx-labs/wasp/v4/wasp/distributed"
-	"github.com/vx-labs/wasp/v4/wasp/messages"
-
+	"github.com/newrelic/go-agent/v3/newrelic"
 	"github.com/spf13/viper"
+	"github.com/vx-labs/cluster"
 	"github.com/vx-labs/mqtt-protocol/packet"
 	"github.com/vx-labs/wasp/v4/async"
 	"github.com/vx-labs/wasp/v4/rpc"
 	"github.com/vx-labs/wasp/v4/vaultacme"
 	"github.com/vx-labs/wasp/v4/wasp"
+	"github.com/vx-labs/wasp/v4/wasp/ack"
+	"github.com/vx-labs/wasp/v4/wasp/distributed"
+	"github.com/vx-labs/wasp/v4/wasp/messages"
 	"github.com/vx-labs/wasp/v4/wasp/stats"
 	"github.com/vx-labs/wasp/v4/wasp/taps"
 	"github.com/vx-labs/wasp/v4/wasp/transport"
@@ -64,6 +64,21 @@ func run(config *viper.Viper) {
 		panic(err)
 	}
 	operations := async.NewOperations(ctx, wasp.L(ctx))
+
+	if nrLicenseKey := config.GetString("newrelic-license-key"); nrLicenseKey != "" {
+		operations.Run("newrelic agent", func(ctx context.Context) {
+			nrApp, err := newrelic.NewApplication(
+				newrelic.ConfigAppName("wasp"),
+				newrelic.ConfigLicense(nrLicenseKey),
+				newrelic.ConfigDistributedTracerEnabled(true),
+			)
+			if err != nil {
+				wasp.L(ctx).Warn("failed to start NewRelic agent", zap.Error(err))
+			}
+			<-ctx.Done()
+			nrApp.Shutdown(3 * time.Second)
+		})
+	}
 
 	var clusterMultiNode cluster.MultiNode
 

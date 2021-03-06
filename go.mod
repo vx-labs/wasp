@@ -17,6 +17,8 @@ require (
 	github.com/hashicorp/memberlist v0.2.2
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mattn/go-colorable v0.1.6
+	github.com/newrelic/go-agent v3.10.0+incompatible // indirect
+	github.com/newrelic/go-agent/v3 v3.10.0
 	github.com/oklog/ulid v1.3.1
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.8.0
