@@ -30,12 +30,14 @@ func TestTree(t *testing.T) {
 	require.NoError(t, myTree.Upsert([]byte("test/c"), func(b []byte) []byte { return []byte("a") }))
 	found = 0
 	myTree.Walk([]byte("test/b/a"), func(b []byte) {
+		require.Equal(t, []byte("a"), b)
 		found++
 	})
 	require.Equal(t, 4, found)
 
 	found = 0
 	myTree.Iterate(func(b []byte) {
+		require.Equal(t, []byte("a"), b)
 		found++
 	})
 	require.Equal(t, 5, found)

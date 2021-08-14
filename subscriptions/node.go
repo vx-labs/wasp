@@ -85,7 +85,6 @@ func newNode() *Node {
 
 func (n *Node) update(topic format.Topic, f func([]byte) []byte) {
 	topic, token := topic.Next()
-
 	if token == "" {
 		n.Data = f(n.Data)
 	} else {
@@ -112,7 +111,6 @@ func (this *Node) iterate(iterator NodeIterator) {
 }
 func (this *Node) walk(topic format.Topic, iterator NodeIterator) {
 	topic, token := topic.Next()
-
 	if token == "" {
 		iterator(this.Data)
 		return
@@ -121,7 +119,7 @@ func (this *Node) walk(topic format.Topic, iterator NodeIterator) {
 	for k, n := range this.Children {
 		// If the key is "#", then these subscribers are added to the result set
 		if k == MWC {
-			iterator(this.Data)
+			iterator(n.Data)
 		} else if k == SWC || k == token {
 			n.walk(topic, iterator)
 		}
