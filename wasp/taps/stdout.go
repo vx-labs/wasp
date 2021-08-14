@@ -1,6 +1,7 @@
 package taps
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -10,7 +11,11 @@ import (
 
 func Stdout() (Tap, error) {
 	return func(ctx context.Context, sender string, p *packet.Publish) error {
-		fmt.Fprintf(os.Stdout, "%s <- %q\n", string(p.Topic), string(p.Payload))
+		if len(p.Payload) < 1200 && !bytes.ContainsAny(p.Payload, "\n") {
+			fmt.Fprintf(os.Stdout, "%s <- %q\n", string(p.Topic), string(p.Payload))
+		} else {
+			fmt.Fprintf(os.Stdout, "%s <- %d bytes\n", string(p.Topic), len(p.Payload))
+		}
 		return nil
 	}, nil
 }
