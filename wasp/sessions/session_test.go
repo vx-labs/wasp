@@ -26,6 +26,15 @@ func TestSessionRemoveTopic(t *testing.T) {
 	s.AddTopic([]byte("c"))
 	s.RemoveTopic([]byte("b"))
 	require.Equal(t, 2, len(s.GetTopics()))
+	s.RemoveTopic([]byte("a"))
+	require.Equal(t, 1, len(s.GetTopics()))
+	s.RemoveTopic([]byte("c"))
+	require.Equal(t, 0, len(s.GetTopics()))
+	s.AddTopic([]byte("c"))
+	s.AddTopic([]byte("c"))
+	require.Equal(t, 1, len(s.GetTopics()))
+	s.RemoveTopic([]byte("c"))
+	require.Equal(t, 0, len(s.GetTopics()))
 }
 
 func BenchmarkPrefixMountPoint(b *testing.B) {

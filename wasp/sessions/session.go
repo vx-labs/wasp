@@ -106,6 +106,11 @@ func (s *Session) processConnect(connect *packet.Connect) error {
 func (s *Session) AddTopic(t []byte) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
+	for _, old := range s.topics {
+		if bytes.Equal(t, old) {
+			return
+		}
+	}
 	s.topics = append(s.topics, t)
 }
 func (s *Session) RemoveTopic(new []byte) {
