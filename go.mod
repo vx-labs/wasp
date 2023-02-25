@@ -17,7 +17,6 @@ require (
 	github.com/hashicorp/memberlist v0.2.2
 	github.com/hashicorp/vault/api v1.0.4
 	github.com/mattn/go-colorable v0.1.6
-	github.com/newrelic/go-agent v3.10.0+incompatible // indirect
 	github.com/newrelic/go-agent/v3 v3.10.0
 	github.com/oklog/ulid v1.3.1
 	github.com/pkg/errors v0.9.1
@@ -32,7 +31,7 @@ require (
 	github.com/vx-labs/mqtt-protocol v5.1.1+incompatible
 	github.com/zond/gotomic v0.0.0-20160912093511-c442ca1e4aa6
 	go.uber.org/zap v1.16.0
-	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
+	golang.org/x/crypto v0.1.0
 	google.golang.org/grpc v1.33.2
 	launchpad.net/gocheck v0.0.0-20140225173054-000000000087 // indirect
 	stathat.com/c/treap v1.0.0 // indirect
