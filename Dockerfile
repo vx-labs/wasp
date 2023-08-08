@@ -10,7 +10,7 @@ ARG BUILT_VERSION="snapshot"
 RUN go build -buildmode=exe -ldflags="-s -w -X main.BuiltVersion=${BUILT_VERSION}" \
        -a -o /bin/wasp ./cmd/wasp
 
-FROM alpine as prod
+FROM alpine:3.18.3 as prod
 ENTRYPOINT ["/usr/bin/wasp"]
 RUN apk -U add ca-certificates && \
     rm -rf /var/cache/apk/*
